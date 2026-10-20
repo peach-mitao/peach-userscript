@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 
 export const ROOT = fileURLToPath(new URL('../', import.meta.url));
-const KEYS = new Set(['id', 'label', 'kind', 'domains', 'mode', 'detail_pattern', 'selectors', 'query_keys']);
+const KEYS = new Set(['id', 'label', 'kind', 'domains', 'mode', 'detail_pattern', 'selectors', 'query_keys', 'identity']);
 export function validDomain(host) {
   return typeof host === 'string' && host.length <= 253
     && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/.test(host)
@@ -36,7 +36,9 @@ export function validateManifest(manifest) {
       if (typeof site.detail_pattern !== 'string' || !site.detail_pattern.startsWith('^')) throw new Error('详情路径无效');
       new RegExp(site.detail_pattern, 'i');
     }
-    if (site.mode === 'automatic' && (!site.detail_pattern || !site.selectors?.length)) throw new Error('自动识别需要详情路径和字段');
+    if (site.identity !== undefined && (site.identity !== 'peach' || site.mode !== 'automatic'
+      || (site.query_keys?.length || 0) > 1)) throw new Error('发行商品号识别配置无效');
+    if (site.mode === 'automatic' && (!site.detail_pattern || (site.identity !== 'peach' && !site.selectors?.length))) throw new Error('自动识别需要详情路径和字段');
   }
   return manifest;
 }
@@ -54,6 +56,7 @@ export function render(template, manifest, version) {
     [`// @match        https://${domain}/*`, `// @match        https://*.${domain}/*`])).join('\n');
   let result = replaceOnce(template.replace(/\r\n/g, '\n'), '// __PEACH_JAV_MATCHES__', matches);
   result = replaceOnce(result, '__PEACH_JAV_SITES__', JSON.stringify(manifest));
+  result = replaceOnce(result, '__PEACH_JAV_VERSION__', JSON.stringify(version));
   if (/__PEACH_JAV_/.test(result)) throw new Error('构建产物含未展开的标记');
   return result.trimEnd() + '\n';
 }
@@ -68,6 +71,7 @@ export async function outputs(root = ROOT) {
   const snapshot = JSON.stringify(manifest, null, 2) + '\n';
   const sha = value => createHash('sha256').update(value).digest('hex');
   const release = JSON.stringify({ version: pkg.version, site_schema_version: manifest.version,
+    install_url: pkg.peach.install_url, bridge_min_version: pkg.peach.bridge_min_version,
     repository: 'https://github.com/peach-mitao/peach-userscript',
     files: { 'peach-jav.user.js': sha(script), 'jav-sites.json': sha(snapshot) } }, null, 2) + '\n';
   return new Map([

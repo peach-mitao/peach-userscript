@@ -1,0 +1,159 @@
+{
+  "version": 1,
+  "observed_on": "2026-10-20",
+  "official": [
+    {
+      "source_url": "https://video.dmm.co.jp/av/content/?id=ssis00519",
+      "page": "年龄确认页，详情 DOM 未取得",
+      "identity_url": "https://api.video.dmm.co.jp/graphql",
+      "id": "ssis00519",
+      "makerContentId": "SSIS-519",
+      "response_sha256": "ca95964687dde38d0b57886299b9d60a3bd5cf4b423cd483519e5cdaedc79e7f"
+    },
+    {
+      "source_url": "https://www.mgstage.com/product/product_detail/300MIUM-1239/",
+      "page": "年龄确认页，详情 DOM 未取得",
+      "identity": "商品号取详情路径，最终番号由 Peach 编目规则解析。"
+    }
+  ],
+  "mirrors": [
+    {
+      "domain": "avmoo.cfd",
+      "url": "https://avmoo.cfd/",
+      "status": 200,
+      "final_url": "https://maas.aionly.com/login/0419694950",
+      "title": "",
+      "sha256": "a23c631b5416caa88ed3ac8459d90349ed21fd99862b3ba0ba5850506eee1ee4",
+      "decision": "pending",
+      "reason": "当前响应为停放页、失效入口或无关登录页，不登记。"
+    },
+    {
+      "domain": "avmoo.click",
+      "url": "https://avmoo.click/",
+      "status": 410,
+      "final_url": "http://ww1.avmoo.click/?subid1=32ee4887-cc54-11f1-ac7e-3918ca0bb39f",
+      "title": "ERROR",
+      "sha256": "ba578e2ce793a2bd412b7a9844fa224a4522d26c81b3be0041613e31f5876266",
+      "decision": "pending",
+      "reason": "当前响应为停放页、失效入口或无关登录页，不登记。"
+    },
+    {
+      "domain": "c70j.com",
+      "url": "https://c70j.com/",
+      "error": "fetch failed",
+      "cause": "unable to get local issuer certificate",
+      "decision": "pending",
+      "reason": "TLS 或连接失败，归属证据未取得。"
+    },
+    {
+      "domain": "f61m.com",
+      "url": "https://f61m.com/",
+      "error": "fetch failed",
+      "cause": "Client network socket disconnected before secure TLS connection was established",
+      "decision": "pending",
+      "reason": "TLS 或连接失败，归属证据未取得。"
+    },
+    {
+      "domain": "g60y.com",
+      "url": "https://g60y.com/",
+      "error": "fetch failed",
+      "cause": "unable to get local issuer certificate",
+      "decision": "pending",
+      "reason": "TLS 或连接失败，归属证据未取得。"
+    },
+    {
+      "domain": "g64w.com",
+      "url": "https://g64w.com/",
+      "error": "fetch failed",
+      "cause": "unable to get local issuer certificate",
+      "decision": "pending",
+      "reason": "TLS 或连接失败，归属证据未取得。"
+    },
+    {
+      "domain": "h68g.com",
+      "url": "https://h68g.com/",
+      "error": "fetch failed",
+      "cause": "Client network socket disconnected before secure TLS connection was established",
+      "decision": "pending",
+      "reason": "TLS 或连接失败，归属证据未取得。"
+    },
+    {
+      "domain": "jav-for.me",
+      "url": "https://jav-for.me/",
+      "status": 200,
+      "final_url": "https://jav-for.me/",
+      "title": "jav-for.me Auction",
+      "sha256": "86c70db1374e9febe8da0f59ab54e5327c5641815c2a1d25386f0ed1f22bd133",
+      "decision": "pending",
+      "reason": "当前响应为停放页、失效入口或无关登录页，不登记。"
+    },
+    {
+      "domain": "javdb457.com",
+      "url": "https://javdb457.com/",
+      "error": "fetch failed",
+      "cause": "Client network socket disconnected before secure TLS connection was established",
+      "decision": "pending",
+      "reason": "TLS 或连接失败，归属证据未取得。"
+    },
+    {
+      "domain": "javhd.today",
+      "url": "https://javhd.today/",
+      "status": 200,
+      "final_url": "https://javhd.today/",
+      "title": "Javhd - Watch Free Jav Streaming Online | Japanese tube - Japanese Sex",
+      "sha256": "302a8c3721fa69332577f0fa75c02b1004bcb6e038c09522bbaa9599f329e010",
+      "decision": "registered",
+      "reason": "HTTPS 首页标识与已有脚本显式域名一致。"
+    },
+    {
+      "domain": "jmvbt.com",
+      "url": "https://jmvbt.com/",
+      "status": 200,
+      "final_url": "https://jmvbt.com/",
+      "title": "Javbooks,線上日本成人影片情報站,線上日本成人影片磁力連結分享站,番號搜尋共享AV磁力連結",
+      "sha256": "7215d0efefebd8e1efe7d6211e3f34b4354e9cdde3048e4722a73a4ddd04f58a",
+      "decision": "registered",
+      "reason": "HTTPS 首页标识与已有脚本显式域名一致。"
+    },
+    {
+      "domain": "n53i.com",
+      "url": "https://n53i.com/",
+      "error": "fetch failed",
+      "cause": "Connect Timeout Error (attempted address: n53i.com:443, timeout: 10000ms)",
+      "decision": "pending",
+      "reason": "TLS 或连接失败，归属证据未取得。"
+    },
+    {
+      "domain": "s87n.com",
+      "url": "https://s87n.com/",
+      "error": "fetch failed",
+      "cause": "Client network socket disconnected before secure TLS connection was established",
+      "decision": "pending",
+      "reason": "TLS 或连接失败，归属证据未取得。"
+    },
+    {
+      "domain": "u65w.com",
+      "url": "https://u65w.com/",
+      "error": "fetch failed",
+      "cause": "unable to get local issuer certificate",
+      "decision": "pending",
+      "reason": "TLS 或连接失败，归属证据未取得。"
+    },
+    {
+      "domain": "v90f.com",
+      "url": "https://v90f.com/",
+      "error": "fetch failed",
+      "cause": "unable to get local issuer certificate",
+      "decision": "pending",
+      "reason": "TLS 或连接失败，归属证据未取得。"
+    },
+    {
+      "domain": "y94i.com",
+      "url": "https://y94i.com/",
+      "error": "fetch failed",
+      "cause": "unable to get local issuer certificate",
+      "decision": "pending",
+      "reason": "TLS 或连接失败，归属证据未取得。"
+    }
+  ]
+}

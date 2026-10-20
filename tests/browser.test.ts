@@ -34,7 +34,7 @@ function body(state: State, code = 'SSIS-057'): Body {
 }
 
 async function open(browser: Browser, options: {
-  url?: string; title?: string; html?: string; configured?: boolean; viewport?: typeof VIEWPORTS[number]; initial?: State; script?: string;
+  url?: string; title?: string; html?: string; configured?: boolean; viewport?: typeof VIEWPORTS[number]; initial?: State; script?: string; resolved?: string;
 } = {}) {
   const viewport = options.viewport || VIEWPORTS[0]!;
   const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
@@ -45,7 +45,7 @@ async function open(browser: Browser, options: {
   await context.route('**/*', route => route.fulfill({
     contentType: 'text/html; charset=utf-8', body: `<!doctype html><html><head><meta charset="utf-8"><title>${options.title || 'SSIS-057 作品详情'}</title></head><body>${options.html ?? '<h1>SSIS-057 作品详情</h1>'}</body></html>`,
   }));
-  await page.addInitScript(({ configured, token, base, initial }) => {
+  await page.addInitScript(({ configured, token, base, initial, resolved }) => {
     const mock: Mock = {
       calls: [], pending: [], automatic: true, menus: {},
       values: configured ? { 'peach.jav.base': base, 'peach.jav.token': token } : {},
@@ -63,25 +63,32 @@ async function open(browser: Browser, options: {
           anonymous: request.anonymous, ...(request.data ? { data: request.data } : {}) });
         mock.pending.push(request);
         if (mock.automatic) setTimeout(() => {
-          const code = new URL(request.url).searchParams.get('code') || 'SSIS-057';
+          const code = new URL(request.url).searchParams.get('code') || resolved || 'SSIS-057';
           request.onload({ status: 200, responseText: JSON.stringify({ ok: true, code, state: initial, message: initial }) });
         }, 0);
       },
     });
-  }, { configured: options.configured !== false, token: TOKEN, base: BASE, initial: options.initial || 'idle' });
+  }, { configured: options.configured !== false, token: TOKEN, base: BASE, initial: options.initial || 'idle', resolved: options.resolved });
   await page.goto(options.url || 'https://missav.ws/en/ssis-057?private=value#player');
   await page.clock.install();
   await page.addScriptTag({ content: options.script ?? SCRIPT });
   return { page, problems, close: () => context.close() };
 }
 
-const button = (page: Page) => page.locator(ROOT).getByRole('button');
-async function ready(page: Page, name = '加入 Peach') {
+const button = (page: Page) => page.locator(ROOT).locator('[data-action="add"]');
+const settingsDialog = (page: Page) => page.locator('#peach-jav-settings').getByRole('dialog');
+async function fillSettings(page: Page, base: string, token: string) {
+  const dialog = settingsDialog(page);
+  await dialog.getByLabel('Peach 地址', { exact: true }).fill(base);
+  await dialog.getByLabel('专用令牌', { exact: true }).fill(token);
+  await dialog.getByRole('button', { name: '保存设置', exact: true }).click();
+}
+async function ready(page: Page, name = '加入 Peach 馆藏') {
   await page.waitForFunction(({ root, label }) => {
-    const button = document.querySelector(root)?.shadowRoot?.querySelector('button');
+    const button = document.querySelector(root)?.shadowRoot?.querySelector('[data-action="add"]');
     return button?.textContent === label && button.getAttribute('aria-busy') === 'false';
   }, { root: ROOT, label: name }, { timeout: 15_000 }).catch(async error => {
-    const panel = await page.locator(ROOT).evaluate(root => ({ button: root.shadowRoot?.querySelector('button')?.textContent,
+    const panel = await page.locator(ROOT).evaluate(root => ({ button: root.shadowRoot?.querySelector('[data-action="add"]')?.textContent,
       status: root.shadowRoot?.querySelector('p')?.textContent,
       fields: [...document.querySelectorAll('dt, dd')].map(field => ({ name: field.tagName, text: field.textContent })) })).catch(() => '未取得');
     throw new Error(`${(error as Error).message}\n${JSON.stringify(panel)}`);
@@ -105,7 +112,9 @@ async function selectCode(page: Page) {
   });
 }
 
-const AUTOMATIC: Record<string, { path: string; title: string; html: string; source?: string }> = {
+const AUTOMATIC: Record<string, { path: string; title: string; html: string; source?: string; code?: string }> = {
+  dmm: { path: '/av/content/?id=ssis00519&private=secret#player', source: '/av/content/?id=ssis00519', code: 'SSIS-519', title: '作品详情', html: '<h1>作品详情</h1>' },
+  mgs: { path: '/product/product_detail/300MIUM-1239/', code: '300MIUM-1239', title: '作品详情', html: '<h1>作品详情</h1>' },
   missav: { path: '/en/ssis-057', title: 'SSIS-057', html: '<h1>SSIS-057 作品</h1>' },
   jable: { path: '/videos/ssis-057/', title: 'Jable', html: '<div class="video-info"><h4>SSIS-057 作品</h4></div>' },
   'jav-guru': { path: '/12345/ssis-057-detail/', title: 'JAV.guru', html: '<h1 class="entry-title">[SSIS-057] 作品</h1>' },
@@ -140,7 +149,7 @@ describe('JAV 用户脚本', () => {
       const submitted = await page.evaluate(() => JSON.parse(window.javMock.calls[1]!.data!));
       assert.deepEqual(submitted, { code: 'SSIS-057', source_url: 'https://javdb.com/v/ABP123' });
       await reply(page, 1, body('owned'));
-      await ready(page, '馆藏已有');
+      await ready(page, '已有该影片');
       assert.deepEqual(opened.problems, []);
     } finally { await opened.close(); }
   });
@@ -150,20 +159,25 @@ describe('JAV 用户脚本', () => {
       it(`${site.label} 自动识别 ${domain} 的明确作品身份`, async () => {
         const fixture = AUTOMATIC[site.id];
         assert.ok(fixture, `${site.id} 需要作品详情夹具`);
+        const code = fixture.code || 'SSIS-057';
         const opened = await open(browser, { url: `https://${domain}${fixture.path}`,
-          title: fixture.title, html: fixture.html + '<aside><h2>推荐 ABW-123</h2><a href="/ABW-123">ABW-123</a></aside>' });
+          title: fixture.title, resolved: code, html: fixture.html + '<aside><h2>推荐 ABW-123</h2><a href="/ABW-123">ABW-123</a></aside>' });
         const { page } = opened;
         try {
           await ready(page);
           const lookup = await page.evaluate(() => window.javMock.calls[0]!);
-          assert.equal(new URL(lookup.url).searchParams.get('code'), 'SSIS-057');
+          if (fixture.code) {
+            assert.equal(new URL(lookup.url).pathname, '/api/jav-browser/identify');
+            assert.equal(new URL(lookup.url).searchParams.get('source_url'), `https://${domain}${fixture.source || fixture.path}`);
+            assert.equal(await page.locator(ROOT).locator('strong').innerText(), code);
+          } else assert.equal(new URL(lookup.url).searchParams.get('code'), code);
           await page.evaluate(() => { window.javMock.automatic = false; });
           await button(page).click();
           await pending(page, 2);
           const submitted = await page.evaluate(() => JSON.parse(window.javMock.calls[1]!.data!));
-          assert.deepEqual(submitted, { code: 'SSIS-057', source_url: `https://${domain}${fixture.source || fixture.path}` });
-          await reply(page, 1, body('owned'));
-          await ready(page, '馆藏已有');
+          assert.deepEqual(submitted, { code, source_url: `https://${domain}${fixture.source || fixture.path}` });
+          await reply(page, 1, body('owned', code));
+          await ready(page, '已有该影片');
           assert.deepEqual(opened.problems, []);
         } finally { await opened.close(); }
       });
@@ -193,7 +207,7 @@ describe('JAV 用户脚本', () => {
             ? `https://${domain}/av/content/?id=opaque_cid` : site.id === 'sehuatang'
               ? `https://${domain}/forum.php?tid=12345` : `https://${domain}/products/opaque` });
           await reply(page, 1, body('owned'));
-          await ready(page, '馆藏已有');
+          await ready(page, '已有该影片');
           assert.deepEqual(opened.problems, []);
         } finally { await opened.close(); }
       });
@@ -201,7 +215,7 @@ describe('JAV 用户脚本', () => {
   }
 
   it('选中菜单拒绝完整标题、多番号、编解码器和超长内容', async () => {
-    const opened = await open(browser, { url: 'https://dmm.co.jp/av/content/?id=ssis00057',
+    const opened = await open(browser, { url: 'https://duga.jp/products/ssis00057',
       title: '商品详情', html: '<span id="selected-code"></span>' });
     const { page } = opened;
     let alerts = 0;
@@ -211,7 +225,10 @@ describe('JAV 用户脚本', () => {
         await page.locator('#selected-code').evaluate((element, value) => { element.textContent = value; }, value);
         await selectCode(page);
       }
-      assert.equal(alerts, 6);
+      assert.equal(alerts, 0);
+      assert.match(await page.locator('#peach-jav-notice').getByRole('status').innerText(), /只选中一个完整/);
+      await page.locator('#peach-jav-notice').getByRole('button', { name: '关闭 Peach 提示' }).click();
+      assert.equal(await page.locator('#peach-jav-notice').count(), 0);
       assert.equal(await page.locator(ROOT).count(), 0);
       assert.equal(await page.evaluate(() => window.javMock.calls.length), 0);
     } finally { await opened.close(); }
@@ -231,7 +248,7 @@ describe('JAV 用户脚本', () => {
         await pending(page, 2);
         assert.equal(JSON.parse(await page.evaluate(() => window.javMock.calls[1]!.data!)).code, raw.toLowerCase());
         await reply(page, 1, body('owned', raw.toLowerCase()));
-        await ready(page, '馆藏已有');
+        await ready(page, '已有该影片');
       } finally { await opened.close(); }
     });
   }
@@ -256,7 +273,7 @@ describe('JAV 用户脚本', () => {
       await selectCode(page);
       await ready(page);
       assert.deepEqual(await page.evaluate(() => window.javMock.calls.map(call => call.method)), ['GET']);
-      assert.match(await page.locator(ROOT).getByRole('status').innerText(), /SSIS-057/);
+      assert.equal(await page.locator(ROOT).locator('header strong').innerText(), 'SSIS-057');
       await page.evaluate(() => { window.javMock.automatic = false; });
       await button(page).click();
       await pending(page, 2);
@@ -269,7 +286,7 @@ describe('JAV 用户脚本', () => {
       await reply(page, 1, body('owned'));
       await reply(page, 2, body('idle', 'ABW-123'));
       await ready(page);
-      assert.match(await page.locator(ROOT).getByRole('status').innerText(), /ABW-123/);
+      assert.equal(await page.locator(ROOT).locator('header strong').innerText(), 'ABW-123');
       assert.equal(await button(page).isDisabled(), false);
       assert.deepEqual(opened.problems, []);
     } finally { await opened.close(); }
@@ -311,16 +328,15 @@ describe('JAV 用户脚本', () => {
     const { page } = opened;
     try {
       await ready(page, '配置 Peach');
-      const dialogs = [BASE, TOKEN];
-      page.on('dialog', dialog => { void dialog.accept(dialogs.shift()); });
       await button(page).click();
+      await fillSettings(page, BASE, TOKEN);
       await ready(page);
       assert.equal(await page.evaluate(() => window.javMock.calls.length), 1);
       await page.evaluate(() => { window.javMock.automatic = false; });
       await button(page).click();
       await page.locator(ROOT).evaluate(root => {
-        root.shadowRoot!.querySelector('button')!.click();
-        root.shadowRoot!.querySelector('button')!.click();
+        root.shadowRoot!.querySelector<HTMLButtonElement>('[data-action="add"]')!.click();
+        root.shadowRoot!.querySelector<HTMLButtonElement>('[data-action="add"]')!.click();
       });
       await pending(page, 2);
       const calls = await page.evaluate(() => window.javMock.calls);
@@ -351,7 +367,7 @@ describe('JAV 用户脚本', () => {
       await page.clock.fastForward(2100);
       await pending(page, 5);
       await reply(page, 4, body('ingested'));
-      await ready(page, '已入库');
+      await ready(page, '已有该影片');
       assert.equal(await button(page).isDisabled(), true);
       assert.deepEqual(opened.problems, []);
     } finally { await opened.close(); }
@@ -391,7 +407,7 @@ describe('JAV 用户脚本', () => {
         const submitted = await page.evaluate(() => JSON.parse(window.javMock.calls[1]!.data!));
         assert.equal(submitted.code, example.extracted);
         await reply(page, 1, body('owned', example.canonical));
-        await ready(page, '馆藏已有');
+        await ready(page, '已有该影片');
         assert.equal(await button(page).isDisabled(), true);
         assert.deepEqual(opened.problems, []);
       } finally { await opened.close(); }
@@ -426,13 +442,13 @@ describe('JAV 用户脚本', () => {
       const { page } = opened;
       try {
         await ready(page, '配置 Peach');
-        const dialogs = [invalid.base, invalid.token];
-        page.on('dialog', dialog => { void dialog.accept(dialogs.shift()); });
         await button(page).click();
+        await fillSettings(page, invalid.base, invalid.token);
         await ready(page, '配置 Peach');
         assert.deepEqual(await page.evaluate(() => window.javMock.values), {});
         assert.equal(await page.evaluate(() => window.javMock.calls.length), 0);
-        assert.match(await page.locator(ROOT).getByRole('status').innerText(), /地址或令牌无效/);
+        assert.match(await settingsDialog(page).getByRole('alert').innerText(), /请输入/);
+        assert.equal(await settingsDialog(page).locator('[aria-invalid="true"]').count(), 1);
       } finally { await opened.close(); }
     });
   }
@@ -443,9 +459,8 @@ describe('JAV 用户脚本', () => {
       const { page } = opened;
       try {
         await ready(page, '配置 Peach');
-        const dialogs = [base, TOKEN];
-        page.on('dialog', dialog => { void dialog.accept(dialogs.shift()); });
         await button(page).click();
+        await fillSettings(page, base, TOKEN);
         await ready(page);
         const stored = await page.evaluate(() => window.javMock.values);
         assert.equal(stored['peach.jav.base'], base);
@@ -500,12 +515,12 @@ describe('JAV 用户脚本', () => {
       await button(page).click();
       await pending(page, 4);
       await reply(page, 3, body('failed'));
-      await ready(page, '重试加入 Peach');
+      await ready(page, '重试加入 Peach 馆藏');
       await button(page).click();
       await pending(page, 5);
       assert.deepEqual(await page.evaluate(() => window.javMock.calls.map(call => call.method)), ['GET', 'POST', 'GET', 'GET', 'POST']);
       await reply(page, 4, body('no_match'));
-      await ready(page, '重试加入 Peach');
+      await ready(page, '重试加入 Peach 馆藏');
       assert.deepEqual(opened.problems, []);
     } finally { await opened.close(); }
   });
@@ -546,7 +561,7 @@ describe('JAV 用户脚本', () => {
       await reply(page, 1, body('owned'));
       await reply(page, 2, body('idle', 'ABW-123'));
       await ready(page);
-      assert.match(await page.locator(ROOT).getByRole('status').innerText(), /ABW-123/);
+      assert.equal(await page.locator(ROOT).locator('header strong').innerText(), 'ABW-123');
       await page.addScriptTag({ content: SCRIPT });
       await page.clock.fastForward(1000);
       assert.equal(await page.locator(ROOT).count(), 1);
@@ -588,12 +603,59 @@ describe('JAV 用户脚本', () => {
     } finally { await opened.close(); }
     const owned = await open(browser, { initial: 'owned' });
     try {
-      await ready(owned.page, '馆藏已有');
+      await ready(owned.page, '已有该影片');
       assert.equal(await button(owned.page).isDisabled(), true);
     } finally { await owned.close(); }
   });
 
   for (const viewport of VIEWPORTS) {
+    for (const theme of ['light', 'dark'] as const) {
+      it(`${viewport.name} / ${theme} 设置表单、取消与 GM 令牌保留`, async () => {
+        const opened = await open(browser, { viewport });
+        const { page } = opened;
+        const dialogs: string[] = [];
+        page.on('dialog', dialog => { dialogs.push(dialog.type()); void dialog.dismiss(); });
+        try {
+          await page.emulateMedia({ colorScheme: theme });
+          await ready(page);
+          const trigger = page.locator(ROOT).getByRole('button', { name: 'Peach 设置', exact: true });
+          await trigger.click();
+          const dialog = settingsDialog(page);
+          const token = dialog.getByLabel('专用令牌', { exact: true });
+          assert.equal(await token.inputValue(), '');
+          assert.equal(await token.getAttribute('type'), 'password');
+          assert.equal(await dialog.getByLabel('Peach 地址', { exact: true }).inputValue(), BASE);
+          await token.fill('draft-only-token');
+          await dialog.getByRole('button', { name: '显示专用令牌' }).click();
+          assert.equal(await token.getAttribute('type'), 'text');
+          await token.press('Escape');
+          assert.equal(await dialog.count(), 0);
+          assert.equal(await trigger.evaluate(node => node.getRootNode() instanceof ShadowRoot && (node.getRootNode() as ShadowRoot).activeElement === node), true);
+          assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.token']), TOKEN);
+          await trigger.click();
+          assert.equal(await token.inputValue(), '');
+          await dialog.getByLabel('Peach 地址', { exact: true }).fill('https://other-peach.example.invalid');
+          await dialog.getByRole('button', { name: '保存设置' }).click();
+          assert.match(await dialog.getByRole('alert').innerText(), /重新填写令牌/);
+          assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.base']), BASE);
+          await dialog.getByLabel('Peach 地址', { exact: true }).fill(BASE + '/');
+          await dialog.getByLabel('Peach 地址', { exact: true }).press('Enter');
+          await ready(page);
+          assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.token']), TOKEN);
+          await page.locator(ROOT).getByRole('button', { name: 'Peach 设置', exact: true }).click();
+          const geometry = await dialog.evaluate(node => {
+            const box = node.getBoundingClientRect();
+            return { left: box.left, top: box.top, right: box.right, bottom: box.bottom, width: innerWidth, height: innerHeight,
+              overflow: node.scrollWidth > node.clientWidth, background: getComputedStyle(node).backgroundColor };
+          });
+          assert.ok(geometry.left >= 0 && geometry.top >= 0 && geometry.right <= geometry.width && geometry.bottom <= geometry.height, JSON.stringify(geometry));
+          assert.equal(geometry.overflow, false);
+          assert.equal(geometry.background, theme === 'dark' ? 'rgb(8, 10, 13)' : 'rgb(255, 255, 255)');
+          assert.deepEqual(dialogs, []);
+          assert.deepEqual(opened.problems, []);
+        } finally { await opened.close(); }
+      });
+    }
     it(`${viewport.name} 下按钮可聚焦且不越出视口`, async () => {
       const opened = await open(browser, { viewport });
       try {
@@ -612,4 +674,73 @@ describe('JAV 用户脚本', () => {
       } finally { await opened.close(); }
     });
   }
+
+  it('配对信息只填入表单，输入法合成、错误与取消不写 GM', async () => {
+    const opened = await open(browser, { configured: false, url: 'https://duga.jp/other/' });
+    const { page } = opened;
+    try {
+      await page.evaluate(() => window.javMock.menus['配置 Peach 地址与令牌']!());
+      const dialog = settingsDialog(page);
+      const address = dialog.getByLabel('Peach 地址', { exact: true });
+      const paste = (text: string) => address.evaluate((node, text) => {
+        const data = new DataTransfer();
+        data.setData('text/plain', text);
+        node.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+      }, text);
+      await paste('{"peach_pairing":1,"base":"http://remote.example","token":"dummy"}');
+      assert.match(await dialog.getByRole('alert').innerText(), /配对信息无效/);
+      await paste(JSON.stringify({ peach_pairing: 1, base: BASE, token: TOKEN }));
+      assert.equal(await address.inputValue(), BASE);
+      assert.equal(await dialog.getByLabel('专用令牌', { exact: true }).inputValue(), TOKEN);
+      assert.deepEqual(await page.evaluate(() => window.javMock.values), {});
+      await address.dispatchEvent('compositionstart');
+      await address.press('Enter');
+      assert.deepEqual(await page.evaluate(() => window.javMock.values), {});
+      await address.dispatchEvent('compositionend');
+      await dialog.getByRole('button', { name: '保存设置' }).click();
+      assert.deepEqual(await page.evaluate(() => window.javMock.values), { 'peach.jav.base': BASE, 'peach.jav.token': TOKEN });
+      await page.clock.runFor(20);
+      assert.equal(await page.locator('#peach-jav-settings').count(), 0);
+      assert.equal(await page.evaluate(() => window.javMock.calls.length), 0);
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
+  it('同源桥接只回报版本和配对状态，不回传配置或令牌', async () => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    try {
+      await context.route('**/*', route => route.fulfill({ contentType: 'text/html', body:
+        new URL(route.request().url()).pathname === '/integrations/peach-userscript-bridge'
+          ? '<meta name="peach-userscript-bridge" content="1">'
+          : '<iframe id="bridge" src="/integrations/peach-userscript-bridge"></iframe>' }));
+      await page.goto(BASE);
+      const frame = page.frames().find(frame => frame.url().endsWith('/integrations/peach-userscript-bridge'))!;
+      await frame.waitForLoadState();
+      await frame.evaluate(({ base, token }) => {
+        Object.assign(window, { GM_getValue: (key: string, fallback: string) =>
+          ({ 'peach.jav.base': base, 'peach.jav.token': token }[key] ?? fallback) });
+      }, { base: BASE, token: TOKEN });
+      await frame.addScriptTag({ content: SCRIPT });
+      const result = await page.evaluate(async () => {
+        const nonce = crypto.randomUUID();
+        return await new Promise<Record<string, unknown>>((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error('桥接无响应')), 2000);
+          const receive = (event: MessageEvent) => {
+            if (event.data?.nonce !== nonce || event.data.type !== 'peach-userscript:ready') return;
+            clearTimeout(timer);
+            removeEventListener('message', receive);
+            resolve(event.data);
+          };
+          addEventListener('message', receive);
+          document.querySelector<HTMLIFrameElement>('#bridge')!.contentWindow!.postMessage({ type: 'peach-userscript:probe', nonce }, location.origin);
+        });
+      });
+      assert.deepEqual(Object.keys(result).sort(), ['nonce', 'paired', 'protocol', 'type', 'version']);
+      assert.equal(result.version, '0.4.0');
+      assert.equal(result.paired, true);
+      assert.equal(JSON.stringify(result).includes(TOKEN), false);
+      assert.equal(await frame.locator(ROOT).count(), 0);
+    } finally { await context.close(); }
+  });
 });

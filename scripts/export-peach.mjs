@@ -45,6 +45,7 @@ export async function exportPeach({ target, commit, apply = false, root = ROOT }
     files.set(name, bytes);
   }
   const provenance = { version: release.version, repository, commit,
+    install_url: release.install_url, bridge_min_version: release.bridge_min_version,
     site_schema_version: release.site_schema_version, files: release.files };
   files.set('jav-userscript-release.json', Buffer.from(JSON.stringify(provenance, null, 2) + '\n'));
   const plan = [];

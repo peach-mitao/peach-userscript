@@ -6,6 +6,18 @@
 
 在 Peach 的浏览器添加设置中启用并生成专用令牌。脚本管理器将 Peach origin 和令牌保存在 `peach.jav.base` 与 `peach.jav.token`，所有请求通过 `GM_xmlhttpRequest` 发往用户配置的 Peach origin。
 
+配对信息使用 JSON：`{"peach_pairing":1,"base":"https://peach.example.com","token":"专用令牌"}`。Peach 在令牌签发后可复制该信息；用户脚本在地址输入框粘贴时校验版本与字段，按配置的相同判据校验后填入表单，不自动保存。载荷上限 4,096 字符，不包含网盘凭据或来源站数据。
+
+## 安装检测
+
+脚本只在固定路径 `/integrations/peach-userscript-bridge` 的同源子框架内响应检测，HTTPS 支持自托管主机，HTTP 仅匹配本机。Peach 页面发出 `{type:"peach-userscript:probe",nonce}`，脚本校验父窗口、来源与 UUID nonce 后回报 `{type:"peach-userscript:ready",protocol:1,nonce,version,paired}`。`paired` 只表示 GM 存储中的有效地址等于当前 origin，不证明令牌仍有效；不回报地址或令牌。普通来源站点的子框架不运行添加逻辑。
+
+## 发行平台商品号
+
+`GET /api/jav-browser/identify?source_url=<已净化的详情地址>` 使用同一专用令牌，返回与状态查询相同的字段。Peach 从登记的 DMM、MGS 详情路径提取商品号，复用 `catalog_rules` 的规范化、发行身份与 `feeds.scan_code` 识别边界；不搜索来源、不写账本、不创建下载。识别失败返回 400，用户可改为选择明确番号。脚本不维护另一份商品号转换表。
+
+发行平台在 `jav-sites.json` 声明 `identity: "peach"`。两端从同一详情正则的第一捕获组或唯一作品参数取得商品号；域名、镜像与详情路径均以该清单为准。
+
 地址接受 HTTPS；HTTP 仅接受 `localhost`、`127.0.0.1`、`[::1]`。地址须为 origin，不能带用户名、密码、路径、查询或片段。令牌不能为空，最多 256 字符，不接受换行。请求使用 `Authorization: Bearer <专用令牌>`，`Accept: application/json`，`anonymous: true`，单次超时 15 秒。`@connect *` 用于自选 Peach 地址；脚本的请求目标始终来自有效配置。
 
 ## 查询状态
