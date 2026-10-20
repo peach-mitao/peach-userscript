@@ -4,7 +4,13 @@
   "official": [
     {
       "source_url": "https://video.dmm.co.jp/av/content/?id=ssis00519",
-      "page": "年龄确认页，详情 DOM 未取得",
+      "page": "浏览器详情表读取到配信品番 ssis00519、メーカー品番 SSIS-519",
+      "browser_validation": {
+        "script_version": "0.4.0",
+        "code": "SSIS-519",
+        "status": "可以加入 Peach 馆藏",
+        "scope": "真实详情页与设置面板；GM 状态接口使用隔离只读适配，真实扩展与网盘联合验收未取得。"
+      },
       "identity_url": "https://api.video.dmm.co.jp/graphql",
       "id": "ssis00519",
       "makerContentId": "SSIS-519",
@@ -12,7 +18,13 @@
     },
     {
       "source_url": "https://www.mgstage.com/product/product_detail/300MIUM-1239/",
-      "page": "年龄确认页，详情 DOM 未取得",
+      "page": "浏览器详情表读取到品番 300MIUM-1239",
+      "browser_validation": {
+        "script_version": "0.4.0",
+        "code": "300MIUM-1239",
+        "status": "可以加入 Peach 馆藏",
+        "scope": "真实详情页与设置面板；GM 状态接口使用隔离只读适配，真实扩展与网盘联合验收未取得。"
+      },
       "identity": "商品号取详情路径，最终番号由 Peach 编目规则解析。"
     }
   ],
