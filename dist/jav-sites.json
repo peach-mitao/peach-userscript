@@ -353,6 +353,11 @@
       "query_keys": [
         "id"
       ],
+      "selectors": [
+        "th",
+        "dt",
+        "[data-video-code]"
+      ],
       "detail_pattern": "^/(?:av/content/?|(?:digital/(?:videoa|videoc)|mono/dvd)/-/detail/=/cid=([A-Za-z0-9_]+)/?)$"
     },
     {
@@ -364,6 +369,11 @@
       ],
       "mode": "automatic",
       "identity": "peach",
+      "selectors": [
+        "th",
+        "dt",
+        "[data-video-code]"
+      ],
       "detail_pattern": "^/product/product_detail/([A-Za-z0-9_-]+)/?$"
     },
     {

@@ -1,5 +1,7 @@
 # 复用记录
 
+商品身份复用 Peach 的 `sources.dmm` CID 模型和 `catalog_rules` 商品番号判据，不引入第三方解析依赖。浏览器只提取明确字段与完整短番号，DMM 与 MGS 的来源差异由服务端解释；厂家番号与商品号联合校验，尾字母和日期分隔符保留。模拟 GM API 的 Chromium 回归覆盖字段冲突、特殊番号与 HTTP 错误分类；Peach 消费端另以完整安装脚本连接临时账本的真实识别接口，验证桌面与手机链路。
+
 用户脚本保留 Peach `f8ca8a5b9ac57f6873661c98db7f6df3694535f9` 的识别、来源净化、GM 凭据存储、请求、状态轮询及 SPA 生命周期行为。构建复用原安装端点按站点清单生成 `@match` 与内联 JSON 的边界，使用 Node 内置 `fs`、`crypto` 和 `node:test`，不引入打包器或运行依赖。
 
 已检查源树的用户脚本、路由与浏览器测试，`docs/REUSE.md` 中的 GM API 记录，以及历史提交 `509827d5` 和 `a15b1758`。Tampermonkey [官方文档](https://www.tampermonkey.net/documentation.php) 定义存储、菜单、跨域请求与 URL 变更通知。浏览器测试复用 `playwright-core` 1.64.1（Apache-2.0），版本由本仓库锁文件固定；这是开发依赖，不进入制品。

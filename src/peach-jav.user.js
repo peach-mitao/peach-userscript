@@ -5,7 +5,7 @@
 // @supportURL   https://github.com/peach-mitao/peach-userscript/issues
 // @homepageURL  https://github.com/peach-mitao/peach-userscript
 // @license      AGPL-3.0-or-later
-// @version      0.4.0
+// @version      0.5.0
 // @description  在 JAV 作品详情页识别或选中番号，交给 Peach 下载入库。
 // __PEACH_JAV_MATCHES__
 // @match        https://*/integrations/peach-userscript-bridge
@@ -185,16 +185,20 @@
       found.add(prefix.toLowerCase() + digits);
       return ' ';
     });
-    for (const match of rest.matchAll(/\b((?:\d{1,5})?[A-Z]{2,12})[-_]?(\d{1,8})(?=$|[^A-Z0-9])/g)) {
-      found.add(`${match[1]}-${match[2]}`);
+    rest = rest.replace(/\b(MKB?D)-S(\d{2,4})(?=$|[^A-Z0-9])/g, (_, prefix, digits) => {
+      found.add(`${prefix}-S${digits}`);
+      return ' ';
+    });
+    for (const match of rest.matchAll(/\b((?:\d{1,5})?[A-Z]{2,12})[-_]?(\d{1,8})([A-Z]{0,2})(?=$|[^A-Z0-9])/g)) {
+      found.add(`${match[1]}-${match[2]}${match[3]}`);
     }
-    for (const match of rest.matchAll(/\b\d{6}[-_]\d{3}\b/g)) found.add(match[0]);
+    for (const match of rest.matchAll(/\b\d{6}[-_]\d{2,4}\b/g)) found.add(match[0]);
     return found;
   }
 
   function comparisonKey(code) {
     if (code.startsWith('FC2-PPV-')) return code;
-    return code.replace(/^((?:\d+)?[A-Z]+)-0*(\d+)$/, '$1-$2');
+    return code.toUpperCase().replace(/^((?:\d+)?[A-Z]+)-0*(\d+)([A-Z]{0,2})$/, '$1-$2$3');
   }
 
   function siteFor(url) {
@@ -226,11 +230,12 @@
       } catch { return ''; }
     }
     const text = (field.textContent || '').slice(0, 800);
-    if (field.matches('dt, strong, b, .header, p')) {
+    if (field.matches('th, dt, strong, b, .header, p')) {
       const label = text.trim().split(/[:：]/, 1)[0].trim().toLowerCase();
-      const labelled = ['番号', '番號', '品番', '識別碼', '识别码', 'id', 'code'].includes(label)
-        || /^(番号|番號|品番|識別碼|识别码|ID|Code)\s*[:：]/i.test(text.trim());
+      const labelled = ['番号', '番號', '品番', 'メーカー品番', '識別碼', '识别码', 'id', 'code'].includes(label)
+        || /^(メーカー品番|番号|番號|品番|識別碼|识别码|ID|Code)\s*[:：]/i.test(text.trim());
       if (!labelled) return '';
+      if (field.tagName === 'TH') return field.nextElementSibling?.tagName === 'TD' ? field.nextElementSibling.textContent : '';
       if (field.tagName === 'DT') return field.nextElementSibling?.tagName === 'DD' ? field.nextElementSibling.textContent : '';
       if (field.tagName === 'P') return text;
       let value = text;
@@ -252,7 +257,14 @@
     if (site.identity === 'peach') {
       if (!match[1] && site.query_keys?.some(key => url.searchParams.getAll(key).length !== 1
         || !/^[A-Za-z0-9_-]{1,100}$/.test(url.searchParams.get(key)))) return null;
-      return { code: '', conflict: false, source: sourcePage(url, site), resolve: true };
+      const codes = new Map();
+      for (const selector of site.selectors || []) {
+        for (const field of [...document.querySelectorAll(selector)].slice(0, 40)) {
+          for (const code of candidates(fieldText(field))) codes.set(comparisonKey(code), code);
+        }
+      }
+      return { code: codes.size === 1 ? [...codes.values()][0] : '', conflict: codes.size > 1,
+        source: sourcePage(url, site), resolve: true };
     }
     if (site.query_keys?.length && !site.query_keys.every(key => url.searchParams.getAll(key).length === 1
       && /^[A-Za-z0-9_-]{1,100}$/.test(url.searchParams.get(key)))) return null;
@@ -300,7 +312,7 @@
     const site = siteFor(url);
     if (!site) return;
     const raw = String(getSelection() || '').trim();
-    const shortCode = /^(?:FC2(?:[-_ ]?PPV)?[-_ ]?\d{4,9}|[NK]\d{4}|(?:\d{1,5})?[A-Z]{2,12}[-_]?\d{1,8}|\d{6}[-_]\d{3})$/i;
+    const shortCode = /^(?:FC2(?:[-_ ]?PPV)?[-_ ]?\d{4,9}|[NK]\d{4}|MKB?D-S\d{2,4}|(?:\d{1,5})?[A-Z]{2,12}[-_]?\d{1,8}[A-Z]{0,2}|\d{6}[-_]\d{2,4})$/i;
     const extracted = candidates(raw);
     if (raw.length > 80 || !shortCode.test(raw) || extracted.size !== 1) {
       showNotice('请只选中一个完整的短番号，再从脚本菜单加入 Peach。');
@@ -486,7 +498,7 @@
       try {
         GM_xmlhttpRequest({
           method,
-          url: resolveIdentity ? `${config.base}/api/jav-browser/identify?source_url=${encodeURIComponent(source)}`
+          url: resolveIdentity ? `${config.base}/api/jav-browser/identify?source_url=${encodeURIComponent(source)}${code ? `&code=${encodeURIComponent(code)}` : ''}`
             : `${config.base}/api/jav-browser${method === 'GET' ? `?code=${encodeURIComponent(code)}` : ''}`,
           headers,
           ...(method === 'POST' ? { data: JSON.stringify({ code, source_url: source }) } : {}),
@@ -494,7 +506,13 @@
           timeout: 15_000,
           onload(response) {
             if (response.status < 200 || response.status >= 300) {
+              let detail = '';
+              try { const value = JSON.parse(response.responseText).detail; if (typeof value === 'string' && value.length <= 200) detail = value; } catch { /* 非 JSON 错误使用 HTTP 状态提示。 */ }
               reject(new Error(response.status === 401 || response.status === 403 ? '令牌无效或无权限，请重新配置。'
+                : response.status >= 500 ? 'Peach 服务暂时不可用，请稍后查询状态。'
+                : response.status === 429 ? 'Peach 请求过于频繁，请稍后查询。'
+                : resolveIdentity && [404, 405].includes(response.status) ? 'Peach 尚不支持商品号识别，请更新 Peach。'
+                : response.status === 400 && detail ? detail
                 : resolveIdentity ? '未识别到作品番号，请选中页面的完整番号后加入 Peach。' : 'Peach 请求失败，请查询状态。'));
               return;
             }
@@ -502,7 +520,7 @@
               const body = JSON.parse(response.responseText);
               if (body.ok !== true || !STATES.has(body.state) || typeof body.code !== 'string'
                 || candidates(body.code).size !== 1
-                || (!resolveIdentity && ![...candidates(body.code)].some(candidate => comparisonKey(candidate) === comparisonKey(code)))) throw new Error();
+                || ((!resolveIdentity || code) && ![...candidates(body.code)].some(candidate => comparisonKey(candidate) === comparisonKey(code)))) throw new Error();
               resolve(body);
             } catch { reject(new Error('Peach 返回的状态无效，请查询状态。')); }
           },

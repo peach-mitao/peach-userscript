@@ -34,7 +34,7 @@ function body(state: State, code = 'SSIS-057'): Body {
 }
 
 async function open(browser: Browser, options: {
-  url?: string; title?: string; html?: string; configured?: boolean; viewport?: typeof VIEWPORTS[number]; initial?: State; script?: string; resolved?: string;
+  url?: string; title?: string; html?: string; configured?: boolean; viewport?: typeof VIEWPORTS[number]; initial?: State; script?: string; resolved?: string; automatic?: boolean;
 } = {}) {
   const viewport = options.viewport || VIEWPORTS[0]!;
   const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
@@ -45,9 +45,9 @@ async function open(browser: Browser, options: {
   await context.route('**/*', route => route.fulfill({
     contentType: 'text/html; charset=utf-8', body: `<!doctype html><html><head><meta charset="utf-8"><title>${options.title || 'SSIS-057 作品详情'}</title></head><body>${options.html ?? '<h1>SSIS-057 作品详情</h1>'}</body></html>`,
   }));
-  await page.addInitScript(({ configured, token, base, initial, resolved }) => {
+  await page.addInitScript(({ configured, token, base, initial, resolved, automatic }) => {
     const mock: Mock = {
-      calls: [], pending: [], automatic: true, menus: {},
+      calls: [], pending: [], automatic, menus: {},
       values: configured ? { 'peach.jav.base': base, 'peach.jav.token': token } : {},
       reply(index, value, status = 200) {
         mock.pending[index]!.onload({ status, responseText: JSON.stringify(value) });
@@ -68,7 +68,7 @@ async function open(browser: Browser, options: {
         }, 0);
       },
     });
-  }, { configured: options.configured !== false, token: TOKEN, base: BASE, initial: options.initial || 'idle', resolved: options.resolved });
+  }, { configured: options.configured !== false, token: TOKEN, base: BASE, initial: options.initial || 'idle', resolved: options.resolved, automatic: options.automatic !== false });
   await page.goto(options.url || 'https://missav.ws/en/ssis-057?private=value#player');
   await page.clock.install();
   await page.addScriptTag({ content: options.script ?? SCRIPT });
@@ -135,6 +135,62 @@ describe('JAV 用户脚本', () => {
   let browser: Browser;
   before(async () => { browser = await launch(); });
   after(async () => { await browser?.close(); });
+
+  for (const viewport of VIEWPORTS) {
+    for (const example of [
+      { site: 'dmm', url: 'https://video.dmm.co.jp/av/content/?id=1dandy00899', code: 'DANDY-899', label: 'メーカー品番：' },
+      { site: 'dmm', url: 'https://video.dmm.co.jp/av/content/?id=1dandy00851c', code: 'DANDY-851C', label: 'メーカー品番：' },
+      { site: 'mgs', url: 'https://www.mgstage.com/product/product_detail/104DANDY-851C/', code: '104DANDY-851C', label: '品番：' },
+    ]) {
+      it(`${viewport.name} ${example.site} 校验详情字段 ${example.code}`, async () => {
+        const opened = await open(browser, { url: example.url, title: '作品详情', viewport,
+          html: `<table><tr><th>配信品番：</th><td>1dandy00899</td></tr><tr><th>${example.label}</th><td>${example.code}</td></tr></table>`, resolved: example.code });
+        try {
+          await ready(opened.page);
+          const url = new URL(await opened.page.evaluate(() => window.javMock.calls[0]!.url));
+          assert.equal(url.pathname, '/api/jav-browser/identify');
+          assert.equal(url.searchParams.get('code'), example.code);
+          assert.equal(url.searchParams.get('source_url'), example.url);
+          assert.equal(await opened.page.locator(ROOT).locator('.bar strong').innerText(), example.code);
+          assert.deepEqual(opened.problems, []);
+        } finally { await opened.close(); }
+      });
+    }
+  }
+
+  for (const code of ['MKBD-S123', 'MKD-S123', '092415_01', '092415_0001', 'DANDY-851C']) {
+    it(`自动识别和主动选中支持完整番号 ${code}`, async () => {
+      const automatic = await open(browser, { url: `https://123av.com/en/v/${code.toLowerCase()}`, title: code, html: `<h1>${code}</h1>` });
+      try {
+        await ready(automatic.page);
+        assert.equal(new URL(await automatic.page.evaluate(() => window.javMock.calls[0]!.url)).searchParams.get('code'), code);
+      } finally { await automatic.close(); }
+      const manual = await open(browser, { url: 'https://sod.co.jp/detail', title: '作品详情', html: `<span id="selected-code">${code}</span>` });
+      try {
+        await selectCode(manual.page);
+        await ready(manual.page);
+        assert.equal(new URL(await manual.page.evaluate(() => window.javMock.calls[0]!.url)).searchParams.get('code'), code);
+      } finally { await manual.close(); }
+    });
+  }
+
+  for (const [status, message] of [
+    [400, '页面番号与商品号不一致，请核对作品详情'],
+    [404, 'Peach 尚不支持商品号识别，请更新 Peach。'],
+    [429, 'Peach 请求过于频繁，请稍后查询。'],
+    [503, 'Peach 服务暂时不可用，请稍后查询状态。'],
+  ] as const) {
+    it(`商品号识别按 HTTP ${status} 显示可恢复错误`, async () => {
+      const opened = await open(browser, { url: 'https://video.dmm.co.jp/av/content/?id=1dandy00899', title: '作品详情', automatic: false });
+      try {
+        await pending(opened.page, 1);
+        await opened.page.evaluate(({status,message}) => window.javMock.reply(0,{detail:message},status), {status,message});
+        await ready(opened.page, '查询 Peach 状态');
+        assert.equal(await opened.page.locator(ROOT).locator('p').innerText(), message);
+        assert.deepEqual(opened.problems, []);
+      } finally { await opened.close(); }
+    });
+  }
 
   it('安装产物在 JavDB 页面读取内联清单并完成添加', async () => {
     const fixture = AUTOMATIC.javdb!;
@@ -737,7 +793,7 @@ describe('JAV 用户脚本', () => {
         });
       });
       assert.deepEqual(Object.keys(result).sort(), ['nonce', 'paired', 'protocol', 'type', 'version']);
-      assert.equal(result.version, '0.4.0');
+      assert.equal(result.version, '0.5.0');
       assert.equal(result.paired, true);
       assert.equal(JSON.stringify(result).includes(TOKEN), false);
       assert.equal(await frame.locator(ROOT).count(), 0);
