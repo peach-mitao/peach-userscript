@@ -20,9 +20,17 @@
 
 脚本只读取详情表中的「メーカー品番」「品番」等明确身份字段，不把「配信品番」与厂家番号混为一谈。多个字段矛盾时阻止添加；请求保留尾字母，响应须与所提交字段一致。通用提取覆盖 KIRARI 的 `MKBD-S`／`MKD-S` 和二至四位序号的日期式番号。HTTP 404／405 提示升级 Peach，429 提示稍后查询，5xx 提示服务故障；不将这些故障显示为番号缺失。
 
-地址接受 HTTPS；HTTP 仅接受 `localhost`、`127.0.0.1`、`[::1]`。地址须为 origin，不能带用户名、密码、路径、查询或片段。令牌不能为空，最多 256 字符，不接受换行。请求使用 `Authorization: Bearer <专用令牌>`，`Accept: application/json`，`anonymous: true`，单次超时 15 秒。`@connect *` 用于自选 Peach 地址；脚本的请求目标始终来自有效配置。
+地址接受 HTTPS；HTTP 仅接受 `localhost`、`127.0.0.1`、`[::1]`。地址须为 origin，不能带用户名、密码、路径、查询或片段。令牌不能为空，最多 256 字符，不接受换行。请求使用 `Authorization: Bearer <专用令牌>`，`Accept: application/json`，`anonymous: true`，业务请求单次超时 60 秒。`@connect *` 用于自选 Peach 地址；脚本的请求目标始终来自有效配置。
 
-## 查询状态
+## 本机错误取证
+
+`POST /api/jav-browser/errors` 使用同一专用令牌与 `{events:[...]}` 请求体；每条仅包含 UUID `id`、ISO 时间 `at`、`kind`、`operation`、站点清单标识 `site`、番号 `code`、`elapsed_ms`、HTTP `status` 与 `script_version`。`kind` 为 `timeout`、`network`、`abort`、`http`、`invalid_response` 或 `client_exception`，`operation` 为 `GET`、`POST` 或 `IDENTIFY`。商品号识别尚未确定番号时 `code` 为空。
+
+脚本不提交原始异常、完整来源地址、Cookie、令牌或页面正文。服务端每批最多 10 条、16 KiB，每分钟最多 20 条；响应 `{recorded:数量}`，同一分钟内重复 UUID 返回 0。日志仅写入当前 Peach 本机并进入诊断包，不创建下载或写入账本。
+
+错误在 GM 存储最多保留 20 条、7 天，只补报至原 Peach 地址。单次日志请求超时 5 秒、尝试间隔至少一分钟，失败不递归记录；后续业务请求成功时可以补报待发送记录。旧 Peach 不支持该端点时不影响添加或查询。
+
+## 查询作品状态
 
 `GET /api/jav-browser?code=SSIS-057` 仅查询状态。首次识别、请求结果不确定和已提交任务的按钮操作均使用查询。查询请求不带来源页面或令牌查询参数。
 
@@ -44,6 +52,8 @@
 ## 响应与恢复
 
 成功响应必须为 JSON，包含 `ok: true`、与请求番号一致的 `code` 和已知 `state`。`message` 由服务端提供，脚本使用自己的状态文案。
+
+可选 `stage: "submitting"` 表示远端提交正在进行。可选 `download` 仅含 `state`、`label`、`phase`、0–1 的实际 `progress` 或 `null`、`postprocess_state`、`postprocess_label` 和 `updated_at`。`phase` 为 `download`、`ingest` 或 `organize`，由真实任务里程碑确定。整体进度覆盖排队、搜索、下载、入库、整理五个阶段，完成阶段打勾、当前阶段高亮；下载百分比仅在下载段填充，其他阶段依据状态推进，不计算预计总耗时百分比。百分比代表后台最近一次网盘对账结果，不按时间插值。已入库但整理仍为 `pending`、`queued` 或 `running` 时继续有限轮询；整理完成后停止，未请求的整理显示跳过。连接异常保留最近一次确认的阶段，没有确认状态时全部待处理。
 
 | `state` | 脚本行为 |
 | --- | --- |

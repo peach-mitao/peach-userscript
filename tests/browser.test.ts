@@ -11,15 +11,18 @@ interface Site {
 const MANIFEST: { version: number; sites: Site[] } = JSON.parse(readFileSync(
   new URL('../jav-sites.json', import.meta.url), 'utf8'));
 const SCRIPT = readFileSync(new URL('../dist/peach-jav.user.js', import.meta.url), 'utf8');
+const VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 const TOKEN = 'test-only-peach-jav-secret-8b4d';
 const BASE = 'https://peach.example.invalid';
 const ROOT = '#peach-jav-action';
 type State = 'idle' | 'queued' | 'searching' | 'submitted' | 'ingested' | 'owned' | 'failed' | 'no_match';
-type Body = { ok: boolean; code: string; state: State; message: string };
+type Body = { ok: boolean; code: string; state: State; message: string; stage?: string;
+  download?: { state: string; label: string; phase?: string; progress: number | null; postprocess_state?: string; postprocess_label?: string } };
 type Call = { method: string; url: string; headers: Record<string, string>; anonymous: boolean; data?: string };
 type MockRequest = Call & { onload(value: unknown): void; ontimeout(): void; onerror(): void };
 type Mock = {
   calls: Call[];
+  reports: MockRequest[];
   pending: MockRequest[];
   values: Record<string, string>;
   menu?: () => void;
@@ -47,7 +50,7 @@ async function open(browser: Browser, options: {
   }));
   await page.addInitScript(({ configured, token, base, initial, resolved, automatic }) => {
     const mock: Mock = {
-      calls: [], pending: [], automatic, menus: {},
+      calls: [], reports: [], pending: [], automatic, menus: {},
       values: configured ? { 'peach.jav.base': base, 'peach.jav.token': token } : {},
       reply(index, value, status = 200) {
         mock.pending[index]!.onload({ status, responseText: JSON.stringify(value) });
@@ -59,6 +62,7 @@ async function open(browser: Browser, options: {
       GM_setValue: (key: string, value: string) => { mock.values[key] = value; },
       GM_registerMenuCommand: (label: string, callback: () => void) => { mock.menu = callback; mock.menus[label] = callback; },
       GM_xmlhttpRequest: (request: MockRequest) => {
+        if (request.url.endsWith('/api/jav-browser/errors')) { mock.reports.push(request); return; }
         mock.calls.push({ method: request.method, url: request.url, headers: request.headers,
           anonymous: request.anonymous, ...(request.data ? { data: request.data } : {}) });
         mock.pending.push(request);
@@ -600,6 +604,234 @@ describe('JAV 用户脚本', () => {
     } finally { await opened.close(); }
   });
 
+  it('超时取证只含白名单，断线保留并在连接恢复后补报，不重复添加', async () => {
+    const opened = await open(browser);
+    const { page } = opened;
+    try {
+      await ready(page);
+      await page.evaluate(() => { window.javMock.automatic = false; });
+      await button(page).click();
+      await pending(page, 2);
+      await page.clock.fastForward(16000);
+      await page.evaluate(() => window.javMock.pending[1]!.ontimeout());
+      await ready(page, '查询 Peach 状态');
+      const first = await page.evaluate(() => {
+        const report = window.javMock.reports[0]!;
+        return { data: report.data, anonymous: report.anonymous, authorization: report.headers.Authorization,
+          queue: window.javMock.values['peach.jav.errors'] };
+      });
+      const event = JSON.parse(first.data!).events[0];
+      assert.deepEqual(Object.keys(event).sort(), ['at', 'code', 'elapsed_ms', 'id', 'kind', 'operation', 'script_version', 'site', 'status'].sort());
+      assert.equal(event.kind, 'timeout');
+      assert.equal(event.operation, 'POST');
+      assert.equal(event.script_version, VERSION);
+      assert.equal(event.site, 'missav');
+      assert.equal(event.code, 'SSIS-057');
+      assert.ok(event.elapsed_ms >= 16000);
+      assert.equal(first.anonymous, true);
+      assert.equal(first.authorization, `Bearer ${TOKEN}`);
+      for (const value of [TOKEN, 'private=value', 'player', '/en/ssis-057']) assert.ok(!first.data!.includes(value));
+      await page.evaluate(() => window.javMock.reports[0]!.onerror());
+      await page.clock.fastForward(61_000);
+      await button(page).click();
+      await pending(page, 3);
+      await reply(page, 2, body('owned'));
+      await ready(page, '已有该影片');
+      assert.equal(await page.evaluate(() => window.javMock.reports.length), 2);
+      assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.errors']), first.queue);
+      await page.evaluate(() => window.javMock.reports[1]!.onload({ status: 200, responseText: '{"recorded":1}' }));
+      assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.errors']), '[]');
+      assert.equal(await page.evaluate(() => window.javMock.calls.filter(call => call.method === 'POST').length), 1);
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
+  it('脚本错误跨页面保留，只向原 Peach 补报且日志失败不递归', async () => {
+    const opened = await open(browser);
+    const { page } = opened;
+    try {
+      await ready(page);
+      await page.evaluate(() => { window.javMock.automatic = false; });
+      await button(page).click();
+      await pending(page, 2);
+      await page.evaluate(() => window.javMock.pending[1]!.onerror());
+      await ready(page, '查询 Peach 状态');
+      await page.evaluate(() => window.javMock.reports[0]!.ontimeout());
+      assert.equal(await page.evaluate(() => window.javMock.reports.length), 1);
+      const saved = await page.evaluate(() => window.javMock.values['peach.jav.errors']);
+      await page.evaluate(() => {
+        window.javMock.values['peach.jav.base'] = 'https://another.example.invalid';
+        history.pushState({}, '', '/en/abw-123'); document.title = 'ABW-123'; document.querySelector('h1')!.textContent = 'ABW-123';
+      });
+      await pending(page, 3);
+      await reply(page, 2, body('idle', 'ABW-123'));
+      await ready(page);
+      assert.equal(await page.evaluate(() => window.javMock.reports.length), 1);
+      assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.errors']), saved);
+    } finally { await opened.close(); }
+  });
+
+  for (const viewport of VIEWPORTS) it(`${viewport.name} 整体进度覆盖五个阶段，下载百分比仅属于下载阶段`, async () => {
+    const opened = await open(browser);
+    const { page } = opened;
+    try {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await ready(page);
+      await page.evaluate(() => { window.javMock.automatic = false; });
+      await button(page).click();
+      await pending(page, 2);
+      await reply(page, 1, { ...body('searching'), stage: 'submitting' });
+      await page.waitForFunction(() => document.querySelector('#peach-jav-action')!.shadowRoot!.querySelector('[role="status"]')!.textContent === '正在提交网盘');
+      const stages = [
+        { state: 'remote_running', label: '网盘下载中', progress: .42 },
+        { state: 'remote_running', label: '网盘下载中', progress: null },
+        { state: 'remote_done', label: '网盘下载完成', progress: 1 },
+        { state: 'landed', label: '文件已可访问', progress: 1 },
+        { state: 'ingested', label: '已入库', progress: 1, postprocess_state: 'running', postprocess_label: '整理中' },
+        { state: 'ingested', label: '已入库', progress: 1, postprocess_state: 'complete', postprocess_label: '整理完成' },
+      ];
+      for (const [index, download] of stages.entries()) {
+        await page.clock.fastForward(2000);
+        await pending(page, index + 3);
+        await reply(page, index + 2, { ...body(download.state === 'ingested' ? 'ingested' : 'submitted'), download });
+        const expected = `${download.label}${download.postprocess_label ? ` · ${download.postprocess_label}` : ''}${download.state !== 'remote_running' || download.progress == null ? '' : ` · ${Math.round(download.progress * 100)}%`}`;
+        await page.waitForFunction(expected => document.querySelector('#peach-jav-action')!.shadowRoot!.querySelector('[role="status"]')!.textContent === expected, expected);
+        const bar = page.locator(ROOT).getByRole('progressbar', { name: '整体任务进度' });
+        assert.equal(await bar.count(), 1);
+        const done = download.state === 'ingested' ? download.postprocess_state === 'complete' ? 5 : 4
+          : ['remote_done', 'landed'].includes(download.state) ? 3 : 2;
+        assert.equal(await bar.getAttribute('aria-valuenow'), String(done + (download.state === 'remote_running' ? download.progress ?? 0 : 0)));
+        assert.equal(await bar.getAttribute('aria-valuemax'), '5');
+        assert.equal((await bar.boundingBox())!.height, 6);
+        assert.equal(await page.locator(ROOT).locator('.flow-step[data-state="complete"]').count(), done);
+        assert.equal(await page.locator(ROOT).locator('.flow-mark svg').count(), 5);
+        assert.equal(await page.locator(ROOT).locator('.flow-mark').allTextContents().then(labels => labels.join('')), '');
+        if (done < 5) assert.equal(await page.locator(ROOT).locator('.flow-step[aria-current="step"]').count(), 1);
+      }
+      await ready(page, '已有该影片');
+      assert.equal(await button(page).isDisabled(), true);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
+  it('整理未请求时标记跳过，连接异常保留最近一次确认的整体进度', async () => {
+    const opened = await open(browser);
+    const { page } = opened;
+    try {
+      await ready(page);
+      await page.evaluate(() => { window.javMock.automatic = false; });
+      await button(page).click();
+      await pending(page, 2);
+      await reply(page, 1, { ...body('submitted'), download: {state:'remote_running',label:'网盘下载中',progress:.42} });
+      await page.waitForFunction(()=>document.querySelector('#peach-jav-action')!.shadowRoot!.querySelector('[role="progressbar"]')!.getAttribute('aria-valuenow')==='2.42');
+      await page.clock.fastForward(2000);
+      await pending(page, 3);
+      await page.evaluate(()=>window.javMock.pending[2]!.ontimeout());
+      await ready(page, '查询 Peach 状态');
+      const bar = page.locator(ROOT).getByRole('progressbar', {name:'整体任务进度'});
+      assert.equal(await bar.getAttribute('aria-valuenow'),'2.42');
+      assert.match(await bar.getAttribute('aria-valuetext') ?? '', /最近一次确认/);
+      await button(page).click();
+      await pending(page, 4);
+      await reply(page, 3, { ...body('ingested'), download:{state:'ingested',label:'已入库',progress:1,postprocess_state:'not_requested',postprocess_label:'整理未开始'} });
+      await ready(page, '已有该影片');
+      assert.equal(await bar.getAttribute('aria-valuenow'),'5');
+      assert.equal(await page.locator(ROOT).locator('.flow-step[data-state="complete"]').count(),4);
+      assert.equal(await page.locator(ROOT).locator('.flow-step[data-state="skipped"]').count(),1);
+      assert.match(await bar.getAttribute('aria-valuetext') ?? '', /整理未请求/);
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
+  it('设置弹窗进入与退出均有过渡，减少动效时立即关闭', async () => {
+    const opened = await open(browser);
+    const { page } = opened;
+    try {
+      await page.emulateMedia({reducedMotion:'no-preference'});
+      await ready(page);
+      await page.evaluate(()=>{
+        const trace: Array<{property:string;elapsed:number}> = [];
+        (window as Window & {settingsMotion:typeof trace}).settingsMotion=trace;
+        const observer=new MutationObserver(()=>{
+          const dialog=document.querySelector('#peach-jav-settings')?.shadowRoot?.querySelector('dialog');
+          if(!dialog)return;
+          observer.disconnect();
+          dialog.addEventListener('transitionend',event=>{
+            const e=event as TransitionEvent;
+            if(e.target===dialog)trace.push({property:e.propertyName,elapsed:e.elapsedTime});
+          });
+        });
+        observer.observe(document.body,{childList:true});
+      });
+      const trigger=page.locator(ROOT).getByRole('button',{name:'Peach 设置',exact:true});
+      await trigger.click();
+      await page.waitForFunction(()=>(window as Window & {settingsMotion:Array<{property:string;elapsed:number}>}).settingsMotion.some(e=>e.property==='transform'&&e.elapsed>=.19));
+      await settingsDialog(page).getByRole('button',{name:'取消',exact:true}).click();
+      await settingsDialog(page).waitFor({state:'detached'});
+      const exits=await page.evaluate(()=>(window as Window & {settingsMotion:Array<{property:string;elapsed:number}>}).settingsMotion);
+      assert.ok(exits.some(e=>e.property==='opacity'&&e.elapsed>=.11&&e.elapsed<=.13));
+      await page.emulateMedia({reducedMotion:'reduce'});
+      await trigger.click();
+      assert.equal(await settingsDialog(page).evaluate(node=>node.getAnimations().length),0);
+      await settingsDialog(page).getByRole('button',{name:'取消',exact:true}).click();
+      await settingsDialog(page).waitFor({state:'detached'});
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
+  it('详情折叠与 logo 恢复保持紧凑布局且只查询状态', async () => {
+    const opened = await open(browser);
+    const { page } = opened;
+    try {
+      await ready(page);
+      const root = page.locator(ROOT);
+      const panel = root.locator('.panel');
+      await root.getByRole('button', {name:'折叠 Peach 详情',exact:true}).click();
+      assert.equal(await panel.locator('.body').isVisible(), false);
+      assert.ok((await panel.boundingBox())!.height <= 64);
+      await root.getByRole('button', {name:'隐藏 Peach 面板',exact:true}).click();
+      assert.equal(await panel.isVisible(), false);
+      const launcher = root.getByRole('button', {name:'展开 Peach 面板',exact:true});
+      await launcher.evaluate(async node => {
+        await Promise.all(node.getAnimations().map(animation => animation.finished.catch(() => {})));
+      });
+      assert.equal((await launcher.boundingBox())!.width, 48);
+      assert.equal((await launcher.boundingBox())!.height, 48);
+      await launcher.press('Enter');
+      await ready(page);
+      assert.equal(await panel.locator('.body').isVisible(), true);
+      assert.equal(await root.locator('.launcher').isVisible(), false);
+      assert.equal(await page.evaluate(()=>window.javMock.calls.filter(call=>call.method==='POST').length),0);
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
+  it('设置弹窗遮住浮卡且反复开关只有一个底部操作栏', async () => {
+    const opened = await open(browser);
+    const { page } = opened;
+    try {
+      await ready(page);
+      for (const viewport of [{width:390,height:360},{width:320,height:320}]) {
+        await page.setViewportSize(viewport);
+        for(let count=0;count<3;count++) {
+          await page.locator(ROOT).getByRole('button',{name:'Peach 设置',exact:true}).click();
+          const dialog = settingsDialog(page);
+          assert.equal(await page.locator(ROOT).isVisible(),false);
+          assert.equal(await dialog.locator('.footer').count(),1);
+          const geometry = await dialog.evaluate(node=>({bottom:node.getBoundingClientRect().bottom,
+            footer:node.querySelector('.footer')!.getBoundingClientRect().bottom,height:innerHeight}));
+          assert.ok(geometry.bottom<=geometry.height && Math.abs(geometry.bottom-geometry.footer-1)<.5);
+          await dialog.getByRole('button',{name:'取消',exact:true}).click();
+          await dialog.waitFor({state:'detached'});
+          assert.equal(await page.locator(ROOT).isVisible(),true);
+          assert.equal(await page.locator('#peach-jav-settings').count(),0);
+        }
+      }
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
   it('SPA 切页隔离过期响应，列表页移除按钮，重复执行只注入一份', async () => {
     const opened = await open(browser);
     const { page } = opened;
@@ -685,6 +917,7 @@ describe('JAV 用户脚本', () => {
           await dialog.getByRole('button', { name: '显示专用令牌' }).click();
           assert.equal(await token.getAttribute('type'), 'text');
           await token.press('Escape');
+          await dialog.waitFor({state:'detached'});
           assert.equal(await dialog.count(), 0);
           assert.equal(await trigger.evaluate(node => node.getRootNode() instanceof ShadowRoot && (node.getRootNode() as ShadowRoot).activeElement === node), true);
           assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.token']), TOKEN);
@@ -756,6 +989,7 @@ describe('JAV 用户脚本', () => {
       await dialog.getByRole('button', { name: '保存设置' }).click();
       assert.deepEqual(await page.evaluate(() => window.javMock.values), { 'peach.jav.base': BASE, 'peach.jav.token': TOKEN });
       await page.clock.runFor(20);
+      await page.locator('#peach-jav-settings').waitFor({state:'detached'});
       assert.equal(await page.locator('#peach-jav-settings').count(), 0);
       assert.equal(await page.evaluate(() => window.javMock.calls.length), 0);
       assert.deepEqual(opened.problems, []);
@@ -793,7 +1027,7 @@ describe('JAV 用户脚本', () => {
         });
       });
       assert.deepEqual(Object.keys(result).sort(), ['nonce', 'paired', 'protocol', 'type', 'version']);
-      assert.equal(result.version, '0.5.0');
+      assert.equal(result.version, '0.5.1');
       assert.equal(result.paired, true);
       assert.equal(JSON.stringify(result).includes(TOKEN), false);
       assert.equal(await frame.locator(ROOT).count(), 0);

@@ -1,9 +1,11 @@
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 
 export const ROOT = fileURLToPath(new URL('../', import.meta.url));
+const PEACH_LOGO = 'data:image/png;base64,' + readFileSync(new URL('../assets/peach-logo-64.png', import.meta.url)).toString('base64');
 const KEYS = new Set(['id', 'label', 'kind', 'domains', 'mode', 'detail_pattern', 'selectors', 'query_keys', 'identity']);
 export function validDomain(host) {
   return typeof host === 'string' && host.length <= 253
@@ -57,6 +59,7 @@ export function render(template, manifest, version) {
   let result = replaceOnce(template.replace(/\r\n/g, '\n'), '// __PEACH_JAV_MATCHES__', matches);
   result = replaceOnce(result, '__PEACH_JAV_SITES__', JSON.stringify(manifest));
   result = replaceOnce(result, '__PEACH_JAV_VERSION__', JSON.stringify(version));
+  result = replaceOnce(result, '__PEACH_JAV_LOGO__', JSON.stringify(PEACH_LOGO));
   if (/__PEACH_JAV_/.test(result)) throw new Error('构建产物含未展开的标记');
   return result.trimEnd() + '\n';
 }

@@ -20,6 +20,18 @@
 
 未引入 React、BoardUI 全量运行时或通用表单框架：脚本只需要两个字段及页面内反馈，完整应用运行时会增加构建与宿主隔离成本。控件样式的来源、语义与主题保留在本快照，表单值不通过 HTML 字符串插入。离线预览直接消费正式构建函数，只在预览响应中把来源地址映射到合成 MissAV 页面；GM 请求均由内存替身响应。此版本的自动回归及真实扩展验收须分别确认。
 
-## 发行平台商品号
+## 本机错误取证
+
+进度条复用 Peach revision `44c347573e47cdd3b2294d35719f363ee5305246` 的 `frontend/src/react/components/progress.tsx`：SVG 画布分为 100 份、高度 6px，保留相同比例、轨道、刻度和填充配色。阶段完成标记、当前阶段与 `aria-current="step"` 复用同 revision 的 `library-processing/library-processing-notice.tsx` 语义，以紧凑横排组成五个阶段。整体条按已确认里程碑推进，下载段内使用实际百分比；无数值时保留阶段指示，不插值。读屏进度以五个阶段为总量，不把各阶段解释为相同耗时。快照与项目采用相同 AGPL-3.0-or-later 许可，不引入 React 或运行时依赖。
+
+错误取证沿用已授权的 Tampermonkey GM 存储与跨域请求 API，接入 Peach 本地 `error_reporting.event` 和诊断包。受限字段、原主机绑定、有限暂存和失败隔离是 Peach 协议策略；不新增遥测 SDK、运行依赖或站点脚本监听，不收集宿主页面异常、原始异常与完整地址。官方 GM API 定义与现有发布实现均已核对；构建仍只使用 Node.js 24 内置模块。
+
+横排阶段标记逐字复用 Peach revision `63b45ae0fdcc13be7b8ef2f4a5ca3e04b8d7f9bf` 所用 `@remixicon/react` 4.9.0 的 `RiCheckLine`、`RiCheckboxBlankCircleLine`、`RiErrorWarningLine` 和 `RiSubtractLine` SVG 路径，尺寸沿用生产 `--icon-inline: 1.2em`。完成标签使用任务列表的删除线与 `text-tertiary` 配色，当前圆环使用 `border-focus-ring` 配色；五阶段保持单行。图形依据 Remix Icon License v1.0 使用，版权与许可链接保留在安装脚本中；图形本身沿用其许可。此适配只内联已使用的图形，不引入 React 或新的运行时依赖。
+
+折叠箭头、关闭键沿用同 revision 的任务提示与现有 `control()`，Peach 标志来自该 revision 的 `resources/peach-logo-64.png`，构建时内联到安装脚本。右下角入口为 48px 圆形按钮，折叠标题栏保留当前状态；显示状态在当前页面与 SPA 导航内保留。恢复入口只执行状态查询。浮卡与 logo 入口切换采用 200ms 的轻量显现，时长沿用生产 Collapse；减少动效时立即切换。参考产品的实际取证与适配边界见 [收起入口参考](reference-snapshots/userscript-launcher.md)，不引入外部动画包。
+
+设置弹窗的进入与退出复用同 revision 的 `components/surface-motion.css`：进入 200ms、退出 120ms，透明度与 `.98` 缩放同步，缓动为生产 `--ease-out` 的 `cubic-bezier(0,0,.2,1)`。遮罩同步淡入淡出；原生 dialog 在退出结束后关闭，随后清除表单、移除宿主并归还焦点。再次打开可反向中止退出；减少动效时直接关闭。
+
+## 商品号识别复用
 
 DMM 与 MGS 的番号识别直接调用 Peach 的只读 `/api/jav-browser/identify`，由现有 `code_key`、`release_code_from_text`、`normalise_code_key` 和 `release_identity` 处理商品号，不在脚本中移植 Python 规则。DMM 官方接口已核对 `ssis00519` 与 `SSIS-519`；MGS 详情路径保留数字前缀。无法确认的渠道前缀回到主动选择，识别过程不搜索外站或创建下载。来源与实证范围见 `docs/evidence/official-and-mirror-review.json`，本版本自动回归待确认界面后执行。

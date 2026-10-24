@@ -5,7 +5,7 @@
 // @supportURL   https://github.com/peach-mitao/peach-userscript/issues
 // @homepageURL  https://github.com/peach-mitao/peach-userscript
 // @license      AGPL-3.0-or-later
-// @version      0.5.0
+// @version      0.5.1
 // @description  在 JAV 作品详情页识别或选中番号，交给 Peach 下载入库。
 // @match        https://missav.ws/*
 // @match        https://*.missav.ws/*
@@ -252,8 +252,10 @@
   const SITE_RULES = {"version":1,"sites":[{"id":"missav","label":"MissAV","kind":"在线播放","domains":["missav.ws","missav.ai","missav.com","missav123.com","missav.live","missav.fans","missav.media"],"mode":"automatic","detail_pattern":"^/(?:dm[0-9]+/)?(?:(?:en|ja|zh|cn|tw)/)?([^/]+)/?$","selectors":["h1","[data-video-code]","dt",".video-info p",".video-detail p"]},{"id":"jable","label":"Jable","kind":"在线播放","domains":["jable.tv"],"mode":"automatic","detail_pattern":"^/videos/([^/]+)/?$","selectors":["h1",".video-info h4","[data-video-code]","dt",".video-info p"]},{"id":"supjav","label":"SupJAV","kind":"在线播放","domains":["supjav.com"],"mode":"selection"},{"id":"jav-guru","label":"JAV.guru","kind":"在线播放","domains":["jav.guru"],"mode":"automatic","detail_pattern":"^/[0-9]+/([^/]+)/?$","selectors":["h1.entry-title","h1"]},{"id":"njav","label":"NJAV / 123AV","kind":"在线播放","domains":["njav.tv","njavtv.com","123av.com","javgo.to"],"mode":"automatic","detail_pattern":"^/(?:en|ja|zh|cn|tw)/v/([^/]+)/?$","selectors":["h1","dt"]},{"id":"javtiful","label":"JAVtiful","kind":"在线播放","domains":["javtiful.com"],"mode":"automatic","detail_pattern":"^/(?:[a-z]{2}/)?video/[0-9]+/([^/]+)/?$","selectors":["h1","[data-video-code]"]},{"id":"javmost","label":"JAVMost","kind":"在线播放","domains":["javmost.com","javmost.ws","javmost.cx"],"mode":"selection"},{"id":"javgg","label":"JAVGG","kind":"在线播放","domains":["javgg.net"],"mode":"selection"},{"id":"7mmtv","label":"7mmtv","kind":"在线播放","domains":["7mmtv.sx"],"mode":"automatic","detail_pattern":"^/(?:ja|en|zh|cn|tw)/(?:censored|uncensored)_content/[0-9]+/([^/]+)\\.html$","selectors":["h1"]},{"id":"hpjav","label":"HPJAV","kind":"在线播放","domains":["hpjav.tv"],"mode":"selection"},{"id":"thisav","label":"ThisAV","kind":"在线播放","domains":["thisav.com"],"mode":"selection"},{"id":"javhd","label":"JAVHD","kind":"在线播放","domains":["javhd.com"],"mode":"selection"},{"id":"javdb","label":"JavDB","kind":"数据库","domains":["javdb.com"],"mode":"automatic","detail_pattern":"^/v/[A-Za-z0-9]+/?$","selectors":["h2.title",".panel-block strong"]},{"id":"javbus","label":"JavBus","kind":"数据库","domains":["javbus.com","dmmsee.casa","busfan.casa","busdmm.casa"],"mode":"automatic","detail_pattern":"^/(?:[a-z]{2}/)?([^/]+)/?$","selectors":["h3",".info p .header"]},{"id":"javlibrary","label":"JavLibrary","kind":"数据库","domains":["javlibrary.com","javlib.com","r86m.com","f101w.com","c99i.com","e100k.com"],"mode":"automatic","detail_pattern":"^/(?:cn|tw|en|ja)/?$","selectors":["#video_id .text","#video_title"],"query_keys":["v"]},{"id":"jav321","label":"Jav321","kind":"数据库","domains":["jav321.com"],"mode":"automatic","detail_pattern":"^/video/[A-Za-z0-9]+/?$","selectors":["h3",".panel-body b"]},{"id":"avbase","label":"AVBase","kind":"数据库","domains":["avbase.net"],"mode":"automatic","detail_pattern":"^/works/(?:[^/:]+:)?([^/:]+)/?$","selectors":["h1","#__NEXT_DATA__"]},{"id":"javdatabase","label":"JAVDatabase","kind":"数据库","domains":["javdatabase.com"],"mode":"automatic","detail_pattern":"^/movies/([^/]+)/?$","selectors":["h1",".movie-code"]},{"id":"jav-land","label":"JAV.land","kind":"数据库","domains":["jav.land"],"mode":"selection"},{"id":"avmoo","label":"AVMOO","kind":"数据库","domains":["avmoo.com"],"mode":"selection"},{"id":"avsox","label":"AVSOX","kind":"数据库","domains":["avsox.com","avsox.click"],"mode":"selection"},{"id":"av-wiki","label":"AV-Wiki","kind":"数据库","domains":["av-wiki.net"],"mode":"selection"},{"id":"fc2ppvdb","label":"FC2PPVDB","kind":"数据库","domains":["fc2ppv-db.com"],"mode":"selection"},{"id":"fc2cmadb","label":"FC2CmaDB","kind":"数据库","domains":["fc2cmadb.com"],"mode":"selection"},{"id":"javtrailers","label":"JAVTrailers","kind":"数据库","domains":["javtrailers.com"],"mode":"selection"},{"id":"javarchive","label":"JavArchive","kind":"数据库","domains":["javarchive.com"],"mode":"selection"},{"id":"javten","label":"JAVten","kind":"数据库","domains":["javten.com"],"mode":"selection"},{"id":"r18dev","label":"r18.dev","kind":"数据库","domains":["r18.dev"],"mode":"selection"},{"id":"dmm","label":"FANZA / DMM","kind":"发行平台","domains":["dmm.co.jp"],"mode":"automatic","identity":"peach","query_keys":["id"],"selectors":["th","dt","[data-video-code]"],"detail_pattern":"^/(?:av/content/?|(?:digital/(?:videoa|videoc)|mono/dvd)/-/detail/=/cid=([A-Za-z0-9_]+)/?)$"},{"id":"mgs","label":"MGS","kind":"发行平台","domains":["mgstage.com"],"mode":"automatic","identity":"peach","selectors":["th","dt","[data-video-code]"],"detail_pattern":"^/product/product_detail/([A-Za-z0-9_-]+)/?$"},{"id":"duga","label":"DUGA","kind":"发行平台","domains":["duga.jp"],"mode":"selection"},{"id":"prestige","label":"Prestige","kind":"发行平台","domains":["prestige-av.com"],"mode":"selection"},{"id":"sod","label":"SOD / SODprime","kind":"发行平台","domains":["sod.co.jp"],"mode":"selection"},{"id":"faleno","label":"FALENO","kind":"发行平台","domains":["faleno.jp"],"mode":"selection"},{"id":"fc2-market","label":"FC2 内容市场","kind":"发行平台","domains":["adult.contents.fc2.com"],"mode":"selection"},{"id":"s1","label":"S1","kind":"片商","domains":["s1s1s1.com"],"mode":"selection"},{"id":"moodyz","label":"MOODYZ","kind":"片商","domains":["moodyz.com"],"mode":"selection"},{"id":"ideapocket","label":"IdeaPocket","kind":"片商","domains":["ideapocket.com"],"mode":"selection"},{"id":"madonna","label":"Madonna","kind":"片商","domains":["madonna-av.com"],"mode":"selection"},{"id":"attackers","label":"Attackers","kind":"片商","domains":["attackers.net"],"mode":"selection"},{"id":"premium","label":"Premium","kind":"片商","domains":["premium-beauty.com"],"mode":"selection"},{"id":"kawaii","label":"Kawaii","kind":"片商","domains":["kawaiikawaii.jp"],"mode":"selection"},{"id":"max-a","label":"MAX-A","kind":"片商","domains":["max-a.co.jp"],"mode":"selection"},{"id":"maxing","label":"MAXING","kind":"片商","domains":["maxing.jp"],"mode":"selection"},{"id":"1pondo","label":"一本道","kind":"无码","domains":["1pondo.tv"],"mode":"selection"},{"id":"caribbeancom","label":"加勒比","kind":"无码","domains":["caribbeancom.com"],"mode":"selection"},{"id":"10musume","label":"天然むすめ","kind":"无码","domains":["10musume.com"],"mode":"selection"},{"id":"pacopacomama","label":"Pacopacomama","kind":"无码","domains":["pacopacomama.com"],"mode":"selection"},{"id":"heyzo","label":"HEYZO","kind":"无码","domains":["heyzo.com"],"mode":"selection"},{"id":"tokyo-hot","label":"Tokyo-Hot","kind":"无码","domains":["tokyo-hot.com"],"mode":"selection"},{"id":"manko","label":"manko.fun","kind":"资源","domains":["manko.fun"],"mode":"selection"},{"id":"sukebei","label":"Sukebei","kind":"资源","domains":["sukebei.nyaa.si"],"mode":"selection"},{"id":"onejav","label":"OneJAV","kind":"资源","domains":["onejav.com"],"mode":"selection"},{"id":"freejavtorrent","label":"Free JAV Torrent","kind":"资源","domains":["freejavtorrent.com"],"mode":"selection"},{"id":"16mag","label":"16mag","kind":"资源","domains":["16mag.com"],"mode":"selection"},{"id":"netflav","label":"NETFLAV","kind":"在线播放","domains":["netflav5.com","netflav.com"],"mode":"selection"},{"id":"bestjavporn","label":"BestJavPorn","kind":"在线播放","domains":["bestjavporn.com"],"mode":"selection"},{"id":"javmenu","label":"JAVMenu","kind":"数据库","domains":["javmenu.com"],"mode":"selection"},{"id":"avjoy","label":"AVJOY","kind":"在线播放","domains":["avjoy.me"],"mode":"selection"},{"id":"ggjav","label":"GGJAV","kind":"在线播放","domains":["ggjav.com"],"mode":"selection"},{"id":"av01","label":"AV01","kind":"在线播放","domains":["av01.tv","av01.media"],"mode":"selection"},{"id":"highporn","label":"HighPorn","kind":"在线播放","domains":["highporn.net"],"mode":"selection"},{"id":"evojav","label":"EvoJAV","kind":"在线播放","domains":["evojav.pro"],"mode":"selection"},{"id":"hayav","label":"HayAV","kind":"在线播放","domains":["hayav.com"],"mode":"selection"},{"id":"javhub","label":"JAVHub","kind":"在线播放","domains":["javhub.net"],"mode":"selection"},{"id":"141jav","label":"141JAV","kind":"资源","domains":["141jav.com"],"mode":"selection"},{"id":"141ppv","label":"141PPV","kind":"资源","domains":["141ppv.com"],"mode":"selection"},{"id":"freejavbt","label":"FreeJavBT","kind":"资源","domains":["freejavbt.com","freejavbt.xyz"],"mode":"selection"},{"id":"javrate","label":"JAVRate","kind":"在线播放","domains":["javrate.com"],"mode":"selection"},{"id":"sehuatang","label":"色花堂","kind":"资源","domains":["sehuatang.net","sehuatang.org"],"mode":"selection","query_keys":["tid"]},{"id":"169bbs","label":"SEX169","kind":"资源","domains":["169bbs.com"],"mode":"selection"},{"id":"hjd2048","label":"2048论坛","kind":"资源","domains":["hjd2048.com"],"mode":"selection"},{"id":"airav","label":"AirAV","kind":"数据库","domains":["airav.wiki","airav.fun","airav.io"],"mode":"selection"},{"id":"javbooks","label":"JavBooks","kind":"资源","domains":["javbooks.com","jmvbt.com"],"mode":"selection"},{"id":"javhd-today","label":"JavHD.today","kind":"在线播放","domains":["javhd.today"],"mode":"selection"},{"id":"javfree","label":"JavFree","kind":"资源","domains":["javfree.me"],"mode":"selection"},{"id":"javcv","label":"JavCV","kind":"数据库","domains":["javcv.com"],"mode":"selection"},{"id":"projectjav","label":"ProjectJav","kind":"资源","domains":["projectjav.com"],"mode":"selection"},{"id":"paipancon","label":"Paipancon","kind":"在线播放","domains":["paipancon.com"],"mode":"selection"}]};
   const STORAGE_BASE = 'peach.jav.base';
   const STORAGE_TOKEN = 'peach.jav.token';
+  const STORAGE_ERRORS = 'peach.jav.errors';
   const ROOT_ID = 'peach-jav-action';
-  const SCRIPT_VERSION = "0.5.0";
+  const SCRIPT_VERSION = "0.5.1";
+  const PEACH_LOGO = "data:image/png;base64,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";
   if (location.pathname === '/integrations/peach-userscript-bridge') {
     let origin;
     try { origin = settings(location.origin, 'bridge-only').base; } catch { return; }
@@ -282,22 +284,43 @@
   let refreshTimer;
   let selected = null;
   let settingsView = null;
+  let panelMode = 'expanded';
 
   // Peach 控件快照：来源与适配范围见 docs/REUSE.md。
   const UI_STYLE = `
     :host{all:initial;--ground:#fff;--surface:#fafafa;--sunk:#f2f2f2;--ink:#171717;--ink-2:#4d4d4d;--muted:#666;
       --line:#e5e5e5;--line-soft:#ebebeb;--field-ring:#00000014;--field-ring-hover:#00000036;--field-ring-focus:#00000057;
-      --tungsten:#2563eb;--drop:#da2f35;--control-radius:6px;--surface-radius:8px;--floating-radius:12px;--control-h:38px;
+      --tungsten:#2563eb;--drop:#da2f35;--task-accent:oklch(62.3% .214 259.815);--task-muted:oklch(70.8% 0 none);--icon-inline:1.2em;
+      --modal-ease:cubic-bezier(0,0,.2,1);
+      --control-radius:6px;--surface-radius:8px;--floating-radius:12px;--control-h:38px;
       --fs-sm:13px;--fs-md:14px;--fs-lg:16px;--fs-xl:20px;--fieldset-bar-h:52px;
       position:fixed;inset:auto max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) auto;
       z-index:2147483647;width:min(320px,calc(100vw - 32px));font:400 14px/1.5 system-ui,sans-serif;color:var(--ink);color-scheme:light dark;text-align:left}
     @media(prefers-color-scheme:dark){:host{--ground:#080a0d;--surface:#0c0f14;--sunk:#0b0d11;--ink:#fff;--ink-2:#c9cdd4;--muted:#9aa0a8;
-      --line:#ffffff1a;--line-soft:#ffffff26;--field-ring:#ffffff26;--field-ring-hover:#ffffff42;--field-ring-focus:#ffffff66}}
+      --line:#ffffff1a;--line-soft:#ffffff26;--field-ring:#ffffff26;--field-ring-hover:#ffffff42;--field-ring-focus:#ffffff66;--task-muted:oklch(43.9% 0 none)}}
     *,*::before,*::after{box-sizing:border-box} [hidden]{display:none!important}
+    :host([data-panel-mode="minimized"]){width:48px}
+    :host([data-settings-open]){visibility:hidden}
     h2,p{margin:0} h2{font-size:var(--fs-xl);line-height:26px;font-weight:600}
     .panel{background:var(--ground);border:1px solid var(--line);border-radius:var(--floating-radius);overflow:hidden}
+    .task-progress{display:block;width:100%;height:6px;overflow:hidden;border-radius:9999px}
+    .task-progress .track{fill:#ebebeb}.task-progress .fill{fill:var(--task-accent)}
+    .task-progress .stop{fill:var(--ground)}
+    .flow{display:grid;gap:10px}.flow-steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}
+    .flow-step{display:grid;justify-items:center;gap:4px;min-width:0;color:var(--task-muted);font-size:var(--fs-sm);line-height:1.4}
+    .flow-step[data-state="complete"] .flow-label{text-decoration:line-through}.flow-step[data-state="current"]{color:var(--ink)}
+    .flow-step[data-state="error"]{color:var(--drop)}.flow-mark{width:var(--icon-inline);height:var(--icon-inline);display:grid;place-items:center;line-height:1}
+    .flow-mark svg{display:block;width:100%;height:100%;fill:currentColor}
+    .flow-step[data-state="current"] .flow-mark{color:var(--task-accent)}
+    @media(prefers-color-scheme:dark){.task-progress .track{fill:oklch(26.9% 0 none)}}
     .bar{min-height:var(--fieldset-bar-h);padding:8px 16px 8px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
     .bar strong{font-weight:500;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+    .bar-heading{display:grid;min-width:0;gap:2px}.bar-summary{font-size:11px;line-height:16px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .bar-actions{display:flex;gap:4px;flex:none}
+    .bar-actions [data-collapse-chevron]{transition:transform .2s ease-in-out}
+    .bar-actions [aria-expanded="false"] [data-collapse-chevron]{transform:rotate(180deg)}
+    .geist-button.launcher{width:48px;height:48px;padding:6px;border-radius:50%;background:var(--ground);transform-origin:bottom right}
+    .launcher img{display:block;width:34px;height:34px;object-fit:contain}
     .body{padding:0 20px 20px;display:grid;gap:16px;min-width:0}.footer{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-height:var(--fieldset-bar-h);padding:8px 16px;border-top:1px solid var(--line);background:var(--surface)}
     .geist-button{height:var(--control-h);padding:0 14px;border:0;border-radius:var(--control-radius);background:var(--ground);color:var(--ink);display:inline-flex;
       align-items:center;justify-content:center;gap:6px;font:inherit;font-size:var(--fs-md);font-weight:500;line-height:1;white-space:nowrap;cursor:pointer;box-shadow:0 0 0 1px var(--line-soft);touch-action:manipulation}
@@ -321,8 +344,13 @@
     .geist-note[data-variant=error]{color:var(--drop)}
     dialog{position:fixed;inset:auto max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) auto;margin:0;
       width:min(400px,calc(100vw - 32px));max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);padding:0;
-      background:var(--ground);color:var(--ink);border:1px solid var(--line);border-radius:var(--floating-radius);overflow:hidden}
-    dialog::backdrop{background:#000b}form{display:flex;flex-direction:column;max-height:calc(100dvh - 34px)}
+      background:var(--ground);color:var(--ink);border:1px solid var(--line);border-radius:var(--floating-radius);overflow:hidden;
+      opacity:1;transform:scale(1);transition:opacity 200ms var(--modal-ease),transform 200ms var(--modal-ease)}
+    dialog::backdrop{background:#000b;opacity:1;transition:opacity 200ms var(--modal-ease)}
+    dialog[data-closing],dialog[data-closing]::backdrop{opacity:0;transition-duration:120ms}
+    dialog[data-closing]{transform:scale(.98)}
+    @starting-style{dialog[open],dialog[open]::backdrop{opacity:0}dialog[open]{transform:scale(.98)}}
+    form{display:flex;flex-direction:column;max-height:calc(100dvh - 34px)}
     dialog .bar{border-bottom:1px solid var(--line);flex:none}dialog .body{padding-top:20px;overflow:auto;overscroll-behavior:contain}dialog .footer{flex:none}
     @media(max-width:760px){.geist-input{font-size:var(--fs-lg)}}
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
@@ -335,6 +363,26 @@
     return node;
   }
 
+  // Peach 任务列表的 Remix Icon 4.9.0 图形；Copyright (c) 2017–2026 Remix Design。
+  // 图形遵循 Remix Icon License v1.0：https://github.com/Remix-Design/RemixIcon/blob/master/License。
+  const STEP_ICON_PATHS = {
+    check: 'M9.9997 15.1709L19.1921 5.97852L20.6063 7.39273L9.9997 17.9993L3.63574 11.6354L5.04996 10.2212L9.9997 15.1709Z',
+    circle: 'M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20Z',
+    error: 'M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM11 15H13V17H11V15ZM11 7H13V13H11V7Z',
+    skipped: 'M5 11V13H19V11H5Z',
+  };
+
+  function stepMark() {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+    const path = document.createElementNS(svg.namespaceURI, 'path');
+    path.setAttribute('d', STEP_ICON_PATHS.circle);
+    svg.append(path);
+    return svg;
+  }
+
   function control(label, { primary = false, icon = '' } = {}) {
     const node = element('button', `geist-button${primary ? ' primary' : ''}${icon ? ' icon' : ''}`, icon ? '' : label);
     node.type = 'button';
@@ -344,9 +392,10 @@
       svg.setAttribute('viewBox', '0 0 24 24');
       svg.setAttribute('aria-hidden', 'true');
       const path = document.createElementNS(svg.namespaceURI, 'path');
-      path.setAttribute('d', icon === 'close' ? 'M6 6l12 12M6 18L18 6'
+      path.setAttribute('d', icon === 'close' ? 'M6 6l12 12M6 18L18 6' : icon === 'collapse' ? 'm6 9 6 6 6-6'
         : 'M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915');
       svg.append(path);
+      if (icon === 'collapse') svg.setAttribute('data-collapse-chevron', '');
       if (icon === 'settings') {
         const circle = document.createElementNS(svg.namespaceURI, 'circle');
         for (const [name, value] of Object.entries({ cx: '12', cy: '12', r: '3' })) circle.setAttribute(name, value);
@@ -551,7 +600,7 @@
   }
 
   function configure() {
-    if (settingsView?.dialog.open) { settingsView.base.focus(); return; }
+    if (settingsView?.dialog.open) { settingsView.reopen(); return; }
     const previousFocus = current?.root.shadowRoot?.activeElement || document.activeElement;
     const saved = configuration();
     const { root, shadow } = surface('peach-jav-settings', 'Peach 设置');
@@ -634,15 +683,51 @@
     form.append(bar, body, footer);
     dialog.append(form);
     shadow.append(dialog);
-    settingsView = { root, dialog, base: address.input };
+    let closing = false;
+    let closeGeneration = 0;
+    settingsView = { root, dialog, base: address.input, reopen() {
+      closeGeneration++;
+      closing = false;
+      dialog.removeAttribute('data-closing');
+      address.input.focus();
+    } };
+    if (current) {
+      current.root.setAttribute('data-settings-open', '');
+      current.root.inert = true;
+    }
     const cleanup = () => {
+      if (!root.isConnected) return;
+      closeGeneration++;
+      closing = false;
       secret.input.value = '';
       if (settingsView?.root === root) settingsView = null;
       root.remove();
+      if (current) {
+        current.root.removeAttribute('data-settings-open');
+        current.root.inert = false;
+      }
       if (previousFocus?.isConnected) previousFocus.focus();
       else current?.settings.focus();
     };
-    const dismiss = () => { dialog.close(); cleanup(); };
+    const dismiss = async () => {
+      if (closing || !dialog.open) return;
+      closing = true;
+      const run = ++closeGeneration;
+      dialog.setAttribute('data-closing', '');
+      if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        dialog.getBoundingClientRect();
+        const animations = dialog.getAnimations();
+        if (animations.length) {
+          let timer;
+          await Promise.race([Promise.allSettled(animations.map(animation => animation.finished)),
+            new Promise(resolve => { timer = setTimeout(resolve, 220); })]);
+          clearTimeout(timer);
+        }
+      }
+      if (run !== closeGeneration || !closing) return;
+      dialog.close();
+      cleanup();
+    };
     close.addEventListener('click', dismiss);
     cancel.addEventListener('click', dismiss);
     dialog.addEventListener('cancel', event => {
@@ -662,7 +747,7 @@
     });
     form.addEventListener('submit', event => {
       event.preventDefault();
-      if (composing) return;
+      if (composing || closing) return;
       for (const input of [address.input, secret.input]) input.removeAttribute('aria-invalid');
       let config;
       let invalid = address.input;
@@ -702,8 +787,59 @@
   GM_registerMenuCommand('配置 Peach 地址与令牌', configure);
   GM_registerMenuCommand('选中番号加入 Peach', selectCode);
 
+  let reporting = false;
+  let reportAfter = 0;
+  function pendingErrors() {
+    try {
+      const rows = JSON.parse(GM_getValue(STORAGE_ERRORS, '[]'));
+      return Array.isArray(rows) ? rows.filter(row => row && typeof row.base === 'string' && row.event
+        && typeof row.event.id === 'string' && Date.now() - Date.parse(row.event.at) < 7 * 86400_000).slice(-20) : [];
+    } catch { return []; }
+  }
+
+  function flushErrors(config) {
+    if (reporting || Date.now() < reportAfter) return;
+    const rows = pendingErrors().filter(row => row.base === config.base).slice(0, 10);
+    if (!rows.length) return;
+    reporting = true;
+    reportAfter = Date.now() + 60_000;
+    const done = () => { reporting = false; };
+    try {
+      GM_xmlhttpRequest({ method: 'POST', url: `${config.base}/api/jav-browser/errors`, anonymous: true,
+        headers: { Authorization: `Bearer ${config.token}`, 'Content-Type': 'application/json' }, timeout: 5000,
+        data: JSON.stringify({ events: rows.map(row => row.event) }),
+        onload(response) {
+          try {
+            if (response.status >= 200 && response.status < 300 && Number.isInteger(JSON.parse(response.responseText).recorded)) {
+              const ids = new Set(rows.map(row => row.event.id));
+              GM_setValue(STORAGE_ERRORS, JSON.stringify(pendingErrors().filter(row => !ids.has(row.event.id))));
+            }
+          } catch { /* 错误取证不影响添加和状态查询。 */ }
+          done();
+        }, onerror: done, ontimeout: done, onabort: done,
+      });
+    } catch { done(); }
+  }
+
+  function rememberError(config, code, source, operation, kind, elapsed, status) {
+    try {
+      const site = siteFor(new URL(source));
+      if (!site) return;
+      const event = { id: crypto.randomUUID(), at: new Date().toISOString(), kind, operation, site: site.id,
+        code, elapsed_ms: Math.min(3_600_000, Math.max(0, Math.round(elapsed))), status, script_version: SCRIPT_VERSION };
+      GM_setValue(STORAGE_ERRORS, JSON.stringify([...pendingErrors(), { base: config.base, event }].slice(-20)));
+      flushErrors(config);
+    } catch { /* GM 存储不可用时保留原操作的错误反馈。 */ }
+  }
+
   function request(config, code, source, method, resolveIdentity = false) {
     return new Promise((resolve, reject) => {
+      const started = performance.now();
+      const fail = (kind, message, status = 0) => {
+        rememberError(config, resolveIdentity ? '' : code, source, resolveIdentity ? 'IDENTIFY' : method,
+          kind, performance.now() - started, status);
+        reject(new Error(message));
+      };
       const headers = { Authorization: `Bearer ${config.token}`, Accept: 'application/json' };
       if (method === 'POST') headers['Content-Type'] = 'application/json';
       try {
@@ -714,17 +850,17 @@
           headers,
           ...(method === 'POST' ? { data: JSON.stringify({ code, source_url: source }) } : {}),
           anonymous: true,
-          timeout: 15_000,
+          timeout: 60_000,
           onload(response) {
             if (response.status < 200 || response.status >= 300) {
               let detail = '';
               try { const value = JSON.parse(response.responseText).detail; if (typeof value === 'string' && value.length <= 200) detail = value; } catch { /* 非 JSON 错误使用 HTTP 状态提示。 */ }
-              reject(new Error(response.status === 401 || response.status === 403 ? '令牌无效或无权限，请重新配置。'
+              fail('http', response.status === 401 || response.status === 403 ? '令牌无效或无权限，请重新配置。'
                 : response.status >= 500 ? 'Peach 服务暂时不可用，请稍后查询状态。'
                 : response.status === 429 ? 'Peach 请求过于频繁，请稍后查询。'
                 : resolveIdentity && [404, 405].includes(response.status) ? 'Peach 尚不支持商品号识别，请更新 Peach。'
                 : response.status === 400 && detail ? detail
-                : resolveIdentity ? '未识别到作品番号，请选中页面的完整番号后加入 Peach。' : 'Peach 请求失败，请查询状态。'));
+                : resolveIdentity ? '未识别到作品番号，请选中页面的完整番号后加入 Peach。' : 'Peach 请求失败，请查询状态。', response.status);
               return;
             }
             try {
@@ -733,21 +869,48 @@
                 || candidates(body.code).size !== 1
                 || ((!resolveIdentity || code) && ![...candidates(body.code)].some(candidate => comparisonKey(candidate) === comparisonKey(code)))) throw new Error();
               resolve(body);
-            } catch { reject(new Error('Peach 返回的状态无效，请查询状态。')); }
+              flushErrors(config);
+            } catch { fail('invalid_response', 'Peach 返回的状态无效，请查询状态。', response.status); }
           },
-          onerror: () => reject(new Error('无法连接 Peach，请查询状态。')),
-          ontimeout: () => reject(new Error('Peach 请求超时，请查询状态。')),
-          onabort: () => reject(new Error('Peach 请求已中止，请查询状态。')),
+          onerror: () => fail('network', '无法连接 Peach，请查询状态。'),
+          ontimeout: () => fail('timeout', 'Peach 请求超时，请查询状态。'),
+          onabort: () => fail('abort', 'Peach 请求已中止，请查询状态。'),
         });
-      } catch { reject(new Error('无法连接 Peach，请查询状态。')); }
+      } catch { fail('client_exception', '无法连接 Peach，请查询状态。'); }
     });
   }
 
   function alive(view) { return current === view && generation === view.generation && view.url === location.href; }
 
+  function present(view, mode, focus = false) {
+    if (!alive(view)) return;
+    panelMode = mode;
+    view.presentation?.cancel();
+    const minimized = mode === 'minimized';
+    const expanded = mode === 'expanded';
+    view.root.dataset.panelMode = mode;
+    view.panel.hidden = minimized;
+    view.launcher.hidden = !minimized;
+    view.body.hidden = !expanded;
+    view.body.inert = !expanded;
+    view.summary.hidden = expanded;
+    view.summary.textContent = mode === 'collapsed' ? view.note.textContent : '';
+    view.collapse.setAttribute('aria-expanded', String(expanded));
+    view.collapse.setAttribute('aria-label', expanded ? '折叠 Peach 详情' : '展开 Peach 详情');
+    if (focus) {
+      (minimized ? view.launcher : view.collapse).focus();
+      if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        const target = minimized ? view.launcher : view.panel;
+        view.presentation = target.animate([{opacity:0, transform:'translateY(4px) scale(.97)'}, {opacity:1, transform:'translateY(0) scale(1)'}],
+          {duration:200, easing:'ease-in-out'});
+      }
+    }
+  }
+
   function render(view) {
     if (!alive(view)) return;
-    const terminalSuccess = ['ingested', 'owned'].includes(view.state);
+    view.summary.textContent = panelMode === 'collapsed' ? view.note.textContent : '';
+    const terminalSuccess = ['ingested', 'owned'].includes(view.state) && !view.tracking;
     view.button.disabled = view.identity.conflict || terminalSuccess;
     view.button.setAttribute('aria-busy', String(view.busy));
     view.button.setAttribute('aria-disabled', String(view.busy || view.button.disabled));
@@ -770,6 +933,46 @@
     }
   }
 
+  function tracking(body) {
+    return ACTIVE.has(body.state) || (body.state === 'ingested'
+      && ['pending', 'queued', 'running'].includes(body.download?.postprocess_state));
+  }
+
+  function renderFlow(view, body) {
+    const download = body?.download;
+    let current = -1;
+    let completed = 0;
+    let fraction = 0;
+    const failed = ['failed', 'no_match'].includes(body?.state) || download?.postprocess_state === 'failed';
+    if (body?.state === 'queued') current = 0;
+    else if (body?.state === 'searching') current = body.stage === 'submitting' ? 2 : 1;
+    else if (body?.state === 'submitted' || body?.state === 'ingested' || failed) {
+      if (download?.state === 'ingested' || body.state === 'ingested') {
+        if (['complete', 'not_requested'].includes(download?.postprocess_state)) completed = 5;
+        else if (download?.postprocess_state) current = 4;
+        else completed = 4;
+      } else if (download?.phase === 'ingest' || ['remote_done', 'landed'].includes(download?.state)) current = 3;
+      else if (download || body.state === 'submitted') current = 2;
+      else current = 1;
+    }
+    if (current >= 0) completed = current;
+    if (current === 2 && !failed && download?.state === 'remote_running'
+        && typeof download.progress === 'number' && Number.isFinite(download.progress)) fraction = Math.min(1, Math.max(0, download.progress));
+    view.flow.toggleAttribute('hidden', !body || ['idle', 'owned'].includes(body.state));
+    view.progress.setAttribute('aria-valuenow', String(Math.round((completed + fraction) * 1000) / 1000));
+    view.progress.setAttribute('aria-valuetext', download?.state === 'ingested' && download.postprocess_state === 'not_requested'
+      ? '流程完成，整理未请求' : `${completed} 个阶段已完成${current >= 0 ? `，${failed ? '未完成' : '当前'}：${['排队', '搜索', '下载', '入库', '整理'][current]}` : ''}`);
+    view.progressFill.setAttribute('width', String((completed + fraction) * 20));
+    view.steps.forEach((step, index) => {
+      const skipped = download?.state === 'ingested' && download.postprocess_state === 'not_requested' && index === 4;
+      const state = skipped ? 'skipped' : index < completed ? 'complete' : index === current ? failed ? 'error' : 'current' : 'pending';
+      step.dataset.state = state;
+      if (index === current) step.setAttribute('aria-current', 'step'); else step.removeAttribute('aria-current');
+      step.querySelector('.flow-mark path').setAttribute('d', STEP_ICON_PATHS[state === 'complete' ? 'check' : state === 'error' ? 'error' : state === 'skipped' ? 'skipped' : 'circle']);
+      step.setAttribute('aria-label', `${['排队', '搜索', '下载', '入库', '整理'][index]}，${{complete:'已完成',current:'当前阶段',error:'未完成',skipped:'未请求',pending:'待处理'}[state]}`);
+    });
+  }
+
   function applyState(view, body) {
     if (view.identity.resolve) {
       view.identity.code = body.code;
@@ -777,10 +980,25 @@
       view.heading.textContent = body.code;
     }
     view.state = body.state;
-    view.queryOnly = ACTIVE.has(body.state);
+    view.tracking = tracking(body);
+    view.queryOnly = view.tracking;
     if (!view.queryOnly) attempts.delete(comparisonKey(view.identity.code));
-    view.note.textContent = LABELS[body.state];
-    view.note.dataset.variant = body.state === 'failed' ? 'error' : 'secondary';
+    const download = body.download;
+    const known = download && ['submitted', 'remote_running', 'remote_done', 'landed', 'ingested', 'failed', 'cancelled', 'stalled'].includes(download.state);
+    let label = body.stage === 'submitting' ? '正在提交网盘' : LABELS[body.state];
+    renderFlow(view, body);
+    if (known && typeof download.label === 'string') {
+      label = download.label.slice(0, 80);
+      if (download.state === 'ingested' && download.postprocess_state !== 'not_requested'
+          && typeof download.postprocess_label === 'string') label += ` · ${download.postprocess_label.slice(0, 80)}`;
+      if (download.state === 'remote_running' && typeof download.progress === 'number' && Number.isFinite(download.progress)) {
+        const percent = Math.round(Math.min(1, Math.max(0, download.progress)) * 100);
+        label += ` · ${percent}%`;
+      }
+    }
+    view.statusText = label;
+    view.note.textContent = label;
+    view.note.dataset.variant = body.state === 'failed' || download?.postprocess_state === 'failed' ? 'error' : 'secondary';
     render(view);
   }
 
@@ -794,6 +1012,9 @@
       attempts.add(comparisonKey(view.identity.code));
       view.queryOnly = true;
       view.note.textContent = '正在交给 Peach';
+      renderFlow(view, { state: 'pending' });
+      view.progress.removeAttribute('aria-valuenow');
+      view.progress.setAttribute('aria-valuetext', '等待 Peach 确认任务状态');
     }
     render(view);
     const deadline = Date.now() + 120_000;
@@ -801,17 +1022,23 @@
       let body = await request(config, view.identity.code, view.identity.source, method, Boolean(view.identity.resolve));
       if (!alive(view)) return;
       applyState(view, body);
-      for (let count = 0; ACTIVE.has(body.state) && count < 30 && Date.now() < deadline; count++) {
+      for (let count = 0; tracking(body) && count < 30 && Date.now() < deadline; count++) {
         await new Promise(resolve => setTimeout(resolve, 2000));
         if (!alive(view)) return;
         body = await request(config, view.identity.code, view.identity.source, 'GET');
         if (!alive(view)) return;
         applyState(view, body);
       }
-      if (ACTIVE.has(body.state)) view.note.textContent = '任务仍在继续，可查询状态。';
+      if (tracking(body)) view.note.textContent = `${view.statusText}，可查询状态。`;
     } catch (error) {
       if (alive(view)) {
         view.queryOnly = true;
+        if (view.flow.hasAttribute('hidden')) {
+          renderFlow(view, { state: 'pending' });
+          view.progress.removeAttribute('aria-valuenow');
+          view.progress.setAttribute('aria-valuetext', '连接异常，任务状态待确认');
+        } else view.progress.setAttribute('aria-valuetext', view.progress.hasAttribute('aria-valuenow')
+          ? '连接异常，显示最近一次确认的阶段' : '连接异常，任务状态待确认');
         view.note.textContent = error.message;
         view.note.dataset.variant = 'error';
       }
@@ -833,22 +1060,80 @@
     document.getElementById(ROOT_ID)?.remove();
     const { root, shadow } = surface(ROOT_ID, 'Peach 入库');
     const panel = element('section', 'panel');
+    panel.id = `${ROOT_ID}-panel`;
     const bar = element('header', 'bar');
     const label = element('strong', '', item.conflict ? '番号待核对' : item.code || '作品番号');
+    const summary = element('span', 'bar-summary');
+    summary.hidden = true;
+    const heading = element('div', 'bar-heading');
+    heading.append(label, summary);
+    const actions = element('div', 'bar-actions');
     const settingsButton = control('Peach 设置', { icon: 'settings' });
     settingsButton.addEventListener('click', configure);
-    bar.append(label, settingsButton);
+    const collapse = control('折叠 Peach 详情', { icon: 'collapse' });
+    collapse.setAttribute('aria-expanded', 'true');
+    collapse.setAttribute('aria-controls', `${ROOT_ID}-body`);
+    const hide = control('隐藏 Peach 面板', { icon: 'close' });
+    actions.append(settingsButton, collapse, hide);
+    bar.append(heading, actions);
     const body = element('div', 'body');
+    body.id = `${ROOT_ID}-body`;
     const button = control('加入 Peach 馆藏', { primary: true });
     button.dataset.action = 'add';
     const note = element('p', 'geist-note');
     note.setAttribute('role', 'status');
     note.setAttribute('aria-live', 'polite');
-    body.append(note, button);
+    // 结构与尺寸复用 Peach 生产 Progress 的 SVG 快照。
+    const progress = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    for (const [name, value] of Object.entries({ role: 'progressbar', 'aria-label': '整体任务进度',
+      'aria-valuemin': '0', 'aria-valuemax': '5', viewBox: '0 0 100 1', preserveAspectRatio: 'none', class: 'task-progress' })) progress.setAttribute(name, value);
+    const progressFill = document.createElementNS(progress.namespaceURI, 'rect');
+    const progressTrack = document.createElementNS(progress.namespaceURI, 'rect');
+    for (const [rect, width, style] of [[progressTrack, '100', 'track'], [progressFill, '0', 'fill']]) {
+      rect.setAttribute('width', width); rect.setAttribute('height', '1'); rect.setAttribute('class', style);
+    }
+    progress.append(progressTrack, progressFill);
+    for (const point of [20, 40, 60, 80]) {
+      const stop = document.createElementNS(progress.namespaceURI, 'rect');
+      stop.setAttribute('x', String(point - .4)); stop.setAttribute('width', '.4'); stop.setAttribute('height', '1'); stop.setAttribute('class', 'stop');
+      progress.append(stop);
+    }
+    const flow = element('div', 'flow');
+    flow.hidden = true;
+    const stepList = element('ol', 'flow-steps');
+    stepList.setAttribute('aria-label', '整体任务阶段');
+    const steps = ['排队', '搜索', '下载', '入库', '整理'].map(label => {
+      const step = element('li', 'flow-step');
+      const mark = element('span', 'flow-mark'); mark.setAttribute('aria-hidden', 'true'); mark.append(stepMark());
+      step.append(mark, element('span', 'flow-label', label)); stepList.append(step); return step;
+    });
+    flow.append(progress, stepList);
+    body.append(note, flow, button);
     panel.append(bar, body);
-    shadow.append(panel);
-    const view = { root, button, note, heading: label, settings: settingsButton, identity: item, url: location.href, generation, state: 'idle', busy: false, queryOnly: attempts.has(comparisonKey(item.code)) };
+    const launcher = control('展开 Peach 面板');
+    launcher.classList.add('launcher');
+    launcher.setAttribute('aria-label', '展开 Peach 面板');
+    launcher.setAttribute('aria-controls', panel.id);
+    launcher.setAttribute('aria-expanded', 'false');
+    const logo = document.createElement('img');
+    logo.src = PEACH_LOGO;
+    logo.alt = '';
+    logo.setAttribute('aria-hidden', 'true');
+    launcher.replaceChildren(logo);
+    launcher.hidden = true;
+    shadow.append(panel, launcher);
+    const view = { root, panel, body, launcher, collapse, summary, button, note, flow, steps, progress, progressFill, heading: label, settings: settingsButton, identity: item, url: location.href, generation, state: 'idle', busy: false, tracking: false, queryOnly: attempts.has(comparisonKey(item.code)) };
     current = view;
+    if (settingsView?.dialog.open) {
+      root.setAttribute('data-settings-open', '');
+      root.inert = true;
+    }
+    collapse.addEventListener('click', () => present(view, panelMode === 'collapsed' ? 'expanded' : 'collapsed', true));
+    hide.addEventListener('click', () => present(view, 'minimized', true));
+    launcher.addEventListener('click', () => {
+      present(view, 'expanded', true);
+      if (!view.identity.conflict && configuration() && !view.busy) void query(view);
+    });
     note.textContent = item.conflict ? '页面身份不一致，请核对番号。' : configuration() ? '正在查询 Peach 馆藏' : '配置地址与令牌后，即可加入 Peach 馆藏。';
     button.addEventListener('click', () => {
       if (!alive(view) || view.busy || view.button.disabled) return;
@@ -856,6 +1141,7 @@
       void query(view, view.queryOnly || ACTIVE.has(view.state) ? 'GET' : 'POST');
     });
     render(view);
+    present(view, panelMode);
     if (!item.conflict && configuration()) void query(view);
   }
 
