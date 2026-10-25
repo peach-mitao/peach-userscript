@@ -106,6 +106,19 @@ async function open(browser: Browser, options: {
 
 const button = (page: Page) => page.locator(ROOT).locator('[data-action="add"]');
 const settingsDialog = (page: Page) => page.locator('#peach-jav-settings').getByRole('dialog');
+async function pairingStorage(page: Page) {
+  const values = await page.evaluate(() => window.javMock.values);
+  const {
+    'peach.jav.installed-version': installed,
+    'peach.jav.update-attempted-at': attempted,
+    'peach.jav.updates': updates,
+    ...pairing
+  } = values;
+  if (installed !== undefined) assert.equal(installed, VERSION);
+  if (attempted !== undefined) assert.match(attempted, /^\d+$/);
+  if (updates !== undefined) assert.deepEqual(JSON.parse(updates), { script: { version: VERSION } });
+  return pairing;
+}
 async function fillSettings(page: Page, base: string, token: string) {
   const dialog = settingsDialog(page);
   await dialog.getByLabel('Peach 地址', { exact: true }).fill(base);
@@ -247,7 +260,7 @@ describe('JAV 用户脚本', () => {
       try {
         await page.evaluate(() => window.javMock.changed('peach.jav.installed-version', '9.3.0', true));
         await updatePanel(page).getByRole('button', { name: '刷新本页' }).waitFor();
-        assert.ok((await updatePanel(page).textContent())!.includes('脚本已更新至 v9.3.0'));
+        assert.ok((await updatePanel(page).getByLabel('用户脚本更新状态').innerText()).includes('脚本已更新至 v9.3.0'));
         await page.addScriptTag({ content: SCRIPT.replace(`const SCRIPT_VERSION = "${VERSION}"`, 'const SCRIPT_VERSION = "9.4.0"') });
         await page.waitForFunction(() => document.querySelector('#peach-jav-updates')?.shadowRoot?.textContent?.includes('v9.4.0'));
         assert.equal(await page.locator('#peach-jav-updates').count(), 1);
@@ -269,7 +282,7 @@ describe('JAV 用户脚本', () => {
           document.dispatchEvent(new Event('visibilitychange'));
         });
         assert.equal(await page.evaluate(() => window.javMock.updates.length), 1);
-        assert.equal((await updatePanel(page).textContent())!.includes('9.5.0'), false);
+        assert.equal((await updatePanel(page).getByLabel('用户脚本更新状态').innerText()).includes('9.5.0'), false);
         await page.clock.fastForward(86400_001);
         await waitUpdates(page, 2);
       } finally { await close(); }
@@ -326,7 +339,7 @@ describe('JAV 用户脚本', () => {
         await pending(opened.page, 1);
         await opened.page.evaluate(({status,message}) => window.javMock.reply(0,{detail:message},status), {status,message});
         await ready(opened.page, '查询 Peach 状态');
-        assert.equal(await opened.page.locator(ROOT).locator('p').innerText(), message);
+        assert.equal(await opened.page.locator(ROOT).getByRole('status', { name: 'Peach 任务状态' }).innerText(), message);
         assert.deepEqual(opened.problems, []);
       } finally { await opened.close(); }
     });
@@ -641,7 +654,7 @@ describe('JAV 用户脚本', () => {
         await button(page).click();
         await fillSettings(page, invalid.base, invalid.token);
         await ready(page, '配置 Peach');
-        assert.deepEqual(await page.evaluate(() => window.javMock.values), {});
+        assert.deepEqual(await pairingStorage(page), {});
         assert.equal(await page.evaluate(() => window.javMock.calls.length), 0);
         assert.match(await settingsDialog(page).getByRole('alert').innerText(), /请输入/);
         assert.equal(await settingsDialog(page).locator('[aria-invalid="true"]').count(), 1);
@@ -1100,7 +1113,7 @@ describe('JAV 用户脚本', () => {
     });
   }
 
-  it('配对信息只填入表单，输入法合成、错误与取消不写 GM', async () => {
+  it('配对信息、输入法合成与取消保持配对配置未保存，显式保存写入地址与令牌', async () => {
     const opened = await open(browser, { configured: false, url: 'https://duga.jp/other/' });
     const { page } = opened;
     try {
@@ -1117,13 +1130,20 @@ describe('JAV 用户脚本', () => {
       await paste(JSON.stringify({ peach_pairing: 1, base: BASE, token: TOKEN }));
       assert.equal(await address.inputValue(), BASE);
       assert.equal(await dialog.getByLabel('专用令牌', { exact: true }).inputValue(), TOKEN);
-      assert.deepEqual(await page.evaluate(() => window.javMock.values), {});
+      assert.deepEqual(await pairingStorage(page), {});
       await address.dispatchEvent('compositionstart');
       await address.press('Enter');
-      assert.deepEqual(await page.evaluate(() => window.javMock.values), {});
+      assert.deepEqual(await pairingStorage(page), {});
       await address.dispatchEvent('compositionend');
+      await dialog.getByRole('button', { name: '取消', exact: true }).click();
+      await dialog.waitFor({ state: 'detached' });
+      assert.deepEqual(await pairingStorage(page), {});
+      await page.evaluate(() => window.javMock.menus['配置 Peach 地址与令牌']!());
+      assert.equal(await address.inputValue(), '');
+      assert.equal(await dialog.getByLabel('专用令牌', { exact: true }).inputValue(), '');
+      await paste(JSON.stringify({ peach_pairing: 1, base: BASE, token: TOKEN }));
       await dialog.getByRole('button', { name: '保存设置' }).click();
-      assert.deepEqual(await page.evaluate(() => window.javMock.values), { 'peach.jav.base': BASE, 'peach.jav.token': TOKEN });
+      assert.deepEqual(await pairingStorage(page), { 'peach.jav.base': BASE, 'peach.jav.token': TOKEN });
       await page.clock.runFor(20);
       await page.locator('#peach-jav-settings').waitFor({state:'detached'});
       assert.equal(await page.locator('#peach-jav-settings').count(), 0);

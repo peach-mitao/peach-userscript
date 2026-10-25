@@ -675,6 +675,8 @@
     for (const previous of updateContainers) if (!previous.isConnected) updateContainers.delete(previous);
     const node = element('section', 'update-section');
     node.setAttribute('aria-label', '检查更新');
+    node.setAttribute('aria-live', 'polite');
+    node.setAttribute('aria-atomic', 'true');
     updateContainers.add(node);
     paintUpdates(node);
     return node;
@@ -682,9 +684,10 @@
 
   function paintUpdates(node) {
     const model = updateModel();
-    const note = element('p', 'geist-note', updateChecking ? '正在检查更新。' : model.message);
-    note.dataset.copyKey = `userscript.updates.${updateChecking ? 'checking' : model.kind}.message`;
-    note.setAttribute('role', 'status');
+    const checking = updateChecking && model.kind === 'current';
+    const note = element('p', 'geist-note', checking ? '正在检查更新。' : model.message);
+    note.dataset.copyKey = `userscript.updates.${checking ? 'checking' : model.kind}.message`;
+    note.setAttribute('aria-label', '用户脚本更新状态');
     const actions = element('div', 'update-actions');
     if (model.kind === 'refresh') {
       const reload = control('刷新本页');
@@ -740,6 +743,7 @@
     if (!updateEntry?.root.isConnected) {
       const entry = surface('peach-jav-updates', 'Peach 更新');
       const launcher = control('Peach 设置与更新');
+      launcher.setAttribute('aria-label', 'Peach 设置与更新');
       launcher.classList.add('launcher');
       const logo = element('img'); logo.src = PEACH_LOGO; logo.alt = '';
       launcher.replaceChildren(logo); launcher.addEventListener('click', configure);
@@ -1345,6 +1349,7 @@
     button.dataset.action = 'add';
     const note = element('p', 'geist-note');
     note.setAttribute('role', 'status');
+    note.setAttribute('aria-label', 'Peach 任务状态');
     note.setAttribute('aria-live', 'polite');
     // 结构与尺寸复用 Peach 生产 Progress 的 SVG 快照。
     const progress = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
