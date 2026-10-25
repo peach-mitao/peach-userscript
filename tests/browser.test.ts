@@ -19,10 +19,13 @@ type State = 'idle' | 'queued' | 'searching' | 'submitted' | 'ingested' | 'owned
 type Body = { ok: boolean; code: string; state: State; message: string; stage?: string;
   download?: { state: string; label: string; phase?: string; progress: number | null; postprocess_state?: string; postprocess_label?: string } };
 type Call = { method: string; url: string; headers: Record<string, string>; anonymous: boolean; data?: string };
-type MockRequest = Call & { onload(value: unknown): void; ontimeout(): void; onerror(): void };
+type MockRequest = Call & { onload(value: unknown): void; ontimeout(): void; onerror(): void; onabort?(): void };
 type Mock = {
   calls: Call[];
   reports: MockRequest[];
+  updates: MockRequest[];
+  updateAutomatic: boolean;
+  changed(key: string, value: string, remote?: boolean): void;
   pending: MockRequest[];
   values: Record<string, string>;
   menu?: () => void;
@@ -37,7 +40,7 @@ function body(state: State, code = 'SSIS-057'): Body {
 }
 
 async function open(browser: Browser, options: {
-  url?: string; title?: string; html?: string; configured?: boolean; viewport?: typeof VIEWPORTS[number]; initial?: State; script?: string; resolved?: string; automatic?: boolean;
+  url?: string; title?: string; html?: string; configured?: boolean; viewport?: typeof VIEWPORTS[number]; initial?: State; script?: string; resolved?: string; automatic?: boolean; updateAutomatic?: boolean; updateValues?: Record<string, string>;
 } = {}) {
   const viewport = options.viewport || VIEWPORTS[0]!;
   const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
@@ -48,10 +51,17 @@ async function open(browser: Browser, options: {
   await context.route('**/*', route => route.fulfill({
     contentType: 'text/html; charset=utf-8', body: `<!doctype html><html><head><meta charset="utf-8"><title>${options.title || 'SSIS-057 作品详情'}</title></head><body>${options.html ?? '<h1>SSIS-057 作品详情</h1>'}</body></html>`,
   }));
-  await page.addInitScript(({ configured, token, base, initial, resolved, automatic }) => {
+  await page.addInitScript(({ configured, token, base, initial, resolved, automatic, version, updateAutomatic, updateValues }) => {
+    const listeners = new Map<number, { key: string; callback: (key: string, oldValue: string, newValue: string, remote: boolean) => void }>();
+    let nextListener = 0;
     const mock: Mock = {
-      calls: [], reports: [], pending: [], automatic, menus: {},
-      values: configured ? { 'peach.jav.base': base, 'peach.jav.token': token } : {},
+      calls: [], reports: [], pending: [], updates: [], automatic, updateAutomatic, menus: {},
+      values: { ...(configured ? { 'peach.jav.base': base, 'peach.jav.token': token } : {}), ...updateValues },
+      changed(key, value, remote = false) {
+        const previous = mock.values[key] || '';
+        mock.values[key] = value;
+        for (const listener of listeners.values()) if (listener.key === key) listener.callback(key, previous, value, remote);
+      },
       reply(index, value, status = 200) {
         mock.pending[index]!.onload({ status, responseText: JSON.stringify(value) });
       },
@@ -59,9 +69,23 @@ async function open(browser: Browser, options: {
     window.javMock = mock;
     Object.assign(window, {
       GM_getValue: (key: string, fallback: string) => mock.values[key] ?? fallback,
-      GM_setValue: (key: string, value: string) => { mock.values[key] = value; },
+      GM_setValue: (key: string, value: string) => { mock.changed(key, value); },
+      GM_info: { script: { version } },
+      GM_addValueChangeListener: (key: string, callback: (key: string, oldValue: string, newValue: string, remote: boolean) => void) => {
+        const id = ++nextListener; listeners.set(id, { key, callback }); return id;
+      },
+      GM_removeValueChangeListener: (id: number) => listeners.delete(id),
       GM_registerMenuCommand: (label: string, callback: () => void) => { mock.menu = callback; mock.menus[label] = callback; },
       GM_xmlhttpRequest: (request: MockRequest) => {
+        if (request.url.includes('update.sleazyfork.org/') || request.url.endsWith('/api/jav-browser/updates')) {
+          mock.updates.push(request);
+          if (mock.updateAutomatic) setTimeout(() => request.onload({ status: 200, finalUrl: request.url,
+            responseText: request.url.includes('update.sleazyfork.org/')
+              ? `// ==UserScript==\n// @name Peach · JAV 入库\n// @namespace https://github.com/peach-mitao/peach-userscript\n// @version ${version}\n// ==/UserScript==`
+              : JSON.stringify({ runtime: { version: '1.0.0', build_id: 'fixture' }, release: { state: 'current' },
+                userscript: { version, minimum_version: '0.5.1', install_url: '/integrations/peach-jav.user.js' } }) }), 0);
+          return { abort: () => request.onabort?.() };
+        }
         if (request.url.endsWith('/api/jav-browser/errors')) { mock.reports.push(request); return; }
         mock.calls.push({ method: request.method, url: request.url, headers: request.headers,
           anonymous: request.anonymous, ...(request.data ? { data: request.data } : {}) });
@@ -72,7 +96,8 @@ async function open(browser: Browser, options: {
         }, 0);
       },
     });
-  }, { configured: options.configured !== false, token: TOKEN, base: BASE, initial: options.initial || 'idle', resolved: options.resolved, automatic: options.automatic !== false });
+  }, { configured: options.configured !== false, token: TOKEN, base: BASE, initial: options.initial || 'idle', resolved: options.resolved,
+    automatic: options.automatic !== false, version: VERSION, updateAutomatic: options.updateAutomatic !== false, updateValues: options.updateValues || {} });
   await page.goto(options.url || 'https://missav.ws/en/ssis-057?private=value#player');
   await page.clock.install();
   await page.addScriptTag({ content: options.script ?? SCRIPT });
@@ -139,6 +164,117 @@ describe('JAV 用户脚本', () => {
   let browser: Browser;
   before(async () => { browser = await launch(); });
   after(async () => { await browser?.close(); });
+
+  describe('独立更新检查', () => {
+    const metadata = (version: string, namespace = 'https://github.com/peach-mitao/peach-userscript') =>
+      `// ==UserScript==\n// @name Peach · JAV 入库\n// @namespace ${namespace}\n// @version ${version}\n// ==/UserScript==`;
+    const updatePanel = (page: Page) => page.locator('#peach-jav-updates');
+    const waitUpdates = (page: Page, count: number) => page.waitForFunction(count => window.javMock.updates.length === count, count);
+    const answerMetadata = (page: Page, version: string, namespace?: string) => page.evaluate(({ text }) => {
+      const request = window.javMock.updates.at(-1)!;
+      request.onload({ status: 200, finalUrl: request.url, responseText: text });
+    }, { text: metadata(version, namespace) });
+
+    it('未配对且没有影片身份的匹配页仍提供设置和独立菜单，元数据请求不带令牌', async () => {
+      const { page, close, problems } = await open(browser, { url: 'https://missav.ws/', title: '首页', html: '<h1>首页</h1>',
+        configured: false, updateAutomatic: false });
+      try {
+        await waitUpdates(page, 1);
+        assert.equal(await page.locator(ROOT).count(), 0);
+        assert.equal(await updatePanel(page).getByRole('button', { name: 'Peach 设置与更新' }).count(), 1);
+        const call = await page.evaluate(() => {
+          const request = window.javMock.updates[0]!;
+          return { url: request.url, anonymous: request.anonymous, headers: request.headers };
+        });
+        assert.equal(new URL(call.url).hostname, 'update.sleazyfork.org');
+        assert.equal(call.anonymous, true);
+        assert.deepEqual(call.headers, { Accept: 'text/plain' });
+        await answerMetadata(page, '9.1.0');
+        await page.waitForFunction(() => document.querySelector('#peach-jav-updates')?.shadowRoot?.textContent?.includes('v9.1.0 可更新'));
+        assert.equal(await updatePanel(page).getByRole('link', { name: '更新用户脚本' }).getAttribute('href'),
+          'https://sleazyfork.org/zh-CN/scripts/600821');
+        assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.installed-version']), VERSION);
+        await page.evaluate(() => window.javMock.menus['检查 Peach 与用户脚本更新']!());
+        await waitUpdates(page, 2);
+        assert.equal(await settingsDialog(page).getByRole('button', { name: '检查更新', exact: true }).count(), 1);
+        assert.deepEqual(problems, []);
+      } finally { await close(); }
+    });
+
+    it('手动检查可重复请求，身份错误和网络失败不会显示已最新', async () => {
+      const { page, close } = await open(browser, { url: 'https://missav.ws/', title: '首页', html: '', configured: false,
+        updateAutomatic: false, updateValues: { 'peach.jav.update-attempted-at': String(Date.now()) } });
+      try {
+        await page.evaluate(() => window.javMock.menus['检查 Peach 与用户脚本更新']!());
+        await waitUpdates(page, 1);
+        await answerMetadata(page, '9.1.0', 'https://untrusted.example/script');
+        await settingsDialog(page).getByRole('alert').filter({ hasText: '脚本发行状态未取得' }).waitFor();
+        assert.equal(await settingsDialog(page).getByRole('link', { name: '更新用户脚本' }).count(), 0);
+        await settingsDialog(page).getByRole('button', { name: '检查更新', exact: true }).click();
+        await waitUpdates(page, 2);
+        await page.evaluate(() => window.javMock.updates.at(-1)!.onerror());
+        assert.equal((await settingsDialog(page).textContent())!.includes('已是最新'), false);
+        assert.equal(await page.evaluate(() => window.javMock.calls.length), 0);
+      } finally { await close(); }
+    });
+
+    it('已配对的更新读取使用专用令牌且安装链接固定在该 Peach origin', async () => {
+      const { page, close } = await open(browser, { url: 'https://missav.ws/', title: '首页', html: '', updateAutomatic: false });
+      try {
+        await waitUpdates(page, 2);
+        await page.evaluate(() => {
+          const remote = window.javMock.updates[0]!;
+          remote.onload({ status: 200, responseText: '// ==UserScript==\n// @name Peach · JAV 入库\n// @namespace https://github.com/peach-mitao/peach-userscript\n// @version 0.5.2\n// ==/UserScript==' });
+          const local = window.javMock.updates[1]!;
+          local.onload({ status: 200, responseText: JSON.stringify({ runtime: { version: '1.0.0', build_id: 'fixture' },
+            release: { state: 'available', latest_version: '1.1.0' },
+            userscript: { version: '9.2.0', minimum_version: '0.5.1', install_url: 'https://untrusted.example/install.user.js' } }) });
+        });
+        const local = await page.evaluate(() => {
+          const request = window.javMock.updates[1]!;
+          return { url: request.url, headers: request.headers };
+        });
+        assert.equal(local.url, `${BASE}/api/jav-browser/updates`);
+        assert.equal(local.headers.Authorization, `Bearer ${TOKEN}`);
+        await updatePanel(page).getByRole('link', { name: '更新用户脚本' }).waitFor();
+        assert.equal(await updatePanel(page).getByRole('link', { name: '更新用户脚本' }).getAttribute('href'), `${BASE}/integrations/peach-jav.user.js`);
+        assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.installed-version']), VERSION);
+      } finally { await close(); }
+    });
+
+    it('跨标签安装标记和同页新实例提示刷新，发行检查不写安装标记', async () => {
+      const { page, close } = await open(browser, { url: 'https://missav.ws/', title: '首页', html: '', configured: false });
+      try {
+        await page.evaluate(() => window.javMock.changed('peach.jav.installed-version', '9.3.0', true));
+        await updatePanel(page).getByRole('button', { name: '刷新本页' }).waitFor();
+        assert.ok((await updatePanel(page).textContent())!.includes('脚本已更新至 v9.3.0'));
+        await page.addScriptTag({ content: SCRIPT.replace(`const SCRIPT_VERSION = "${VERSION}"`, 'const SCRIPT_VERSION = "9.4.0"') });
+        await page.waitForFunction(() => document.querySelector('#peach-jav-updates')?.shadowRoot?.textContent?.includes('v9.4.0'));
+        assert.equal(await page.locator('#peach-jav-updates').count(), 1);
+      } finally { await close(); }
+    });
+
+    it('自动检查保持每日间隔，隐藏中止在途请求并拒绝迟到结果', async () => {
+      const { page, close } = await open(browser, { url: 'https://missav.ws/', title: '首页', html: '', configured: false,
+        updateAutomatic: false });
+      try {
+        await waitUpdates(page, 1);
+        await page.evaluate(() => {
+          Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+          document.dispatchEvent(new Event('visibilitychange'));
+        });
+        await answerMetadata(page, '9.5.0');
+        await page.evaluate(() => {
+          Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+          document.dispatchEvent(new Event('visibilitychange'));
+        });
+        assert.equal(await page.evaluate(() => window.javMock.updates.length), 1);
+        assert.equal((await updatePanel(page).textContent())!.includes('9.5.0'), false);
+        await page.clock.fastForward(86400_001);
+        await waitUpdates(page, 2);
+      } finally { await close(); }
+    });
+  });
 
   for (const viewport of VIEWPORTS) {
     for (const example of [
@@ -1027,7 +1163,7 @@ describe('JAV 用户脚本', () => {
         });
       });
       assert.deepEqual(Object.keys(result).sort(), ['nonce', 'paired', 'protocol', 'type', 'version']);
-      assert.equal(result.version, '0.5.1');
+      assert.equal(result.version, '0.5.2');
       assert.equal(result.paired, true);
       assert.equal(JSON.stringify(result).includes(TOKEN), false);
       assert.equal(await frame.locator(ROOT).count(), 0);

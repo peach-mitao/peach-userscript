@@ -5,7 +5,7 @@
 // @supportURL   https://github.com/peach-mitao/peach-userscript/issues
 // @homepageURL  https://github.com/peach-mitao/peach-userscript
 // @license      AGPL-3.0-or-later
-// @version      0.5.1
+// @version      0.5.2
 // @description  在 JAV 作品详情页识别或选中番号，交给 Peach 下载入库。
 // __PEACH_JAV_MATCHES__
 // @match        https://*/integrations/peach-userscript-bridge
@@ -16,8 +16,12 @@
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
 // @grant        GM_xmlhttpRequest
+// @grant        GM_info
+// @grant        GM_addValueChangeListener
+// @grant        GM_removeValueChangeListener
 // @grant        window.onurlchange
 // @connect      *
+// @connect      update.sleazyfork.org
 // @run-at       document-idle
 // ==/UserScript==
 
@@ -45,6 +49,18 @@
   const ROOT_ID = 'peach-jav-action';
   const SCRIPT_VERSION = __PEACH_JAV_VERSION__;
   const PEACH_LOGO = __PEACH_JAV_LOGO__;
+  const STORAGE_INSTALLED = 'peach.jav.installed-version';
+  const STORAGE_UPDATES = 'peach.jav.updates';
+  const STORAGE_CHECKED = 'peach.jav.update-attempted-at';
+  const RELEASE_PAGE = 'https://sleazyfork.org/zh-CN/scripts/600821';
+  const RELEASE_META = 'https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js';
+  const infoVersion = typeof GM_info === 'object' && validVersion(GM_info?.script?.version) ? GM_info.script.version : SCRIPT_VERSION;
+  const RUNNING_VERSION = compareVersion(SCRIPT_VERSION, infoVersion) <= 0 ? SCRIPT_VERSION : infoVersion;
+  // 新实例在同页去重及桥接返回之前登记安装版本，正在运行的实例可收到变化。
+  try {
+    const installed = compareVersion(SCRIPT_VERSION, infoVersion) >= 0 ? SCRIPT_VERSION : infoVersion;
+    if (compareVersion(installed, GM_getValue(STORAGE_INSTALLED, '0.0.0')) > 0) GM_setValue(STORAGE_INSTALLED, installed);
+  } catch { /* 安装检测不阻断原有入口。 */ }
   if (location.pathname === '/integrations/peach-userscript-bridge') {
     let origin;
     try { origin = settings(location.origin, 'bridge-only').base; } catch { return; }
@@ -74,6 +90,18 @@
   let selected = null;
   let settingsView = null;
   let panelMode = 'expanded';
+  let updateEntry = null;
+  let updateCache = readUpdateCache();
+  let updateError = '';
+  let updateChecking = false;
+  let updateDismissed = '';
+  let updateGeneration = 0;
+  let updateTimer;
+  let updateDisposed = false;
+  let automaticUpdatesAvailable = true;
+  const updateRequests = new Set();
+  const updateContainers = new Set();
+  const updateListeners = [];
 
   // Peach 控件快照：来源与适配范围见 docs/REUSE.md。
   const UI_STYLE = `
@@ -131,6 +159,9 @@
     .secret{display:flex;align-items:center;gap:8px}.secret .geist-button{flex:none}
     .geist-note{font-size:var(--fs-sm);line-height:20px;color:var(--ink-2);overflow-wrap:anywhere}
     .geist-note[data-variant=error]{color:var(--drop)}
+    .update-section{display:grid;gap:8px;min-width:0;border-top:1px solid var(--line);padding-top:12px}
+    .update-actions{display:flex;flex-wrap:wrap;gap:8px}.update-actions a{text-decoration:none}
+    .update-actions .geist-button{height:32px;padding-inline:10px}
     dialog{position:fixed;inset:auto max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) auto;margin:0;
       width:min(400px,calc(100vw - 32px));max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);padding:0;
       background:var(--ground);color:var(--ink);border:1px solid var(--line);border-radius:var(--floating-radius);overflow:hidden;
@@ -388,6 +419,233 @@
     } catch { return null; }
   }
 
+  function validVersion(value) { return typeof value === 'string' && /^\d{1,5}\.\d{1,5}\.\d{1,5}$/.test(value); }
+
+  function compareVersion(left, right) {
+    if (!validVersion(left) || !validVersion(right)) return 0;
+    const a = left.split('.').map(Number), b = right.split('.').map(Number);
+    for (let index = 0; index < 3; index++) if (a[index] !== b[index]) return a[index] > b[index] ? 1 : -1;
+    return 0;
+  }
+
+  function readUpdateCache() {
+    try {
+      const saved = JSON.parse(GM_getValue(STORAGE_UPDATES, '{}'));
+      return saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+    } catch { return {}; }
+  }
+
+  function installedVersion() {
+    try { return GM_getValue(STORAGE_INSTALLED, RUNNING_VERSION); } catch { return RUNNING_VERSION; }
+  }
+
+  function updateModel() {
+    const installed = installedVersion();
+    if (compareVersion(installed, RUNNING_VERSION) > 0) return {
+      key: `refresh:${installed}`, kind: 'refresh', message: `用户脚本已更新至 v${installed}，刷新本页即可使用。`,
+    };
+    const config = configuration();
+    const local = config && updateCache.peach?.base === config.base ? updateCache.peach : null;
+    const remote = validVersion(updateCache.script?.version) ? updateCache.script.version : '';
+    const bundled = local?.userscript?.version;
+    const version = compareVersion(bundled, remote || '0.0.0') > 0 ? bundled : remote;
+    if (compareVersion(version, RUNNING_VERSION) > 0) return {
+      key: `script:${version}`, kind: 'script', message: `用户脚本 v${version} 可更新。`,
+      href: bundled === version && config ? `${config.base}/integrations/peach-jav.user.js` : RELEASE_PAGE,
+    };
+    if (local?.release?.state === 'available' && typeof local.release.latest_version === 'string') return {
+      key: `peach:${config.base}:${local.release.latest_version}`, kind: 'peach',
+      message: `Peach ${local.release.latest_version} 可更新。`, href: `${config.base}/settings/maintenance#releaseUpdates`,
+    };
+    return { key: '', kind: 'current', message: `当前用户脚本 v${RUNNING_VERSION}` };
+  }
+
+  function updateSection() {
+    for (const previous of updateContainers) if (!previous.isConnected) updateContainers.delete(previous);
+    const node = element('section', 'update-section');
+    node.setAttribute('aria-label', '检查更新');
+    updateContainers.add(node);
+    paintUpdates(node);
+    return node;
+  }
+
+  function paintUpdates(node) {
+    const model = updateModel();
+    const note = element('p', 'geist-note', updateChecking ? '正在检查更新。' : model.message);
+    note.dataset.copyKey = `userscript.updates.${updateChecking ? 'checking' : model.kind}.message`;
+    note.setAttribute('role', 'status');
+    const actions = element('div', 'update-actions');
+    if (model.kind === 'refresh') {
+      const reload = control('刷新本页');
+      reload.dataset.copyKey = 'userscript.updates.refresh.action';
+      reload.addEventListener('click', () => location.reload());
+      actions.append(reload);
+    } else if (model.href) {
+      const install = element('a', 'geist-button', model.kind === 'script' ? '更新用户脚本' : '查看 Peach 更新');
+      Object.assign(install, { href: model.href, target: '_blank', rel: 'noopener noreferrer' });
+      install.dataset.copyKey = `userscript.updates.${model.kind}.action`;
+      actions.append(install);
+    }
+    const check = control('检查更新');
+    check.dataset.copyKey = 'userscript.updates.check.action';
+    check.setAttribute('aria-busy', String(updateChecking));
+    check.setAttribute('aria-disabled', String(updateChecking));
+    check.addEventListener('click', () => { if (!updateChecking) void checkUpdates(true); });
+    actions.append(check);
+    node.replaceChildren(note);
+    if (updateError && !updateChecking) {
+      const error = element('p', 'geist-note', updateError);
+      error.dataset.variant = 'error'; error.setAttribute('role', 'alert');
+      error.dataset.copyKey = 'userscript.updates.error.message';
+      node.append(error);
+    }
+    node.append(actions);
+    const config = configuration();
+    const peach = config && updateCache.peach?.base === config.base ? updateCache.peach : null;
+    if (model.kind !== 'peach' && peach?.release?.state === 'available' && typeof peach.release.latest_version === 'string') {
+      const app = element('p', 'geist-note', `Peach ${peach.release.latest_version} 可更新。`);
+      app.dataset.copyKey = 'userscript.updates.peach.message';
+      const open = element('a', 'geist-button', '查看 Peach 更新');
+      Object.assign(open, { href: `${config.base}/settings/maintenance#releaseUpdates`, target: '_blank', rel: 'noopener noreferrer' });
+      open.dataset.copyKey = 'userscript.updates.peach.action';
+      const appActions = element('div', 'update-actions'); appActions.append(open);
+      node.append(app, appActions);
+    }
+  }
+
+  function paintAllUpdates() {
+    if (updateDisposed) return;
+    for (const node of updateContainers) {
+      if (node.isConnected) paintUpdates(node); else updateContainers.delete(node);
+    }
+    refreshUpdateEntry();
+  }
+
+  function refreshUpdateEntry() {
+    if (!document.body || updateDisposed) return;
+    if (current) { updateEntry?.root.remove(); updateEntry = null; return; }
+    const model = updateModel();
+    const expanded = document.visibilityState !== 'hidden' && model.kind !== 'current' && updateDismissed !== model.key;
+    if (!updateEntry?.root.isConnected) {
+      const entry = surface('peach-jav-updates', 'Peach 更新');
+      const launcher = control('Peach 设置与更新');
+      launcher.classList.add('launcher');
+      const logo = element('img'); logo.src = PEACH_LOGO; logo.alt = '';
+      launcher.replaceChildren(logo); launcher.addEventListener('click', configure);
+      const panel = element('section', 'panel');
+      const bar = element('header', 'bar');
+      const later = control('稍后', { icon: 'close' });
+      later.addEventListener('click', () => { updateDismissed = updateModel().key; refreshUpdateEntry(); });
+      bar.append(element('strong', '', 'Peach 更新'), later);
+      const body = element('div', 'body'); body.append(updateSection());
+      const settings = control('Peach 设置'); settings.addEventListener('click', configure); body.append(settings);
+      panel.append(bar, body); entry.shadow.append(panel, launcher);
+      updateEntry = { ...entry, launcher, panel };
+    }
+    updateEntry.root.dataset.panelMode = expanded ? 'expanded' : 'minimized';
+    updateEntry.launcher.hidden = expanded; updateEntry.panel.hidden = !expanded;
+    updateEntry.root.toggleAttribute('data-settings-open', Boolean(settingsView?.dialog.open));
+  }
+
+  function updateRequest(url, config = null) {
+    return new Promise((resolve, reject) => {
+      let handle;
+      let finished = false;
+      let watchdog;
+      let ticket;
+      const finish = (error, value) => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(watchdog);
+        if (ticket) updateRequests.delete(ticket);
+        if (error) reject(error); else resolve(value);
+      };
+      const failed = () => finish(new Error(config ? 'Peach 更新状态未取得，请检查连接和令牌后重试。' : '脚本发行状态未取得，请稍后重试。'));
+      ticket = { abort() { failed(); handle?.abort?.(); } };
+      // anonymous 使用的 fetch 模式在 Chrome 中不保证 GM timeout 生效。
+      watchdog = setTimeout(() => ticket.abort(), 15_000);
+      try {
+        handle = GM_xmlhttpRequest({ method: 'GET', url, anonymous: true, timeout: 15_000, redirect: 'error',
+          headers: config ? { Accept: 'application/json', Authorization: `Bearer ${config.token}` } : { Accept: 'text/plain' },
+          onload(response) {
+            if (finished) return;
+            if (response.status < 200 || response.status >= 300 || response.responseText?.length > 128_000
+              || (response.finalUrl && response.finalUrl !== url)) { failed(); return; }
+            try {
+              if (!config) {
+                const metadata = /^\s*\/\/ ==UserScript==\r?\n([\s\S]*?)\/\/ ==\/UserScript==/.exec(response.responseText)?.[1];
+                const entries = key => [...(metadata || '').matchAll(new RegExp(`^// @${key}\\s+(.+)$`, 'gm'))].map(match => match[1].trim());
+                const version = entries('version');
+                if (!metadata || version.length !== 1 || !validVersion(version[0])
+                  || entries('namespace').length !== 1 || entries('namespace')[0] !== 'https://github.com/peach-mitao/peach-userscript'
+                  || entries('name').length !== 1 || entries('name')[0] !== 'Peach · JAV 入库') throw new Error();
+                finish(null, { version: version[0] });
+              } else {
+                const body = JSON.parse(response.responseText);
+                if (!validVersion(body.userscript?.version) || !validVersion(body.userscript?.minimum_version)
+                  || typeof body.runtime?.version !== 'string' || typeof body.runtime?.build_id !== 'string'
+                  || typeof body.release?.state !== 'string') throw new Error();
+                // 安装链接只由当前配置地址和固定路径组成。
+                finish(null, { base: config.base, runtime: body.runtime, release: body.release,
+                  userscript: { version: body.userscript.version, minimum_version: body.userscript.minimum_version } });
+              }
+            } catch { failed(); }
+          }, onerror: failed, ontimeout: failed, onabort: failed,
+        });
+        if (!finished) updateRequests.add(ticket);
+      } catch { failed(); }
+    });
+  }
+
+  async function checkUpdates(manual = false) {
+    if (updateDisposed || updateChecking || (!manual && document.visibilityState === 'hidden')) return;
+    const run = ++updateGeneration;
+    updateChecking = true; updateError = '';
+    try { GM_setValue(STORAGE_CHECKED, String(Date.now())); } catch { automaticUpdatesAvailable = false; }
+    paintAllUpdates();
+    const config = configuration();
+    const results = await Promise.allSettled([updateRequest(RELEASE_META),
+      ...(config ? [updateRequest(`${config.base}/api/jav-browser/updates`, config)] : [])]);
+    if (updateDisposed || run !== updateGeneration) return;
+    updateChecking = false;
+    const latest = readUpdateCache();
+    if (results[0].status === 'fulfilled') latest.script = results[0].value;
+    if (config && results[1]?.status === 'fulfilled' && configuration()?.base === config.base) latest.peach = results[1].value;
+    const errors = results.filter(result => result.status === 'rejected');
+    if (manual && errors.length) updateError = errors.map(result => result.reason.message).join(' ');
+    updateCache = latest;
+    try { GM_setValue(STORAGE_UPDATES, JSON.stringify(latest)); } catch { /* 页面内保留本次结果。 */ }
+    paintAllUpdates(); scheduleUpdateCheck();
+  }
+
+  function scheduleUpdateCheck() {
+    clearTimeout(updateTimer);
+    if (updateDisposed || !automaticUpdatesAvailable || document.visibilityState === 'hidden') return;
+    let last;
+    try { last = Number(GM_getValue(STORAGE_CHECKED, '0')); } catch { return; }
+    const delay = Number.isFinite(last) ? Math.max(0, last + 86400_000 - Date.now()) : 0;
+    if (delay === 0) void checkUpdates();
+    else updateTimer = setTimeout(scheduleUpdateCheck, Math.min(delay, 86400_000));
+  }
+
+  function updateVisibility() {
+    clearTimeout(updateTimer);
+    if (document.visibilityState === 'hidden') {
+      updateGeneration++; updateChecking = false;
+      for (const request of updateRequests) request.abort?.();
+      updateRequests.clear();
+    } else { updateCache = readUpdateCache(); paintAllUpdates(); scheduleUpdateCheck(); }
+  }
+
+  function disposeUpdates() {
+    updateDisposed = true; updateGeneration++;
+    clearTimeout(updateTimer);
+    for (const request of updateRequests) request.abort?.();
+    updateRequests.clear(); updateContainers.clear();
+    document.removeEventListener('visibilitychange', updateVisibility);
+    if (typeof GM_removeValueChangeListener === 'function') for (const listener of updateListeners) GM_removeValueChangeListener(listener);
+  }
+
   function configure() {
     if (settingsView?.dialog.open) { settingsView.reopen(); return; }
     const previousFocus = current?.root.shadowRoot?.activeElement || document.activeElement;
@@ -441,6 +699,7 @@
     error.setAttribute('role', 'alert');
     error.hidden = true;
     body.append(error);
+    body.append(updateSection());
     address.input.addEventListener('paste', event => {
       const text = event.clipboardData?.getData('text/plain')?.trim() || '';
       if (!text.startsWith('{')) return;
@@ -484,6 +743,7 @@
       current.root.setAttribute('data-settings-open', '');
       current.root.inert = true;
     }
+    updateEntry?.root.setAttribute('data-settings-open', '');
     const cleanup = () => {
       if (!root.isConnected) return;
       closeGeneration++;
@@ -495,6 +755,7 @@
         current.root.removeAttribute('data-settings-open');
         current.root.inert = false;
       }
+      refreshUpdateEntry();
       if (previousFocus?.isConnected) previousFocus.focus();
       else current?.settings.focus();
     };
@@ -567,6 +828,7 @@
       dismiss();
       pageKey = '';
       refresh();
+      paintAllUpdates();
       current?.settings.focus();
       if (!current) showNotice('已保存 Peach 设置。');
     });
@@ -575,6 +837,7 @@
 
   GM_registerMenuCommand('配置 Peach 地址与令牌', configure);
   GM_registerMenuCommand('选中番号加入 Peach', selectCode);
+  GM_registerMenuCommand('检查 Peach 与用户脚本更新', () => { configure(); void checkUpdates(true); });
 
   let reporting = false;
   let reportAfter = 0;
@@ -844,7 +1107,7 @@
     generation++;
     current?.root.remove();
     current = null;
-    if (!item || !document.body) return;
+    if (!item || !document.body) { refreshUpdateEntry(); return; }
     // Shadow DOM 隔离宿主样式。
     document.getElementById(ROOT_ID)?.remove();
     const { root, shadow } = surface(ROOT_ID, 'Peach 入库');
@@ -897,7 +1160,7 @@
       step.append(mark, element('span', 'flow-label', label)); stepList.append(step); return step;
     });
     flow.append(progress, stepList);
-    body.append(note, flow, button);
+    body.append(note, flow, button, updateSection());
     panel.append(bar, body);
     const launcher = control('展开 Peach 面板');
     launcher.classList.add('launcher');
@@ -913,6 +1176,7 @@
     shadow.append(panel, launcher);
     const view = { root, panel, body, launcher, collapse, summary, button, note, flow, steps, progress, progressFill, heading: label, settings: settingsButton, identity: item, url: location.href, generation, state: 'idle', busy: false, tracking: false, queryOnly: attempts.has(comparisonKey(item.code)) };
     current = view;
+    refreshUpdateEntry();
     if (settingsView?.dialog.open) {
       root.setAttribute('data-settings-open', '');
       root.inert = true;
@@ -952,4 +1216,12 @@
   // 用户脚本沙箱无需替换页面的 History API。
   setInterval(refresh, 750);
   refresh();
+  if (typeof GM_addValueChangeListener === 'function') {
+    for (const key of [STORAGE_INSTALLED, STORAGE_UPDATES]) updateListeners.push(GM_addValueChangeListener(key, () => {
+      updateCache = readUpdateCache(); paintAllUpdates();
+    }));
+  }
+  document.addEventListener('visibilitychange', updateVisibility);
+  addEventListener('pagehide', event => { if (!event.persisted) disposeUpdates(); });
+  scheduleUpdateCheck();
 })();

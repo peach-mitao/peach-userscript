@@ -4,7 +4,7 @@
 
 ## 配对与传输
 
-在 Peach 的浏览器添加设置中启用并生成专用令牌。脚本管理器将 Peach origin 和令牌保存在 `peach.jav.base` 与 `peach.jav.token`，所有请求通过 `GM_xmlhttpRequest` 发往用户配置的 Peach origin。
+在 Peach 的浏览器添加设置中启用并生成专用令牌。脚本管理器将 Peach origin 和令牌保存在 `peach.jav.base` 与 `peach.jav.token`，作品操作和本机状态请求通过 `GM_xmlhttpRequest` 发往用户配置的 Peach origin。
 
 配对信息使用 JSON：`{"peach_pairing":1,"base":"https://peach.example.com","token":"专用令牌"}`。Peach 在令牌签发后可复制该信息；用户脚本在地址输入框粘贴时校验版本与字段，按配置的相同判据校验后填入表单，不自动保存。载荷上限 4,096 字符，不包含网盘凭据或来源站数据。
 
@@ -20,7 +20,17 @@
 
 脚本只读取详情表中的「メーカー品番」「品番」等明确身份字段，不把「配信品番」与厂家番号混为一谈。多个字段矛盾时阻止添加；请求保留尾字母，响应须与所提交字段一致。通用提取覆盖 KIRARI 的 `MKBD-S`／`MKD-S` 和二至四位序号的日期式番号。HTTP 404／405 提示升级 Peach，429 提示稍后查询，5xx 提示服务故障；不将这些故障显示为番号缺失。
 
-地址接受 HTTPS；HTTP 仅接受 `localhost`、`127.0.0.1`、`[::1]`。地址须为 origin，不能带用户名、密码、路径、查询或片段。令牌不能为空，最多 256 字符，不接受换行。请求使用 `Authorization: Bearer <专用令牌>`，`Accept: application/json`，`anonymous: true`，业务请求单次超时 60 秒。`@connect *` 用于自选 Peach 地址；脚本的请求目标始终来自有效配置。
+地址接受 HTTPS；HTTP 仅接受 `localhost`、`127.0.0.1`、`[::1]`。地址须为 origin，不能带用户名、密码、路径、查询或片段。令牌不能为空，最多 256 字符，不接受换行。请求使用 `Authorization: Bearer <专用令牌>`，`Accept: application/json`，`anonymous: true`，业务请求单次超时 60 秒。`@connect *` 用于自选 Peach 地址；带令牌的请求目标始终来自有效配置，独立发行检查使用下文固定的官方元数据地址。
+
+## 检查更新
+
+`GET /api/jav-browser/updates` 使用同一 Bearer 专用令牌，无需番号或作品来源。返回 `{runtime:{version,build_id},release,userscript:{version,minimum_version,install_url,release_url}}`；`release` 沿用 Peach 的发行检查快照。服务端只读取本机状态，不联网检查发行版、不创建任务、不写 ledger。脚本只采纳合法脚本版本，安装入口固定为当前已配对 origin 的 `/integrations/peach-jav.user.js`，应用入口为该 origin 的 `/settings/maintenance#releaseUpdates`。
+
+独立检查固定请求 `https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js`，不带 Bearer、Cookie、来源站地址或影片身份。响应最大 128,000 字符，必须包含唯一 `@name Peach · JAV 入库`、`@namespace https://github.com/peach-mitao/peach-userscript` 与三段数字版本。只解析元数据区，不执行返回内容，也不采纳返回的安装地址；安装动作固定打开 [Sleazy 发布页](https://sleazyfork.org/zh-CN/scripts/600821)。跨域响应与重定向均拒绝。
+
+更新请求通过 `GM_xmlhttpRequest` 的 `anonymous` 模式发送；15 秒看门狗到期后调用 `abort()`。自动检查尝试时间与成功结果分别保存在 `peach.jav.update-attempted-at` 和 `peach.jav.updates`，自动尝试间隔至少 24 小时。页面隐藏或退出中止未完成请求；恢复可见时读取已保存结果，并在间隔到期时检查。手动检查独立于此间隔，失败保留明确错误与重试入口。
+
+`peach.jav.installed-version` 只从本机实际运行实例的编译版本与 `GM_info.script.version` 更新，不从发行检查结果写入。实例保留自己的运行版本，监听 GM 安装标记与结果变化；安装标记高于运行版本时提示刷新。记录在同页重复注入的去重判断之前写入。新发行版提示安装，已安装版提示刷新，两个状态互不替代。
 
 ## 本机错误取证
 
