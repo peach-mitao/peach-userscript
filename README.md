@@ -1,103 +1,37 @@
-# Peach · JAV 入库
+<p align="center"><img src="https://peach.video/assets/peach-logo-192.webp" alt="Peach" width="88"></p>
 
-在 JAV 作品详情页识别或选中番号，点击「加入 Peach 馆藏」，交给自己的 Peach 搜索磁力、提交云下载并入库。脚本需要已运行的 [Peach](https://github.com/peach-mitao/peach) 写入端，并在 Peach 配置好下载渠道、目标目录和挂载路径。
+# Peach Userscript
 
-## 安装与配对
+Send video codes from supported pages to your self-hosted Peach instance.
 
-1. 安装 [Tampermonkey](https://www.tampermonkey.net/)。
-2. 打开 [Sleazy 发布页](https://sleazyfork.org/zh-CN/scripts/600821)，点击「安装此脚本」，在脚本管理器中确认安装。
-3. 在 Peach 打开「Peach 配置 → 下载渠道 → 浏览器添加 JAV」，启用并生成专用令牌，点击「复制配对信息」。
-4. 在支持的站点点击右下角「配置 Peach」或设置按钮，在「Peach 地址」中粘贴配对信息，自动填好地址与令牌，再保存设置。也可分别填写地址与令牌。脚本菜单「设置」同样能打开设置面板。
-5. 允许脚本连接该 Peach 地址。浏览器须信任其 HTTPS 证书；HTTP 仅支持回环地址。
+[Install script](https://raw.githubusercontent.com/peach-mitao/peach-userscript/main/dist/peach-jav.user.js) · [Peach](https://github.com/peach-mitao/peach) · [Site rules](docs/SITES.md) · [简体中文](README.zh-CN.md)
 
-详情页能够明确识别单个番号时，右下角显示添加按钮。其他页面可选中一个完整番号，再使用脚本菜单「开启」。状态查询不会创建下载任务。任务由 Peach 保存，关闭来源页面后继续处理。
+[![CI](https://img.shields.io/github/actions/workflow/status/peach-mitao/peach-userscript/ci.yml?branch=main&label=CI&logo=githubactions&logoColor=white)](https://github.com/peach-mitao/peach-userscript/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue?logo=gnu&logoColor=white)](LICENSE)
 
-DMM、MGS 的详情表番号和商品地址交给 Peach 联合校验。DMM 的目录前缀与 MGS 的发行前缀按各自来源处理，商品番号的尾字母保留；KIRARI 和日期式番号可自动识别或选中添加。来源接口不兼容、服务故障与番号缺失分别提示，操作方式见 [Peach API](docs/PROTOCOL.md)。
+## Features
 
-设置面板支持检查地址、遮挡或显示输入的令牌、保存和取消。已保存令牌可以留空保留；更换地址时需要重新输入令牌。保存后收为 Peach 图标。校验、连接与选中番号的错误均在页面内提示，窄屏正文可独立滚动。
+- **Recognize and add**: detect a code on supported detail pages, or submit a selected code through the script menu.
+- **Track status**: check whether a title is already in your library or queued.
+- **Continue in Peach**: Peach saves the task and handles cloud download and library import after the source page closes.
 
-外观同步已配对 Peach 的深浅色和强调色。首次配对后，在同一浏览器打开一次 Peach；脚本只读取 `peach.settings.v1` 中的 `theme`、`accent` 和页面已应用的强调色，将外观快照保存在 GM 存储。Peach 页面切换外观时同步已打开的脚本界面，关闭 Peach 后保留上次外观。Peach 选择「随系统」时脚本也随系统；尚未取得外观时默认随系统。
+## Setup
 
-按钮显示范围默认「仅在 JAV 网站显示」，也可选择「在所有网页常驻显示」。为支持任意网页及自托管 Peach 的外观同步，安装规则包含 `*://*/*`；脚本管理器可能要求重新确认网页运行权限。此权限与连接自选 Peach 的 `@connect` 分开管理。普通网页只在点击图标后扫描可见文本、图片说明和明确番号字段，不发送整页内容或普通网页地址。修改显示范围后，原先未运行脚本的网页需要刷新。
+1. Install [Tampermonkey](https://www.tampermonkey.net/) and the [userscript](https://raw.githubusercontent.com/peach-mitao/peach-userscript/main/dist/peach-jav.user.js).
+2. Configure a download channel, target folder and mount path in Peach.
+3. Enable browser integration in Peach's download settings and generate a dedicated token.
+4. Enter your Peach address and token in the script menu, then allow the connection.
 
-点击「识别本页全部番号」查看去重后的候选，勾选若干项加入，或点击「全部加入」。脚本逐项提交并显示回执；关闭列表停止后续提交，已经提交的任务仍在 Peach 处理。普通网页采用不带来源地址的手动添加协议，需要支持 `manual: true` 的 Peach；旧版本可能拒绝该请求。
+The browser must trust Peach's HTTPS certificate; HTTP is supported only on loopback addresses. Supported sites are maintained in [site rules](docs/SITES.md); registration does not establish live-site or end-to-end verification.
 
-列表不显示作品封面。女优信息异步读取 Peach 本地账本与已有元数据快照；有本地头像时显示头像，有名字但无头像时使用灰底首字母，没有人物信息时显示灰底人像图标。此查询不调用外站、不恢复后台抓取、不生成任务，未取得时单独提示，番号选择仍可使用。批量列表和底部操作保持单行，设置由浮卡齿轮或脚本菜单打开。
+## Privacy
 
-配对信息包含地址与专用令牌，应按令牌保管。服务端只保存令牌哈希，不能读回明文；脚本从 GM 存储读取已保存的配置。
+The dedicated token stays in userscript-manager storage. The script submits the code and a filtered source URL, not source-site cookies, player URLs or page contents. Peach manages cloud-drive credentials.
 
-专用令牌只保存在脚本管理器的 GM 存储中。脚本不提交来源站 Cookie、播放器地址或整页正文。来源地址仅保留作品路径和清单允许的作品标识参数。网盘凭据由 Peach 管理。
+## Development
 
-请求超时不代表任务失败，按钮保留查询入口，不自动重复添加。请求上限为 60 秒；错误只向自己的 Peach 本机日志提交发生时间、站点标识、番号、版本、操作、耗时与状态码。连接失败时暂存最多 20 条、7 天，在后续连接成功时按一分钟限频补报，随 Peach 导出诊断包提供。
+[Build and release](docs/DEVELOPMENT.md) · [API protocol](docs/PROTOCOL.md) · [Reuse](docs/REUSE.md) · [Report a problem](https://github.com/peach-mitao/peach-userscript/issues)
 
-右下角整体进度覆盖排队、搜索、下载、入库、整理。当前阶段依次使用 loading.dev 的 Clock、Radar、LinearDots、Gather、Blocks；完成、待处理和错误阶段静止，减少动态效果时全部静止。网盘百分比只填充下载阶段，其他阶段按后台状态推进。整理未请求时显示跳过。
+## License
 
-卡片可折叠为标题栏，隐藏后保留 Peach logo 圆形入口，点击即可恢复并查询状态。圆形入口支持拖动，位置保存在 GM 存储，页面刷新后恢复并按窗口边界限制。折叠与隐藏不取消已提交的后台任务。设置窗口打开期间浮卡不可见，取消后恢复，保存后收起。
-
-## 检查更新
-
-设置中的「彻底关闭图标」会持久保存关闭状态，移除浮卡与圆形入口，停止自动识别、状态轮询和自动更新检查。后台已提交任务继续处理。篡改猴脚本菜单保留三项：「开启」恢复之前的显示范围，「检测更新」手动检查并显示结果，「设置」修改配置。关闭时仍可使用后两项，刷新保持关闭。选中完整番号后选择「开启」可明确当前作品；没有单片身份时打开本页番号列表。
-
-脚本菜单「检测更新」和设置面板提供检查入口。浮卡只在有更新或安装后待刷新时显示更新区，脚本更新使用蓝色，Peach 更新使用橙色。未识别影片或尚未配对时，仍可检查固定 [Sleazy 发布页](https://sleazyfork.org/zh-CN/scripts/600821) 的脚本发行版本。已配对时，同时读取自己的 Peach 随附脚本版本和应用发行状态；更新 Peach 的入口打开「应用与维护」。
-
-自动检查仅在页面可见时执行，同一份 GM 存储每天最多自动检查一次；手动检查可随时发起。检查失败保留已取得的版本，显示检查未完成。安装由脚本管理器确认，页面不会自动刷新。其他标签运行新安装版本后，仍在使用旧脚本的页面提示「刷新本页」。已经打开且未运行本版本检查器的页面需先刷新一次。
-
-## 支持的站点
-
-支持范围由 [`jav-sites.json`](jav-sites.json) 唯一维护；构建同时生成安装匹配规则、内联运行规则及供 Peach 后端验证的站点快照。登记不代表站点当前可达或已取得真实扩展、源站与网盘联合验收。已完成合成页面行为回归，具体接入方式见 [站点规则](docs/SITES.md)。
-
-## 构建与验证
-
-运行 `npm run preview` 后访问 `http://127.0.0.1:8799/en/real-864`，可查看未配置、可添加、馆藏已有与连接失败状态。预览使用内存 GM 存储和模拟请求，不连接 Peach 或来源站点，刷新会还原数据。
-
-使用 [Node.js 24 LTS](https://nodejs.org/en/about/previous-releases)。构建与基础单测仅使用 Node 内置模块，无运行依赖。浏览器回归的唯一开发依赖为 `playwright-core`。
-
-以下命令均在仓库根目录执行。生成确定性的安装脚本及站点快照：
-
-```powershell
-npm run build
-```
-
-执行构建和候选工具的基础单测：
-
-```powershell
-npm test
-```
-
-按锁文件安装浏览器测试依赖：
-
-```powershell
-npm ci --ignore-scripts
-```
-
-安装用于离线合成页面回归的 Chromium：
-
-```powershell
-node node_modules/playwright-core/cli.js install chromium
-```
-
-核对已提交产物并运行全部测试：
-
-```powershell
-npm run verify
-```
-
-有本机 Chrome 时，可将 `PEACH_E2E_CHROME` 设置为其完整可执行文件路径。测试拦截所有页面请求并模拟 GM API，不访问真实 Peach、源站或网盘。真实扩展权限确认与网盘联合验收仍需在实际部署中完成。
-
-## 发布与 Peach 同步
-
-`dist/peach-jav.user.js` 可直接安装，`dist/jav-sites.json` 是版本化站点快照，`dist/release.json` 记录脚本版本与两个文件的 SHA256，`dist/SHA256SUMS` 用于校验制品。构建不写时间戳、不访问网络。CI 检查已提交制品与源文件一致，并上传制品。
-
-Peach 主仓库消费同一次发布的脚本与站点快照，服务端继续独立验证来源域名和作品参数。维护脚本或站点时在本仓库修改、构建、验证，递增版本后同步制品；协议说明见 [Peach API](docs/PROTOCOL.md)。[Sleazy 发布说明](docs/SLEAZY.md) 可用于发布页面。
-
-需要交给其他项目时，可运行 `npm run export -- --output <制品目录>`，导出这四个文件。导出前会核对源与产物一致；相同内容可重复导出，已有不同内容会被拒绝，防止覆盖混合版本。
-
-同步到 Peach 隔离工作树时，使用 `node scripts/export-peach.mjs --target <Peach隔离工作树> --commit <本仓库40位提交SHA>`。默认仅预览，添加 `--apply` 才写入 `web/integrations/` 中的脚本、站点快照与 `jav-userscript-release.json` 来源记录。工具校验工作树注册关系、Peach 项目标识、发布清单与 hash，不访问网络、不执行 Git 或服务命令。
-
-## 站点与镜像候选
-
-[候选同步工具](docs/MIRROR_REVIEW.md) 从人工选定并固定 SHA256 的 Sleazy、Greasy 用户脚本元数据中，提取显式 `@match` / `@include` / `@connect` 域名，辅助发现镜像和缺少的源站。仓库提供 8 个不含第三方实现的元数据快照，支持离线重放。所有候选结果保持待复核；工具不执行远程代码，也不改 `jav-sites.json`。没有自动站点同步或定时任务。
-
-## 许可证与来源
-
-采用 [AGPL-3.0-or-later](LICENSE)。用户脚本和回归测试来自 Peach 项目，固定来源和依赖说明见 [NOTICE](NOTICE.md) 与 [复用记录](docs/REUSE.md)。
+[AGPL-3.0-or-later](LICENSE). See [NOTICE](NOTICE.md) for origins and dependencies.

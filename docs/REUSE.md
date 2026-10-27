@@ -33,6 +33,9 @@
 Sleazy 官方脚本 600821 的 JSON 元数据与 `.meta.js` 已通过严格 HTTPS 读取核对：名称 `Peach · JAV 入库`、namespace `https://github.com/peach-mitao/peach-userscript`、发行版本 `0.5.1`、对应同 ID 的下载地址一致。协议格式依据 [Greasy Fork 官方 API](https://greasyfork.org/en/help/api) 和维护者的[元数据下载域名说明](https://github.com/Tampermonkey/tampermonkey/issues/1904)。只解析版本与身份，不依赖影片识别或 Peach 配对；本地 Peach 接口继续复用既有发行快照。独立更新库及远程代码加载不适用于此只读需求。
 
 商品身份复用 Peach 的 `sources.dmm` CID 模型和 `catalog_rules` 商品番号判据，不引入第三方解析依赖。浏览器只提取明确字段与完整短番号，DMM 与 MGS 的来源差异由服务端解释；厂家番号与商品号联合校验，尾字母和日期分隔符保留。模拟 GM API 的 Chromium 回归覆盖字段冲突、特殊番号与 HTTP 错误分类；Peach 消费端另以完整安装脚本连接临时账本的真实识别接口，验证桌面与手机链路。
+CI 使用 Node 原生 TypeScript 执行文档判定，不增加依赖。push 从最近成功的同分支祖先计算差异，失败区间仍纳入本次验证。普通 README 和维护文档只检查格式及比较基线，保留验证结果；混合代码、未知路径、基线未取得和手动运行执行完整制品与浏览器验证。
+
+浏览器回归通过现有 `PEACH_E2E_CHROME` 入口使用 runner 已安装的 Chrome，记录实际版本；不重复下载 Chromium 或通过 apt 安装桌面依赖。runner 未提供浏览器时直接失败，不把未运行当作通过。
 
 用户脚本保留 Peach `f8ca8a5b9ac57f6873661c98db7f6df3694535f9` 的识别、来源净化、GM 凭据存储、请求、状态轮询及 SPA 生命周期行为。构建复用原安装端点按站点清单生成 `@match` 与内联 JSON 的边界，使用 Node 内置 `fs`、`crypto` 和 `node:test`，不引入打包器或运行依赖。
 

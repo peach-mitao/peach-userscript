@@ -11,7 +11,7 @@
     "preview": "node scripts/preview.mjs",
     "check": "node scripts/build.mjs --check",
     "export": "node scripts/export.mjs",
-    "test": "node --test tests/build.test.mjs tests/candidates.test.mjs tests/export-peach.test.mjs",
+    "test": "node --test tests/build.test.mjs tests/candidates.test.mjs tests/export-peach.test.mjs tests/ci_plan.test.ts",
     "test:browser": "node --test tests/browser.test.ts",
     "verify": "npm run check && npm test && npm run test:browser",
     "candidates": "node scripts/sync-candidates.mjs"
