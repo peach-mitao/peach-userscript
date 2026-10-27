@@ -2,6 +2,8 @@
 
 CI 使用 Node 原生 TypeScript 执行文档判定，不增加依赖。普通 README 和维护文档只检查格式及比较基线，保留验证结果；混合代码、未知路径、基线未取得和手动运行执行完整制品与浏览器验证。
 
+浏览器回归通过现有 `PEACH_E2E_CHROME` 入口使用 runner 已安装的 Chrome，记录实际版本；不重复下载 Chromium 或通过 apt 安装桌面依赖。runner 未提供浏览器时直接失败，不把未运行当作通过。
+
 用户脚本保留 Peach `f8ca8a5b9ac57f6873661c98db7f6df3694535f9` 的识别、来源净化、GM 凭据存储、请求、状态轮询及 SPA 生命周期行为。构建复用原安装端点按站点清单生成 `@match` 与内联 JSON 的边界，使用 Node 内置 `fs`、`crypto` 和 `node:test`，不引入打包器或运行依赖。
 
 已检查源树的用户脚本、路由与浏览器测试，`docs/REUSE.md` 中的 GM API 记录，以及历史提交 `509827d5` 和 `a15b1758`。Tampermonkey [官方文档](https://www.tampermonkey.net/documentation.php) 定义存储、菜单、跨域请求与 URL 变更通知。浏览器测试复用 `playwright-core` 1.64.1（Apache-2.0），版本由本仓库锁文件固定；这是开发依赖，不进入制品。

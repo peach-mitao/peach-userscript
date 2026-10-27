@@ -43,8 +43,12 @@ jobs:
         run: node scripts/ci_plan.ts --base "$BASE_SHA" --event "$EVENT_NAME" --verify-docs
       - run: npm ci --ignore-scripts
         if: needs.plan.outputs.runtime == 'true'
-      - run: node node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: 使用 runner 已安装的 Chrome
         if: needs.plan.outputs.runtime == 'true'
+        run: |
+          peachChrome="$(command -v google-chrome)"
+          "$peachChrome" --version
+          printf 'PEACH_E2E_CHROME=%s\n' "$peachChrome" >> "$GITHUB_ENV"
       - run: npm run verify
         if: needs.plan.outputs.runtime == 'true'
       - uses: actions/upload-artifact@v7.0.2
