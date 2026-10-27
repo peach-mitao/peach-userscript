@@ -5,9 +5,10 @@
 // @supportURL   https://github.com/peach-mitao/peach-userscript/issues
 // @homepageURL  https://github.com/peach-mitao/peach-userscript
 // @license      AGPL-3.0-or-later
-// @version      0.5.2
+// @version      0.6.0
 // @description  在 JAV 作品详情页识别或选中番号，交给 Peach 下载入库。
 // __PEACH_JAV_MATCHES__
+// @match        *://*/*
 // @match        https://*/integrations/peach-userscript-bridge
 // @match        http://localhost/integrations/peach-userscript-bridge
 // @match        http://127.0.0.1/integrations/peach-userscript-bridge
@@ -42,10 +43,32 @@
    * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
    */
 
+  /* loading-dev 0.3.6, MIT License. Copyright (c) 2026 Jakub Krehel.
+   * Permission is hereby granted, free of charge, to any person obtaining a copy
+   * of this software and associated documentation files (the "Software"), to deal
+   * in the Software without restriction, including without limitation the rights
+   * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+   * copies of the Software, and to permit persons to whom the Software is
+   * furnished to do so, subject to the following conditions:
+   * The above copyright notice and this permission notice shall be included in
+   * all copies or substantial portions of the Software.
+   * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+   * THE SOFTWARE.
+   */
+
   const SITE_RULES = __PEACH_JAV_SITES__;
   const STORAGE_BASE = 'peach.jav.base';
   const STORAGE_TOKEN = 'peach.jav.token';
   const STORAGE_ERRORS = 'peach.jav.errors';
+  const STORAGE_DISPLAY = 'peach.jav.display';
+  const STORAGE_ENABLED = 'peach.jav.enabled';
+  const STORAGE_POSITION = 'peach.jav.position';
+  const STORAGE_APPEARANCE = 'peach.jav.appearance';
   const ROOT_ID = 'peach-jav-action';
   const SCRIPT_VERSION = __PEACH_JAV_VERSION__;
   const PEACH_LOGO = __PEACH_JAV_LOGO__;
@@ -76,6 +99,7 @@
   if (window.top !== window.self) return;
   if (globalThis.__peachJavUserscriptActive) return;
   globalThis.__peachJavUserscriptActive = true;
+  if (configuration()?.base === location.origin) watchPeachAppearance();
   const ACTIVE = new Set(['queued', 'searching', 'submitted']);
   const STATES = new Set([...ACTIVE, 'ingested', 'owned', 'failed', 'no_match', 'idle']);
   const LABELS = {
@@ -89,6 +113,7 @@
   let refreshTimer;
   let selected = null;
   let settingsView = null;
+  let batchView = null;
   let panelMode = 'expanded';
   let updateEntry = null;
   let updateCache = readUpdateCache();
@@ -102,69 +127,176 @@
   const updateRequests = new Set();
   const updateContainers = new Set();
   const updateListeners = [];
+  const surfaces = new Set();
 
-  // Peach 控件快照：来源与适配范围见 docs/REUSE.md。
+  function pageInterfaceAllowed() {
+    return GM_getValue(STORAGE_ENABLED,true) !== false && configuration()?.base !== location.origin
+      && (Boolean(siteFor(new URL(location.href))) || GM_getValue(STORAGE_DISPLAY,'jav') === 'always');
+  }
+
+  function applyDisplayPreference() {
+    if (!pageInterfaceAllowed()) {
+      pageKey='';
+      generation++;
+      clearTimeout(refreshTimer);clearTimeout(updateTimer);
+      updateGeneration++;updateChecking=false;
+      for(const request of updateRequests)request.abort?.();
+      updateRequests.clear();
+      batchView?.dialog.close();
+      current?.presentation?.cancel();current?.root.remove();current=null;
+      updateEntry?.root.remove();updateEntry=null;
+      document.getElementById('peach-jav-notice')?.remove();
+      return;
+    }
+    refresh();scheduleUpdateCheck();
+  }
+
+  function activateInterface() {
+    settingsView?.dialog.close();
+    panelMode='expanded';
+    GM_setValue(STORAGE_ENABLED,true);
+    if (String(getSelection() || '').trim() && siteFor(new URL(location.href))) {
+      selectCode();return;
+    }
+    refresh();
+    if(current)present(current,'expanded',true);else openPageActions();
+  }
+
+  const DARK_STYLE = `color-scheme:dark;--color-text-primary:oklch(98.5% 0 0);--color-text-secondary:oklch(70.8% 0 0);--color-text-tertiary:oklch(43.9% 0 0);
+      --color-border-checkbox-default:oklch(43.9% 0 0);--color-border-checkbox-hover:oklch(55.6% 0 0);
+      --color-background-full:#121212;--color-background-primary-default:oklch(26.9% 0 0);--color-background-primary-hover:#40404099;
+      --color-background-secondary-default:oklch(20.5% 0 0);--color-background-tertiary-default:oklch(26.9% 0 0);
+      --color-border-button-default:oklch(37.1% 0 0);--color-border-button-hover:oklch(55.6% 0 0);--color-border-button-active:oklch(43.9% 0 0);
+      --color-separator-border:oklch(37.1% 0 0);--color-text-error:oklch(70.4% .191 22.216);
+      --update-script-foreground:#3392ff;--update-peach-foreground:oklch(82.8% .189 84.429);
+      --elevation-xs:0 1px 2px 0 rgb(0 0 0 / .18);--elevation-dropdown:0 1px 1px 0 rgb(0 0 0 / .14),0 4px 4px 0 rgb(0 0 0 / .10);`;
+  // Peach BoardUI DOM 控件快照：来源与适配范围见 docs/REUSE.md。
   const UI_STYLE = `
-    :host{all:initial;--ground:#fff;--surface:#fafafa;--sunk:#f2f2f2;--ink:#171717;--ink-2:#4d4d4d;--muted:#666;
-      --line:#e5e5e5;--line-soft:#ebebeb;--field-ring:#00000014;--field-ring-hover:#00000036;--field-ring-focus:#00000057;
-      --tungsten:#2563eb;--drop:#da2f35;--task-accent:oklch(62.3% .214 259.815);--task-muted:oklch(70.8% 0 none);--icon-inline:1.2em;
+    :host{all:initial;--color-text-primary:oklch(14.5% 0 0);--color-text-secondary:oklch(55.6% 0 0);--color-text-tertiary:oklch(70.8% 0 0);
+      --color-border-checkbox-default:oklch(87% 0 0);--color-border-checkbox-hover:oklch(70.8% 0 0);
+      --color-background-full:#fff;--color-background-primary-default:#fff;--color-background-primary-hover:#f7f7f7;
+      --color-background-secondary-default:#f7f7f7;--color-background-tertiary-default:#ebebeb;
+      --color-border-button-default:#ebebeb;--color-border-button-hover:oklch(87% 0 0);--color-border-button-active:oklch(70.8% 0 0);
+      --color-accent-400:#3392ff;--color-accent-500:oklch(62.3% .214 259.815);--color-accent-600:oklch(54.6% .245 262.881);--color-accent-700:oklch(48.8% .243 264.376);
+      --color-text-white:#fff;--color-text-error:oklch(57.7% .245 27.325);--color-separator-border:#ebebeb;
+      --update-script-foreground:oklch(54.6% .245 262.881);--update-peach-foreground:oklch(55.5% .163 48.998);
+      --elevation-xs:0 1px 2px 0 rgb(0 0 0 / .05);--elevation-dropdown:0 1px 1px 0 rgb(0 0 0 / .04),0 4px 4px 0 rgb(0 0 0 / .02);
+      --ground:var(--color-background-full);--surface:var(--color-background-secondary-default);--sunk:var(--color-background-tertiary-default);
+      --ink:var(--color-text-primary);--ink-2:var(--color-text-secondary);--muted:var(--color-text-secondary);
+      --line:var(--color-border-button-default);--line-soft:var(--color-separator-border);--tungsten:var(--color-accent-500);--drop:var(--color-text-error);
+      --color-avatar-neutral-background:color-mix(in srgb,var(--color-text-primary) 10%,var(--color-background-primary-default));
+      --task-accent:var(--color-accent-500);--task-muted:var(--color-text-tertiary);--icon-inline:1.2em;
+      --board-font:'Inter Variable','Inter','Segoe UI','Microsoft YaHei UI','Microsoft YaHei','PingFang SC','Hiragino Sans GB','Noto Sans CJK SC','Noto Sans SC','Source Han Sans SC',sans-serif;
+      --board-body:400 14px/20px var(--board-font);--board-body-medium:500 14px/20px var(--board-font);--board-caption:400 12px/16px var(--board-font);--board-caption-semibold:600 12px/16px var(--board-font);--board-heading:500 20px/26px var(--board-font);
+      --board-blue:linear-gradient(180deg,var(--color-accent-500),var(--color-accent-600));--board-blue-hover:linear-gradient(180deg,var(--color-accent-400),var(--color-accent-500));--board-blue-active:linear-gradient(180deg,var(--color-accent-600),var(--color-accent-700));
       --modal-ease:cubic-bezier(0,0,.2,1);
-      --control-radius:6px;--surface-radius:8px;--floating-radius:12px;--control-h:38px;
+      --control-radius:10px;--surface-radius:16px;--floating-radius:20px;--control-h:36px;
       --fs-sm:13px;--fs-md:14px;--fs-lg:16px;--fs-xl:20px;--fieldset-bar-h:52px;
       position:fixed;inset:auto max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) auto;
-      z-index:2147483647;width:min(320px,calc(100vw - 32px));font:400 14px/1.5 system-ui,sans-serif;color:var(--ink);color-scheme:light dark;text-align:left}
-    @media(prefers-color-scheme:dark){:host{--ground:#080a0d;--surface:#0c0f14;--sunk:#0b0d11;--ink:#fff;--ink-2:#c9cdd4;--muted:#9aa0a8;
-      --line:#ffffff1a;--line-soft:#ffffff26;--field-ring:#ffffff26;--field-ring-hover:#ffffff42;--field-ring-focus:#ffffff66;--task-muted:oklch(43.9% 0 none)}}
+      z-index:2147483647;width:min(320px,calc(100% - 32px));font:var(--board-body);color:var(--ink);color-scheme:light;text-align:left;-webkit-font-smoothing:antialiased}
+    @media(prefers-color-scheme:dark){:host(:not([data-theme=light])){${DARK_STYLE}}}
+    :host([data-theme=dark]){${DARK_STYLE}}
     *,*::before,*::after{box-sizing:border-box} [hidden]{display:none!important}
     :host([data-panel-mode="minimized"]){width:48px}
     :host([data-settings-open]){visibility:hidden}
-    h2,p{margin:0} h2{font-size:var(--fs-xl);line-height:26px;font-weight:600}
+    h2,p{margin:0} h2{font:var(--board-heading)}
     .panel{background:var(--ground);border:1px solid var(--line);border-radius:var(--floating-radius);overflow:hidden}
     .task-progress{display:block;width:100%;height:6px;overflow:hidden;border-radius:9999px}
-    .task-progress .track{fill:#ebebeb}.task-progress .fill{fill:var(--task-accent)}
+    .task-progress .track{fill:var(--color-background-tertiary-default)}.task-progress .fill{fill:var(--task-accent)}
     .task-progress .stop{fill:var(--ground)}
-    .flow{display:grid;gap:10px}.flow-steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}
-    .flow-step{display:grid;justify-items:center;gap:4px;min-width:0;color:var(--task-muted);font-size:var(--fs-sm);line-height:1.4}
+    .flow{display:grid;gap:12px}.flow-steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}
+    .flow-step{display:grid;grid-template-rows:18px 20px;justify-items:center;align-items:center;gap:4px;min-width:0;color:var(--task-muted);font:var(--board-body)}
     .flow-step[data-state="complete"] .flow-label{text-decoration:line-through}.flow-step[data-state="current"]{color:var(--ink)}
-    .flow-step[data-state="error"]{color:var(--drop)}.flow-mark{width:var(--icon-inline);height:var(--icon-inline);display:grid;place-items:center;line-height:1}
+    .flow-step[data-state="error"]{color:var(--drop)}.flow-mark{width:18px;height:18px;display:grid;place-items:center;line-height:1}
     .flow-mark svg{display:block;width:100%;height:100%;fill:currentColor}
     .flow-step[data-state="current"] .flow-mark{color:var(--task-accent)}
-    @media(prefers-color-scheme:dark){.task-progress .track{fill:oklch(26.9% 0 none)}}
+    .flow-step:not([data-state=current]) [data-stage-animation]{display:none}
+    .flow-step[data-state=current]> .flow-mark>svg{display:none}
+    .flow-step:not([data-state=current]) [data-stage-animation] *{animation-play-state:paused}
+    [data-stage-animation]{display:block;width:18px;height:18px;color:currentColor}
+    .stage-spin{transform-origin:8px 8px;animation:stage-rotate 1200ms linear infinite}
+    .stage-radar .stage-spin{animation-duration:1500ms}
+    @keyframes stage-rotate{to{transform:rotate(360deg)}}
+    .stage-linear{display:flex;align-items:center;justify-content:center;gap:3.375px}
+    .stage-linear i{width:3.375px;height:3.375px;border-radius:9999px;background:currentColor;animation:stage-fade 900ms linear infinite;animation-delay:calc(900ms * (var(--ld-step) - 3) / 3)}
+    @keyframes stage-fade{0%,100%{opacity:1}66.67%{opacity:.5}}
+    .stage-gather{display:grid;grid-template-columns:1fr 1fr;gap:24%;animation:stage-turn 1600ms ease-in-out infinite}
+    .stage-gather i{background:currentColor;border-radius:2.52px;animation:stage-pull 1600ms ease-in-out infinite}
+    @keyframes stage-pull{0%,100%{transform:translate(0,0)}30%,60%{transform:translate(calc(var(--ld-x) * 21.1%),calc(var(--ld-y) * 21.1%))}}
+    @keyframes stage-turn{0%,30%{transform:rotate(0)}60%,100%{transform:rotate(90deg)}}
+    .stage-blocks{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:1.8px}
+    .stage-blocks i{background:currentColor;border-radius:1.125px;animation:stage-block 1300ms ease-in-out infinite;animation-delay:calc(1300ms * (var(--ld-step) - 5) / 5)}
+    @keyframes stage-block{0%,70%,100%{transform:scale(1)}35%{transform:scale(0)}}
     .bar{min-height:var(--fieldset-bar-h);padding:8px 16px 8px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .bar.subpage-bar{justify-content:flex-start;gap:8px}
     .bar strong{font-weight:500;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
-    .bar-heading{display:grid;min-width:0;gap:2px}.bar-summary{font-size:11px;line-height:16px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .bar-heading{display:grid;min-width:0;gap:2px}.bar-summary{font:var(--board-caption);color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .bar-actions{display:flex;gap:4px;flex:none}
     .bar-actions [data-collapse-chevron]{transition:transform .2s ease-in-out}
     .bar-actions [aria-expanded="false"] [data-collapse-chevron]{transform:rotate(180deg)}
     .geist-button.launcher{width:48px;height:48px;padding:6px;border-radius:50%;background:var(--ground);transform-origin:bottom right}
-    .launcher img{display:block;width:34px;height:34px;object-fit:contain}
+    .launcher img{display:block;width:34px;height:34px;object-fit:contain;user-select:none;-webkit-user-drag:none;pointer-events:none}
+    .geist-button.launcher{touch-action:none;cursor:grab}.geist-button.launcher:active{cursor:grabbing}
     .body{padding:0 20px 20px;display:grid;gap:16px;min-width:0}.footer{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-height:var(--fieldset-bar-h);padding:8px 16px;border-top:1px solid var(--line);background:var(--surface)}
-    .geist-button{height:var(--control-h);padding:0 14px;border:0;border-radius:var(--control-radius);background:var(--ground);color:var(--ink);display:inline-flex;
-      align-items:center;justify-content:center;gap:6px;font:inherit;font-size:var(--fs-md);font-weight:500;line-height:1;white-space:nowrap;cursor:pointer;box-shadow:0 0 0 1px var(--line-soft);touch-action:manipulation}
-    .geist-button.primary{background:var(--ink);color:var(--ground);box-shadow:none}
-    .geist-button.icon{padding:0;width:var(--control-h);flex:none;background:transparent;box-shadow:none}
+    .geist-button{height:var(--control-h);padding:8px 12px;border:1px solid var(--color-border-button-default);border-radius:var(--control-radius);background:var(--color-background-primary-default);color:var(--ink);display:inline-flex;
+      align-items:center;justify-content:center;gap:4px;font:var(--board-body-medium);white-space:nowrap;cursor:pointer;box-shadow:var(--elevation-xs);touch-action:manipulation;transition:background-color .15s ease,border-color .15s ease,color .15s ease}
+    .geist-button.primary{position:relative;isolation:isolate;background:var(--board-blue);border:0;color:var(--color-text-white)}
+    .geist-button.primary::before{content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;background:var(--board-blue-hover);opacity:0;transition:opacity .15s ease}
+    .geist-button.icon{padding:0;width:var(--control-h);flex:none;border:0;background:transparent;box-shadow:none}
     .geist-button svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
     .geist-button:focus-visible{outline:2px solid var(--tungsten);outline-offset:2px}
-    @media(hover:hover) and (pointer:fine){.geist-button:hover{background:color-mix(in srgb,var(--ink) 8%,var(--ground))}
-      .geist-button.primary:hover{background:color-mix(in srgb,var(--ink) 88%,var(--ground));color:var(--ground)}}
-    .geist-button:disabled,.geist-button[aria-disabled=true]{background:var(--surface);color:var(--muted);box-shadow:0 0 0 1px var(--line-soft);cursor:default}
-    .geist-button[aria-busy=true]{cursor:wait}.ui-geist-spinner{position:relative;display:inline-block;flex:none;width:16px;height:16px;color:currentColor}
+    @media(hover:hover) and (pointer:fine){.geist-button:not(:disabled,[aria-disabled=true]):hover{background-color:var(--color-background-primary-hover);border-color:var(--color-border-button-hover)}
+      .geist-button.primary:not(:disabled,[aria-disabled=true]):hover::before{opacity:1}}
+    .geist-button.primary:not(:disabled,[aria-disabled=true]):active{background:var(--board-blue-active)}.geist-button.primary:not(:disabled,[aria-disabled=true]):active::before{opacity:0}
+    .geist-button:disabled,.geist-button[aria-disabled=true]{background:var(--surface);color:var(--color-text-tertiary);box-shadow:none;cursor:default;transition:none}
+    .geist-button:disabled::before,.geist-button[aria-disabled=true]::before{display:none}
+    .geist-button[aria-busy=true]:not(:disabled){cursor:wait}.ui-geist-spinner{position:relative;display:inline-block;flex:none;width:16px;height:16px;color:currentColor}
     .ui-geist-spinner>i{position:absolute;top:1px;left:7px;width:2px;height:4px;border-radius:999px;background:currentColor;transform-origin:1px 7px;transform:rotate(var(--spinner-angle));animation:geist-spinner-opacity 1s linear var(--spinner-delay) infinite}
     @keyframes geist-spinner-opacity{0%{opacity:1}100%{opacity:.15}}
-    .geist-input{width:100%;min-width:0;height:var(--control-h);border:1px solid var(--field-ring);border-radius:var(--control-radius);
-      background:var(--ground);color:var(--ink);padding:0 12px;font:inherit;font-size:var(--fs-md);line-height:20px}
-    .geist-input::placeholder{color:var(--muted)}.geist-input:hover{box-shadow:inset 0 0 0 2px var(--field-ring-hover)}
-    .geist-input:focus{outline:0;box-shadow:inset 0 0 0 2px var(--field-ring-focus)}.geist-input[aria-invalid=true]{border-color:var(--drop)}
-    .field{display:grid;gap:8px;min-width:0}.field label{font-weight:500}.hint{font-size:var(--fs-sm);color:var(--muted);overflow-wrap:anywhere}
+    .geist-input{width:100%;min-width:0;height:var(--control-h);border:1px solid var(--color-border-button-default);border-radius:var(--control-radius);
+      background:var(--color-background-tertiary-default);color:var(--ink);padding:0 12px;font:var(--board-body);transition:background-color .15s ease,box-shadow .15s ease}
+    .geist-input::placeholder{color:var(--color-text-tertiary)}.geist-input:hover{box-shadow:inset 0 0 0 2px var(--color-border-button-hover)}
+    .geist-input:focus{outline:0;box-shadow:inset 0 0 0 2px var(--color-border-button-active)}.geist-input[aria-invalid=true]{border-color:var(--drop)}
+    .field{display:grid;gap:4px;min-width:0}.field label{font:var(--board-body-medium)}.hint{font:var(--board-caption);color:var(--muted);overflow-wrap:anywhere}
     .secret{display:flex;align-items:center;gap:8px}.secret .geist-button{flex:none}
-    .geist-note{font-size:var(--fs-sm);line-height:20px;color:var(--ink-2);overflow-wrap:anywhere}
+    fieldset.display-scope{margin:0;padding:0;border:0;display:grid;gap:8px;min-width:0}
+    .display-scope legend{font:var(--board-body-medium);margin-bottom:8px}.display-scope label{display:flex;align-items:center;gap:8px;cursor:pointer}
+    .display-scope input{accent-color:var(--color-accent-500);width:16px;height:16px;margin:0;flex:none}
+    .batch-list{position:relative;border:1px solid var(--line);border-radius:var(--control-radius);overflow:hidden;background:var(--color-background-primary-default)}
+    .bui-table{width:100%;border-collapse:collapse;text-align:left;table-layout:fixed}.bui-table col:first-child{width:40px}.bui-table col:last-child{width:72px}
+    .bui-table th,.bui-table td{height:48px;padding:10px 12px;vertical-align:middle;font:var(--board-body-medium);white-space:nowrap;text-align:left}
+    .bui-table th{color:var(--ink);background:var(--surface);border-bottom:1px solid var(--line)}.bui-table td{color:var(--ink)}
+    .bui-table .batch-row:not(:last-child){border-bottom:1px solid var(--line)}.batch-row{height:48px;cursor:pointer;transition:background-color .15s ease}
+    @media(hover:hover) and (pointer:fine){.batch-row:not([aria-disabled=true]):hover{background:var(--color-background-primary-hover)}}
+    .batch-row[data-board-selected]{background:var(--surface)}.batch-row[aria-disabled=true]{cursor:default}
+    .ui-pcheck{position:relative;display:grid;place-items:center;width:20px;height:20px;flex:none;cursor:pointer}
+    .ui-pcheck input{position:absolute;inset:0;width:100%;height:100%;opacity:0;margin:0;cursor:inherit}
+    .ui-pcheck>span{position:relative;display:grid;place-items:center;width:16px;height:16px;border:1px solid var(--color-border-checkbox-default);border-radius:4px;background:var(--color-background-primary-default);box-shadow:var(--elevation-xs);pointer-events:none;transition:background .15s,border-color .15s,box-shadow .15s}
+    .ui-pcheck>span svg{display:block;width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;visibility:hidden}
+    .ui-pcheck input:is(:checked,:indeterminate)+span{border-color:transparent;background:var(--board-blue);box-shadow:inset 0 1px 0 #ffffff40,0 1px 2px #0450e229}
+    .ui-pcheck input:checked+span svg{visibility:visible}.ui-pcheck input:indeterminate+span svg{visibility:hidden}
+    .ui-pcheck input:indeterminate+span::after{content:'';position:absolute;top:6px;left:3px;width:8px;height:2px;border-radius:1px;background:#fff}
+    .ui-pcheck input:focus-visible+span{outline:2px solid var(--tungsten);outline-offset:2px}.ui-pcheck:has(input:disabled){cursor:default}.ui-pcheck input:disabled+span{opacity:.5}
+    @media(hover:hover) and (pointer:fine){.ui-pcheck:hover input:not(:disabled)+span{border-color:var(--color-border-checkbox-hover)}.ui-pcheck:hover input:is(:checked,:indeterminate):not(:disabled)+span{border-color:transparent;background:var(--board-blue-hover)}}
+    .batch-row-main{display:flex;align-items:center;gap:8px;min-width:0;flex:1}.batch-row-code{font:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}.batch-row-status{display:block;font:var(--board-body);color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+    .batch-row[data-state=failed] .batch-row-status{color:var(--drop)}.batch-footer{flex-wrap:nowrap;gap:8px}.batch-footer .geist-button.icon{padding:0;border:1px solid var(--color-border-button-default);background:var(--color-background-primary-default);box-shadow:var(--elevation-xs)}
+    .batch-footer .geist-button.primary:disabled{border:1px solid var(--color-border-button-default);background:var(--color-background-primary-default)}
+    .batch-people{display:flex;align-items:center;gap:4px;flex:none;min-width:24px}.batch-person{position:relative;display:grid;place-items:center;width:24px;height:24px;flex:none;border-radius:50%;overflow:hidden;background:var(--color-avatar-neutral-background);color:var(--color-text-primary);font:var(--board-caption-semibold)}.batch-person img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+    .batch-person>svg{width:16px;height:16px;fill:currentColor}
+    .batch-empty{font:var(--board-body);color:var(--muted)}
+    .geist-note{font:var(--board-body);color:var(--ink-2);overflow-wrap:anywhere}
     .geist-note[data-variant=error]{color:var(--drop)}
     .update-section{display:grid;gap:8px;min-width:0;border-top:1px solid var(--line);padding-top:12px}
     .update-actions{display:flex;flex-wrap:wrap;gap:8px}.update-actions a{text-decoration:none}
     .update-actions .geist-button{height:32px;padding-inline:10px}
-    dialog{position:fixed;inset:auto max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) auto;margin:0;
-      width:min(400px,calc(100vw - 32px));max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);padding:0;
-      background:var(--ground);color:var(--ink);border:1px solid var(--line);border-radius:var(--floating-radius);overflow:hidden;
+    [data-update-kind=script],[data-update-kind=refresh]{--update-foreground:var(--update-script-foreground)}
+    [data-update-kind=peach]{--update-foreground:var(--update-peach-foreground)}
+    .geist-note[data-update-kind]:not([data-update-kind=current]){color:var(--update-foreground)}
+    .geist-button[data-update-kind]{color:var(--update-foreground);border-color:color-mix(in srgb,var(--update-foreground) 35%,var(--line));background:color-mix(in srgb,var(--update-foreground) 10%,var(--ground));box-shadow:none}
+    @media(hover:hover) and (pointer:fine){.geist-button[data-update-kind]:hover{color:var(--update-foreground);border-color:var(--update-foreground);background:color-mix(in srgb,var(--update-foreground) 18%,var(--ground))}}
+    dialog{position:fixed;inset:auto var(--panel-right,max(16px,env(safe-area-inset-right))) var(--panel-bottom,max(16px,env(safe-area-inset-bottom))) auto;margin:0;
+      width:min(400px,calc(100% - 32px));max-width:calc(100% - 32px);max-height:calc(100dvh - 32px);padding:0;
+      background:var(--ground);color:var(--ink);border:1px solid var(--line);border-radius:var(--floating-radius);overflow:hidden;box-shadow:var(--elevation-dropdown);
       opacity:1;transform:scale(1);transition:opacity 200ms var(--modal-ease),transform 200ms var(--modal-ease)}
     dialog::backdrop{background:#000b;opacity:1;transition:opacity 200ms var(--modal-ease)}
     dialog[data-closing],dialog[data-closing]::backdrop{opacity:0;transition-duration:120ms}
@@ -192,13 +324,21 @@
     skipped: 'M5 11V13H19V11H5Z',
   };
 
-  function stepMark() {
+  const STAGE_ICON_PATHS = [
+    'M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM13 12H17V14H11V7H13V12Z',
+    'M18.031 16.6168L22.3137 20.8995L20.8995 22.3137L16.6168 18.031C15.0769 19.263 13.124 20 11 20C6.032 20 2 15.968 2 11C2 6.032 6.032 2 11 2C15.968 2 20 6.032 20 11C20 13.124 19.263 15.0769 18.031 16.6168ZM16.0247 15.8748C17.2475 14.6146 18 12.8956 18 11C18 7.1325 14.8675 4 11 4C7.1325 4 4 7.1325 4 11C4 14.8675 7.1325 18 11 18C12.8956 18 14.6146 17.2475 15.8748 16.0247L16.0247 15.8748Z',
+    'M13 10H18L12 16L6 10H11V3H13V10ZM4 19H20V12H22V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V12H4V19Z',
+    'M20 3L22 7V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V7.00353L4 3H20ZM20 9H4V19H20V9ZM13 10V14H16L12 18L8 14H11V10H13ZM18.7639 5H5.23656L4.23744 7H19.7639L18.7639 5Z',
+    'M21 3C21.5523 3 22 3.44772 22 4V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H21ZM11 13H4V19H11V13ZM20 13H13V19H20V13ZM11 5H4V11H11V5ZM20 5H13V11H20V5Z',
+  ];
+
+  function stepMark(index = 0) {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('viewBox', '0 0 24 24');
     svg.setAttribute('aria-hidden', 'true');
     svg.setAttribute('focusable', 'false');
     const path = document.createElementNS(svg.namespaceURI, 'path');
-    path.setAttribute('d', STEP_ICON_PATHS.circle);
+    path.setAttribute('d', STAGE_ICON_PATHS[index]);
     svg.append(path);
     return svg;
   }
@@ -212,9 +352,12 @@
       svg.setAttribute('viewBox', '0 0 24 24');
       svg.setAttribute('aria-hidden', 'true');
       const path = document.createElementNS(svg.namespaceURI, 'path');
-      path.setAttribute('d', icon === 'close' ? 'M6 6l12 12M6 18L18 6' : icon === 'collapse' ? 'm6 9 6 6 6-6'
+      path.setAttribute('d', icon === 'close' ? 'M6 6l12 12M6 18L18 6' : icon === 'collapse' ? 'm6 9 6 6 6-6' : icon === 'refresh' ? 'M5.46257 4.43262C7.21556 2.91688 9.5007 2 12 2C17.5228 2 22 6.47715 22 12C22 14.1361 21.3302 16.1158 20.1892 17.7406L17 12H20C20 7.58172 16.4183 4 12 4C9.84982 4 7.89777 4.84827 6.46023 6.22842L5.46257 4.43262ZM18.5374 19.5674C16.7844 21.0831 14.4993 22 12 22C6.47715 22 2 17.5228 2 12C2 9.86386 2.66979 7.88416 3.8108 6.25944L7 12H4C4 16.4183 7.58172 20 12 20C14.1502 20 16.1022 19.1517 17.5398 17.7716L18.5374 19.5674Z'
         : 'M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915');
       svg.append(path);
+      if (icon === 'back') path.setAttribute('d','M7.82843 10.9999H20V12.9999H7.82843L13.1924 18.3638L11.7782 19.778L4 11.9999L11.7782 4.22168L13.1924 5.63589L7.82843 10.9999Z');
+      if (icon === 'back') { svg.style.fill='currentColor'; svg.style.stroke='none'; }
+      if (icon === 'refresh') { svg.style.fill='currentColor'; svg.style.stroke='none'; }
       if (icon === 'collapse') svg.setAttribute('data-collapse-chevron', '');
       if (icon === 'settings') {
         const circle = document.createElementNS(svg.namespaceURI, 'circle');
@@ -226,6 +369,146 @@
     return node;
   }
 
+  function appearance() {
+    try {
+      const value = JSON.parse(GM_getValue(STORAGE_APPEARANCE, '{}'));
+      if (value.base !== configuration()?.base || !['system', 'light', 'dark'].includes(value.theme)
+          || typeof value.accent !== 'string' || value.accent.length > 40 || !value.colors
+          || ![400, 500, 600, 700].every(step => typeof value.colors[step] === 'string'
+            && value.colors[step].length <= 100 && CSS.supports('color', value.colors[step]))) return null;
+      return value;
+    } catch { return null; }
+  }
+
+  function watchPeachAppearance() {
+    const publish = () => {
+      if (configuration()?.base !== location.origin) return;
+      try {
+        const settings = JSON.parse(localStorage.getItem('peach.settings.v1') || '{}');
+        const theme = ['system', 'light', 'dark'].includes(settings.theme) ? settings.theme : 'system';
+        const style = getComputedStyle(document.documentElement);
+        const colors = Object.fromEntries([400, 500, 600, 700].map(step => [step, style.getPropertyValue(`--color-accent-${step}`).trim()]));
+        if (!Object.values(colors).every(value => value && value.length <= 100 && CSS.supports('color', value))) return;
+        const snapshot = JSON.stringify({base:location.origin, theme, accent:String(settings.accent || 'blue').slice(0, 40), colors});
+        if (snapshot !== GM_getValue(STORAGE_APPEARANCE, '')) GM_setValue(STORAGE_APPEARANCE, snapshot);
+      } catch { /* 页面偏好未取得时保留上次同步的外观。 */ }
+    };
+    new MutationObserver(publish).observe(document.documentElement, {attributes:true, attributeFilter:['data-theme','data-accent','class','style']});
+    addEventListener('storage', event => { if (event.key === 'peach.settings.v1') publish(); });
+    addEventListener('load', publish, {once:true});
+    publish();
+  }
+
+  function applyAppearance(root) {
+    const value = appearance();
+    root.toggleAttribute('data-peach-appearance', Boolean(value));
+    if (value && value.theme !== 'system') root.dataset.theme = value.theme; else delete root.dataset.theme;
+    for (const step of [400, 500, 600, 700]) {
+      if (value) root.style.setProperty(`--color-accent-${step}`, value.colors[step]);
+      else root.style.removeProperty(`--color-accent-${step}`);
+    }
+  }
+
+  function savedPosition() {
+    try {
+      const value = JSON.parse(GM_getValue(STORAGE_POSITION, '{}'));
+      return value.version === 1 && ['right','bottom'].every(key => typeof value[key] === 'number'
+        && Number.isFinite(value[key]) && value[key] >= 0 && value[key] <= 1) ? value : null;
+    } catch { return null; }
+  }
+
+  function placeSurface(root) {
+    const value = savedPosition();
+    if (!value) return;
+    const viewportWidth=document.documentElement.clientWidth;
+    const width = root.id === 'peach-jav-settings' || root.id === 'peach-jav-batch' ? Math.min(400, viewportWidth - 32)
+      : root.dataset.panelMode === 'minimized' ? 48 : Math.min(320, viewportWidth - 32);
+    const dialog = (root.shadowRoot || root).querySelector('dialog[open]');
+    const height = Math.min((dialog || root).getBoundingClientRect().height || 48, innerHeight - 32);
+    const right = Math.max(16, Math.min(16 + value.right * Math.max(0, viewportWidth - 80), viewportWidth - width - 16));
+    const bottom = Math.max(16, Math.min(16 + value.bottom * Math.max(0, innerHeight - 80), innerHeight - height - 16));
+    root.style.right = `${right}px`; root.style.bottom = `${bottom}px`;
+    root.style.setProperty('--panel-right', `${right}px`); root.style.setProperty('--panel-bottom', `${bottom}px`);
+  }
+
+  function wireLauncher(root, launcher) {
+    let drag = null, suppressClickUntil = 0;
+    launcher.addEventListener('pointerdown', event => {
+      if (event.button !== 0 || root.dataset.panelMode !== 'minimized') return;
+      event.preventDefault(); launcher.focus({preventScroll:true});
+      const box = root.getBoundingClientRect();
+      drag = {id:event.pointerId, x:event.clientX, y:event.clientY, right:document.documentElement.clientWidth-box.right, bottom:innerHeight-box.bottom, moved:false};
+      launcher.setPointerCapture(event.pointerId);
+    });
+    launcher.addEventListener('pointermove', event => {
+      if (!drag || event.pointerId !== drag.id) return;
+      const x = event.clientX-drag.x, y = event.clientY-drag.y;
+      if (!drag.moved && Math.hypot(x, y) < 4) return;
+      drag.moved = true;
+      root.style.right = `${Math.max(16, Math.min(document.documentElement.clientWidth-64, drag.right-x))}px`;
+      root.style.bottom = `${Math.max(16, Math.min(innerHeight-64, drag.bottom-y))}px`;
+    });
+    const finish = event => {
+      if (!drag || event.pointerId !== drag.id) return;
+      if (drag.moved && event.type === 'pointerup') {
+        const box = root.getBoundingClientRect();
+        GM_setValue(STORAGE_POSITION, JSON.stringify({version:1,
+          right:Math.max(0, Math.min(1, (document.documentElement.clientWidth-box.right-16)/Math.max(1, document.documentElement.clientWidth-80))),
+          bottom:Math.max(0, Math.min(1, (innerHeight-box.bottom-16)/Math.max(1, innerHeight-80)))}));
+        suppressClickUntil = performance.now()+250;
+      }
+      if (launcher.hasPointerCapture(event.pointerId)) launcher.releasePointerCapture(event.pointerId);
+      drag = null; placeSurface(root);
+    };
+    launcher.addEventListener('pointerup', finish);
+    launcher.addEventListener('pointercancel', finish);
+    launcher.addEventListener('click', event => {
+      if (performance.now() < suppressClickUntil) { event.preventDefault(); event.stopImmediatePropagation(); }
+    }, true);
+  }
+
+  function tableCheckbox(label) {
+    const wrapper=element('label','ui-pcheck');wrapper.title=label;
+    const input=element('input');input.type='checkbox';input.setAttribute('aria-label',label);
+    const glyph=element('span');glyph.setAttribute('aria-hidden','true');
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 16 16');
+    const path=document.createElementNS(svg.namespaceURI,'path');path.setAttribute('d','M4 7.7002L6.64645 10.3466C6.84171 10.5419 7.15829 10.5419 7.35355 10.3466L12 5.7002');
+    svg.append(path);glyph.append(svg);wrapper.append(input,glyph);
+    return {wrapper,input};
+  }
+
+  function defaultPersonAvatar() {
+    const avatar=element('span','batch-person');avatar.title='默认头像';avatar.setAttribute('role','img');avatar.setAttribute('aria-label','默认头像');
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('aria-hidden','true');
+    const path=document.createElementNS(svg.namespaceURI,'path');
+    path.setAttribute('d','M4 22C4 17.5817 7.58172 14 12 14C16.4183 14 20 17.5817 20 22H18C18 18.6863 15.3137 16 12 16C8.68629 16 6 18.6863 6 22H4ZM12 13C8.685 13 6 10.315 6 7C6 3.685 8.685 1 12 1C15.315 1 18 3.685 18 7C18 10.315 15.315 13 12 13ZM12 11C14.21 11 16 9.21 16 7C16 4.79 14.21 3 12 3C9.79 3 8 4.79 8 7C8 9.21 9.79 11 12 11Z');
+    svg.append(path);avatar.append(svg);return avatar;
+  }
+
+  let motionId = 0;
+  // loading-dev 0.3.6 的原生 DOM 适配；固定源码与 MIT 许可见 assets/loading-dev-source.json。
+  function stageAnimation(index) {
+    const node = element('span');
+    node.dataset.stageAnimation = ['clock','radar','linear-dots','gather','blocks'][index];
+    node.setAttribute('aria-hidden', 'true');
+    if (index === 0) node.innerHTML = '<svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="8" fill="currentColor" opacity=".1"/><path class="stage-spin" fill="currentColor" d="M11.1937 2.92061C10.5206 2.49739 9.77304 2.21397 8.9954 2.08314C8.45076 1.99151 8 2.44772 8 3V7.20324C8 7.49211 8.12492 7.76686 8.34259 7.95677L11.8999 11.0603C12.3287 11.4344 12.9913 11.378 13.2643 10.8787C13.6356 10.1998 13.8736 9.45248 13.9617 8.67713C14.0892 7.55433 13.8971 6.41834 13.4074 5.39993C12.9177 4.38152 12.1503 3.5221 11.1937 2.92061Z"/></svg>';
+    else if (index === 1) {
+      const id = `peach-radar-${++motionId}`;
+      node.className = 'stage-radar';
+      node.innerHTML = `<svg viewBox="0 0 16 16" fill="none"><defs><radialGradient id="${id}" cx="8" cy="8" r="8" gradientUnits="userSpaceOnUse"><stop offset=".3334" stop-color="currentColor"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></radialGradient></defs><circle cx="8" cy="8" r="8" fill="currentColor" opacity=".2"/><circle cx="8" cy="8" r="5.5" stroke="currentColor" opacity=".2"/><path class="stage-spin" fill="url(#${id})" d="M8 0C9.50657 0 10.9824 0.425672 12.2578 1.22754C13.5333 2.02953 14.557 3.17533 15.21 4.5332C15.8629 5.89107 16.1193 7.40626 15.9492 8.90332C15.7791 10.4001 15.1896 11.8184 14.249 12.9951L10.4707 9.69922C10.8037 9.21598 11 8.63123 11 8C11 6.34315 9.65685 5 8 5V0Z"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>`;
+    } else {
+      node.className = ['','','stage-linear','stage-gather','stage-blocks'][index];
+      const count = index === 2 ? 3 : index === 3 ? 4 : 9;
+      for (let n=0; n<count; n++) {
+        const part = element('i');
+        part.style.setProperty('--ld-step', String(index === 4 ? n%3+Math.floor(n/3) : n));
+        if (index === 3) { part.style.setProperty('--ld-x', String(n%2 ? -1 : 1)); part.style.setProperty('--ld-y', String(n<2 ? 1 : -1)); }
+        node.append(part);
+      }
+    }
+    return node;
+  }
+
   function surface(id, label) {
     const root = element('aside');
     root.id = id;
@@ -233,6 +516,7 @@
     const shadow = root.attachShadow({ mode: 'open' });
     shadow.append(element('style', '', UI_STYLE));
     document.body.append(root);
+    surfaces.add(root); applyAppearance(root); placeSurface(root);
     return { root, shadow };
   }
 
@@ -254,9 +538,9 @@
   }
 
   // 只做粗提取；合法番号由 Peach 校验。
-  function candidates(value) {
+  function candidates(value, maxLength = 800) {
     const found = new Set();
-    const bounded = String(value || '').slice(0, 800).toUpperCase();
+    const bounded = String(value || '').slice(0, maxLength).toUpperCase();
     let rest = bounded.replace(/\bFC2(?:[-_ ]?PPV)?[-_ ]?(\d{4,9})\b/g, (_, digits) => {
       found.add(`FC2-PPV-${digits}`);
       return ' ';
@@ -395,7 +679,7 @@
     const shortCode = /^(?:FC2(?:[-_ ]?PPV)?[-_ ]?\d{4,9}|[NK]\d{4}|MKB?D-S\d{2,4}|(?:\d{1,5})?[A-Z]{2,12}[-_]?\d{1,8}[A-Z]{0,2}|\d{6}[-_]\d{2,4})$/i;
     const extracted = candidates(raw);
     if (raw.length > 80 || !shortCode.test(raw) || extracted.size !== 1) {
-      showNotice('请只选中一个完整的短番号，再从脚本菜单加入 Peach。');
+      showNotice('请只选中一个完整的短番号，再在脚本菜单选择「开启」。');
       return;
     }
     selected = { url: location.href, code: [...extracted][0], conflict: false, source: sourcePage(url, site) };
@@ -460,9 +744,10 @@
     return { key: '', kind: 'current', message: `当前用户脚本 v${RUNNING_VERSION}` };
   }
 
-  function updateSection() {
+  function updateSection({ availableOnly = false } = {}) {
     for (const previous of updateContainers) if (!previous.isConnected) updateContainers.delete(previous);
     const node = element('section', 'update-section');
+    node.dataset.availableOnly = String(availableOnly);
     node.setAttribute('aria-label', '检查更新');
     node.setAttribute('aria-live', 'polite');
     node.setAttribute('aria-atomic', 'true');
@@ -473,18 +758,24 @@
 
   function paintUpdates(node) {
     const model = updateModel();
+    const availableOnly = node.dataset.availableOnly === 'true';
+    node.hidden = availableOnly && model.kind === 'current';
+    if (node.hidden) { node.replaceChildren(); return; }
     const checking = updateChecking && model.kind === 'current';
     const note = element('p', 'geist-note', checking ? '正在检查更新。' : model.message);
+    note.dataset.updateKind = model.kind;
     note.dataset.copyKey = `userscript.updates.${checking ? 'checking' : model.kind}.message`;
     note.setAttribute('aria-label', '用户脚本更新状态');
     const actions = element('div', 'update-actions');
     if (model.kind === 'refresh') {
       const reload = control('刷新本页');
+      reload.dataset.updateKind = 'refresh';
       reload.dataset.copyKey = 'userscript.updates.refresh.action';
       reload.addEventListener('click', () => location.reload());
       actions.append(reload);
     } else if (model.href) {
       const install = element('a', 'geist-button', model.kind === 'script' ? '更新用户脚本' : '查看 Peach 更新');
+      install.dataset.updateKind = model.kind;
       Object.assign(install, { href: model.href, target: '_blank', rel: 'noopener noreferrer' });
       install.dataset.copyKey = `userscript.updates.${model.kind}.action`;
       actions.append(install);
@@ -493,8 +784,9 @@
     check.dataset.copyKey = 'userscript.updates.check.action';
     check.setAttribute('aria-busy', String(updateChecking));
     check.setAttribute('aria-disabled', String(updateChecking));
+    check.disabled = updateChecking;
     check.addEventListener('click', () => { if (!updateChecking) void checkUpdates(true); });
-    actions.append(check);
+    if (!availableOnly) actions.append(check);
     node.replaceChildren(note);
     if (updateError && !updateChecking) {
       const error = element('p', 'geist-note', updateError);
@@ -507,8 +799,10 @@
     const peach = config && updateCache.peach?.base === config.base ? updateCache.peach : null;
     if (model.kind !== 'peach' && peach?.release?.state === 'available' && typeof peach.release.latest_version === 'string') {
       const app = element('p', 'geist-note', `Peach ${peach.release.latest_version} 可更新。`);
+      app.dataset.updateKind = 'peach';
       app.dataset.copyKey = 'userscript.updates.peach.message';
       const open = element('a', 'geist-button', '查看 Peach 更新');
+      open.dataset.updateKind = 'peach';
       Object.assign(open, { href: `${config.base}/settings/maintenance#releaseUpdates`, target: '_blank', rel: 'noopener noreferrer' });
       open.dataset.copyKey = 'userscript.updates.peach.action';
       const appActions = element('div', 'update-actions'); appActions.append(open);
@@ -522,10 +816,12 @@
       if (node.isConnected) paintUpdates(node); else updateContainers.delete(node);
     }
     refreshUpdateEntry();
+    for (const root of surfaces) if (root.isConnected) placeSurface(root); else surfaces.delete(root);
   }
 
   function refreshUpdateEntry() {
     if (!document.body || updateDisposed) return;
+    if (!pageInterfaceAllowed()) {updateEntry?.root.remove();updateEntry=null;return;}
     if (current) { updateEntry?.root.remove(); updateEntry = null; return; }
     const model = updateModel();
     const expanded = document.visibilityState !== 'hidden' && model.kind !== 'current' && updateDismissed !== model.key;
@@ -534,8 +830,10 @@
       const launcher = control('Peach 设置与更新');
       launcher.setAttribute('aria-label', 'Peach 设置与更新');
       launcher.classList.add('launcher');
-      const logo = element('img'); logo.src = PEACH_LOGO; logo.alt = '';
-      launcher.replaceChildren(logo); launcher.addEventListener('click', configure);
+      const logo = element('img'); logo.src = PEACH_LOGO; logo.alt = ''; logo.draggable=false;
+      launcher.replaceChildren(logo);
+      wireLauncher(entry.root, launcher);
+      launcher.addEventListener('click', openPageActions);
       const panel = element('section', 'panel');
       const bar = element('header', 'bar');
       const later = control('稍后', { icon: 'close' });
@@ -547,8 +845,9 @@
       updateEntry = { ...entry, launcher, panel };
     }
     updateEntry.root.dataset.panelMode = expanded ? 'expanded' : 'minimized';
+    placeSurface(updateEntry.root);
     updateEntry.launcher.hidden = expanded; updateEntry.panel.hidden = !expanded;
-    updateEntry.root.toggleAttribute('data-settings-open', Boolean(settingsView?.dialog.open));
+    updateEntry.root.toggleAttribute('data-settings-open', Boolean(settingsView?.dialog.open || batchView?.dialog.open));
   }
 
   function updateRequest(url, config = null) {
@@ -602,7 +901,7 @@
   }
 
   async function checkUpdates(manual = false) {
-    if (updateDisposed || updateChecking || (!manual && document.visibilityState === 'hidden')) return;
+    if (updateDisposed || updateChecking || (!manual && (!pageInterfaceAllowed() || document.visibilityState === 'hidden'))) return;
     const run = ++updateGeneration;
     updateChecking = true; updateError = '';
     try { GM_setValue(STORAGE_CHECKED, String(Date.now())); } catch { automaticUpdatesAvailable = false; }
@@ -624,7 +923,7 @@
 
   function scheduleUpdateCheck() {
     clearTimeout(updateTimer);
-    if (updateDisposed || !automaticUpdatesAvailable || document.visibilityState === 'hidden') return;
+    if (updateDisposed || !automaticUpdatesAvailable || !pageInterfaceAllowed() || document.visibilityState === 'hidden') return;
     let last;
     try { last = Number(GM_getValue(STORAGE_CHECKED, '0')); } catch { return; }
     const delay = Number.isFinite(last) ? Math.max(0, last + 86400_000 - Date.now()) : 0;
@@ -650,19 +949,194 @@
     if (typeof GM_removeValueChangeListener === 'function') for (const listener of updateListeners) GM_removeValueChangeListener(listener);
   }
 
+  async function scanPage(view) {
+    const codes = new Map();
+    const add = text => { for (const code of candidates(text, text.length)) if (!codes.has(comparisonKey(code))) codes.set(comparisonKey(code), code); };
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {acceptNode(node) {
+      const parent = node.parentElement;
+      return !parent || parent.closest('script,style,noscript,textarea,input,select,[contenteditable],aside[id^="peach-jav-"]')
+        || !parent.getClientRects().length ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+    }});
+    let node, count = 0;
+    while ((node = walker.nextNode())) {
+      if (!view.root.isConnected) return;
+      add(node.data);
+      if (++count % 200 === 0) await new Promise(resolve => requestAnimationFrame(resolve));
+    }
+    for (const item of document.querySelectorAll('img[alt],a[title],[data-video-code]')) {
+      if (item.closest('aside[id^="peach-jav-"]') || !item.getClientRects().length) continue;
+      add(item.getAttribute('data-video-code') || item.getAttribute('alt') || item.getAttribute('title') || '');
+    }
+    if (!view.root.isConnected) return;
+    view.rows = [...codes.values()].map(code => {
+      const row = element('tr', 'batch-row');
+      row.setAttribute('data-copy-interact','');
+      const {wrapper,input}=tableCheckbox(`选择 ${code}`);
+      const selection=element('td');selection.append(wrapper);
+      const identity=element('td');
+      const main = element('span', 'batch-row-main');
+      const people = element('span', 'batch-people');
+      people.append(defaultPersonAvatar());
+      const status = element('span', 'batch-row-status');
+      status.textContent='待加入';
+      const result=element('td');result.append(status);
+      const codeLabel=element('span','batch-row-code',code);codeLabel.title=code;
+      main.append(people,codeLabel);identity.append(main);row.append(selection,identity,result);
+      input.addEventListener('change', view.paint);
+      row.addEventListener('click',event=>{if(input.disabled||event.target.closest('label,input,button,a'))return;input.checked=!input.checked;view.paint();});
+      return {code, row, input, status, people};
+    });
+    view.list.replaceChildren(...view.rows.map(item => item.row));
+    view.tableFrame.hidden = !view.rows.length;
+    view.note.textContent = view.rows.length ? `识别到 ${view.rows.length} 个候选番号，重复番号已合并。`
+      : '本页未识别到完整番号。可以选中一个番号后使用脚本菜单，或切换到作品列表页。';
+    view.busy = false; view.paint();
+    void loadPagePeople(view);
+  }
+
+  async function loadPagePeople(view) {
+    const config=configuration(), rows=view.rows;
+    if (!config || !rows.length) return;
+    for (let start=0; start<rows.length; start+=50) {
+      if (!view.root.isConnected || view.rows !== rows) return;
+      const chunk=rows.slice(start,start+50), codes=chunk.map(item=>item.code);
+      try {
+        const body=await new Promise((resolve,reject)=>{
+          let handle, timer, finished=false;
+          const finish=(error,value)=>{if(finished)return;finished=true;clearTimeout(timer);view.peopleAbort=null;error?reject(error):resolve(value);};
+          view.peopleAbort=()=>{finish(new Error('本地女优资料未取得'));handle?.abort?.();};
+          timer=setTimeout(view.peopleAbort,5000);
+          handle=GM_xmlhttpRequest({method:'GET',url:`${config.base}/api/jav-browser/people?codes=${encodeURIComponent(codes.join(','))}`,anonymous:true,redirect:'error',timeout:5000,
+            headers:{Accept:'application/json',Authorization:`Bearer ${config.token}`},
+            onload(response){try{if(response.status!==200||response.responseText.length>2*1024*1024)throw new Error();
+              const data=JSON.parse(response.responseText);if(data.ok!==true||data.source!=='local-cache'||!data.items)throw new Error();finish(null,data);
+            }catch{finish(new Error('本地女优资料未取得'));}},onerror:()=>finish(new Error('本地女优资料未取得')),ontimeout:()=>finish(new Error('本地女优资料未取得')),onabort:()=>finish(new Error('本地女优资料未取得'))});
+        });
+        if (!view.root.isConnected || view.rows !== rows) return;
+        for (const item of chunk) {
+          const people=body.items[item.code];
+          if (!Array.isArray(people) || people.some(person=>!person||typeof person.name!=='string'||!person.name.trim()||person.name.length>200)) throw new Error('本地女优资料格式无效');
+          item.people.replaceChildren(...(people.length ? [] : [defaultPersonAvatar()]));
+          for (const person of people.slice(0,3)) {
+            const avatar=element('span','batch-person',Array.from(person.name.trim())[0].toLocaleUpperCase());
+            avatar.title=person.name;avatar.setAttribute('role','img');avatar.setAttribute('aria-label',person.name);
+            if (typeof person.avatar==='string' && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(person.avatar) && person.avatar.length<32000) {
+              const image=element('img');image.alt='';image.src=person.avatar;image.addEventListener('error',()=>image.remove(),{once:true});avatar.append(image);
+            }
+            item.people.append(avatar);
+          }
+          if(people.length>3){const more=element('span','batch-person',`+${people.length-3}`);more.title=people.slice(3).map(person=>person.name).join('、');item.people.append(more);}
+        }
+      } catch(error) { if(view.root.isConnected && view.rows===rows){view.peopleNote.hidden=false;view.peopleNote.textContent=`${error.message}，仍可选择番号加入。`;} return; }
+    }
+  }
+
+  function openPageActions() {
+    if (!configuration()) { configure(); return; }
+    if (batchView?.dialog.open) { batchView.dialog.focus(); return; }
+    if (settingsView?.dialog.open) settingsView.dialog.close();
+    const previousFocus=current?.root.shadowRoot?.activeElement || updateEntry?.root.shadowRoot?.activeElement || document.activeElement;
+    const {root, shadow} = surface('peach-jav-batch', 'Peach 页面番号');
+    const dialog = element('dialog'); dialog.setAttribute('aria-label', '本页番号');
+    const form = element('div'); form.style.display='flex'; form.style.flexDirection='column'; form.style.maxHeight='calc(100dvh - 34px)';
+    const bar = element('header', 'bar subpage-bar');
+    const close = control('返回 Peach 主界面', {icon:'back'});
+    bar.append(close,element('h2', '', '本页番号'));
+    const body = element('div', 'body');
+    const note = element('p', 'geist-note', '正在识别本页番号…'); note.setAttribute('role', 'status');
+    const tip = element('p', 'hint', '候选番号由 Peach 校验。返回后停止继续提交，已提交的任务继续处理。');
+    const tableFrame=element('div','batch-list');tableFrame.hidden=true;tableFrame.setAttribute('data-board-data-table','');
+    const table=element('table','bui-table');table.setAttribute('aria-label','本页番号列表');
+    const columns=element('colgroup');for(let i=0;i<3;i++)columns.append(element('col'));
+    const head=element('thead'),header=element('tr'),selection=element('th');selection.scope='col';
+    const {wrapper:selectLabel,input:selectAll}=tableCheckbox('全选本页番号');selection.append(selectLabel);
+    const numberHeader=element('th','','番号');numberHeader.scope='col';
+    const statusHeader=element('th','','状态');statusHeader.scope='col';
+    header.append(selection,numberHeader,statusHeader);head.append(header);
+    const list=element('tbody');table.append(columns,head,list);tableFrame.append(table);
+    const peopleNote=element('p','hint');peopleNote.hidden=true;peopleNote.setAttribute('role','status');
+    body.append(note, tip, tableFrame, peopleNote);
+    const footer = element('footer', 'footer batch-footer');
+    const rescan = control('重新识别', {icon:'refresh'}); rescan.title='重新识别';
+    const addSelected = control('加入所选', {primary:true});
+    const addAll = control('全部加入');
+    footer.append(rescan, addAll, addSelected);
+    form.append(bar, body, footer); dialog.append(form); shadow.append(dialog);
+    const view = {root, dialog, note, list, tableFrame, peopleNote, rows:[], busy:true, paint() {
+      const available = view.rows.filter(item => !item.done);
+      const chosen = available.filter(item => item.input.checked);
+      addSelected.textContent = `加入所选${chosen.length ? `（${chosen.length}）` : ''}`;
+      addAll.textContent = `全部加入${available.length ? `（${available.length}）` : ''}`;
+      addSelected.disabled = view.busy || !chosen.length; addAll.disabled = view.busy || !available.length;
+      rescan.disabled = view.busy; selectAll.disabled = view.busy || !available.length;
+      selectAll.checked = available.length > 0 && chosen.length === available.length;
+      selectAll.indeterminate = chosen.length > 0 && chosen.length < available.length;
+      for (const item of view.rows) {
+        item.input.disabled = view.busy || Boolean(item.done);
+        item.row.toggleAttribute('data-board-selected',item.input.checked);
+        item.row.setAttribute('aria-disabled',String(item.input.disabled));
+      }
+    }};
+    batchView = view;
+    selectAll.addEventListener('change', () => { for (const item of view.rows) if (!item.done) item.input.checked = selectAll.checked; view.paint(); });
+    const submit = async all => {
+      if (view.busy) return;
+      const chosen = view.rows.filter(item => !item.done && (all || item.input.checked));
+      if (!chosen.length) return;
+      const config = configuration();
+      if (!config) { note.textContent='配对信息已失效，请重新设置。'; return; }
+      view.busy=true; view.paint();
+      const url = new URL(location.href), site = siteFor(url);
+      const source = site ? sourcePage(url, site) : '';
+      let handled=0, failed=0;
+      for (const item of chosen) {
+        if (!root.isConnected || !dialog.open) break;
+        item.status.textContent='正在交给 Peach…';
+        try {
+          const result = await request(config, item.code, source, 'POST');
+          if (!root.isConnected) break;
+          item.row.dataset.state=result.state; item.status.textContent=LABELS[result.state];
+          item.done=!['failed','no_match'].includes(result.state);
+          if (!item.done) failed++;
+        } catch (error) {
+          if (!root.isConnected) break;
+          item.row.dataset.state='failed'; item.status.textContent=error.message; failed++;
+        }
+        item.status.title=item.status.textContent;
+        handled++; note.textContent=`已处理 ${handled}/${chosen.length} 项${failed ? `，${failed} 项未完成` : ''}。`;
+      }
+      view.busy=false; view.paint();
+    };
+    addSelected.addEventListener('click', () => { void submit(false); });
+    addAll.addEventListener('click', () => { void submit(true); });
+    rescan.addEventListener('click', () => { view.peopleAbort?.();peopleNote.hidden=true;view.busy=true; view.paint(); note.textContent='正在识别本页番号…'; void scanPage(view); });
+    close.addEventListener('click', () => dialog.close());
+    dialog.addEventListener('close', () => {
+      view.peopleAbort?.();
+      root.remove(); if (batchView===view) batchView=null;
+      if (current && !settingsView?.dialog.open) { current.root.removeAttribute('data-settings-open'); current.root.inert=false; }
+      refreshUpdateEntry();
+      if(previousFocus?.isConnected)previousFocus.focus();
+    }, {once:true});
+    if (current) { current.root.setAttribute('data-settings-open',''); current.root.inert=true; }
+    updateEntry?.root.setAttribute('data-settings-open','');
+    view.paint(); dialog.showModal(); placeSurface(root); void scanPage(view);
+  }
+
   function configure() {
+    if (batchView?.dialog.open) batchView.dialog.close();
     if (settingsView?.dialog.open) { settingsView.reopen(); return; }
-    const previousFocus = current?.root.shadowRoot?.activeElement || document.activeElement;
+    const previousFocus = current?.root.shadowRoot?.activeElement || updateEntry?.root.shadowRoot?.activeElement || document.activeElement;
     const saved = configuration();
     const { root, shadow } = surface('peach-jav-settings', 'Peach 设置');
     const dialog = element('dialog');
     dialog.setAttribute('aria-labelledby', 'peach-settings-title');
     const form = element('form');
     form.noValidate = true;
-    const bar = element('header', 'bar');
+    const bar = element('header', 'bar subpage-bar');
     const heading = element('h2', '', 'Peach 设置');
     heading.id = 'peach-settings-title';
-    const close = control('关闭 Peach 设置', { icon: 'close' });
+    const close = control('返回 Peach 主界面', { icon: 'back' });
     const cancel = control('取消');
     const body = element('div', 'body');
     function field(id, label, hint, type = 'text') {
@@ -697,6 +1171,22 @@
       reveal.setAttribute('aria-pressed', String(visible));
     });
     secretRow.append(secret.input, reveal);
+    const display = element('fieldset', 'display-scope');
+    display.append(element('legend', '', '按钮显示范围'));
+    const displayValue=GM_getValue(STORAGE_ENABLED,true) === false ? 'off' : GM_getValue(STORAGE_DISPLAY,'jav') === 'always' ? 'always' : 'jav';
+    for (const [value, title] of [['jav', '仅在 JAV 网站显示'], ['always', '在所有网页常驻显示'], ['off','彻底关闭图标']]) {
+      const option = element('label');
+      const radio = element('input');
+      Object.assign(radio, {type:'radio', name:'peach-display', value, checked:displayValue === value});
+      option.append(radio, document.createTextNode(title)); display.append(option);
+    }
+    display.append(element('p', 'hint', '所有网页模式需要脚本管理器允许在 HTTP／HTTPS 网页运行；普通网页内容只在点击识别后读取。'));
+    display.append(element('p','hint','彻底关闭后不显示浮卡和图标。可从篡改猴菜单选择「开启」恢复，后台任务继续处理。'));
+    body.append(display);
+    const appearanceNote = element('p', 'hint', appearance()
+      ? `外观已同步 Peach：${{system:'跟随系统',light:'浅色',dark:'深色'}[appearance().theme]}，强调色 ${appearance().accent}。`
+      : '外观暂随系统。请在同一浏览器打开一次已配对的 Peach，以同步深浅色和强调色；之后修改会自动同步。');
+    body.append(appearanceNote);
     const error = element('p', 'geist-note');
     error.id = 'peach-settings-error';
     error.dataset.variant = 'error';
@@ -731,7 +1221,7 @@
     const save = control('保存设置', { primary: true });
     save.type = 'submit';
     footer.append(cancel, save);
-    bar.append(heading, close);
+    bar.append(close, heading);
     form.append(bar, body, footer);
     dialog.append(form);
     shadow.append(dialog);
@@ -755,7 +1245,7 @@
       secret.input.value = '';
       if (settingsView?.root === root) settingsView = null;
       root.remove();
-      if (current) {
+      if (current && !batchView?.dialog.open) {
         current.root.removeAttribute('data-settings-open');
         current.root.inert = false;
       }
@@ -802,6 +1292,13 @@
     form.addEventListener('submit', event => {
       event.preventDefault();
       if (composing || closing) return;
+      const range=display.querySelector('input:checked').value;
+      if(range==='off' && !saved && !address.input.value.trim() && !secret.input.value.trim()) {
+        try{GM_setValue(STORAGE_ENABLED,false);}catch{
+          error.textContent='设置未能保存，请检查脚本管理器的存储权限后重试。';error.hidden=false;return;
+        }
+        dismiss();applyDisplayPreference();return;
+      }
       for (const input of [address.input, secret.input]) input.removeAttribute('aria-invalid');
       let config;
       let invalid = address.input;
@@ -824,24 +1321,29 @@
       try {
         GM_setValue(STORAGE_TOKEN, config.token);
         GM_setValue(STORAGE_BASE, config.base);
+        if(range !== 'off')GM_setValue(STORAGE_DISPLAY,range);
+        GM_setValue(STORAGE_ENABLED,range !== 'off');
       } catch {
         error.textContent = '设置未能保存，请检查脚本管理器的存储权限后重试。';
         error.hidden = false;
         return;
       }
       dismiss();
+      panelMode = 'minimized';
       pageKey = '';
       refresh();
       paintAllUpdates();
-      current?.settings.focus();
-      if (!current) showNotice('已保存 Peach 设置。');
+      for (const node of surfaces) if (node.isConnected) applyAppearance(node);
+      if (current) present(current, 'minimized', true);
+      else updateEntry?.launcher.focus();
     });
     dialog.showModal();
+    placeSurface(root);
   }
 
-  GM_registerMenuCommand('配置 Peach 地址与令牌', configure);
-  GM_registerMenuCommand('选中番号加入 Peach', selectCode);
-  GM_registerMenuCommand('检查 Peach 与用户脚本更新', () => { configure(); void checkUpdates(true); });
+  GM_registerMenuCommand('开启', activateInterface);
+  GM_registerMenuCommand('检测更新', () => { configure(); void checkUpdates(true); });
+  GM_registerMenuCommand('设置', configure);
 
   let reporting = false;
   let reportAfter = 0;
@@ -904,7 +1406,7 @@
           url: resolveIdentity ? `${config.base}/api/jav-browser/identify?source_url=${encodeURIComponent(source)}${code ? `&code=${encodeURIComponent(code)}` : ''}`
             : `${config.base}/api/jav-browser${method === 'GET' ? `?code=${encodeURIComponent(code)}` : ''}`,
           headers,
-          ...(method === 'POST' ? { data: JSON.stringify({ code, source_url: source }) } : {}),
+          ...(method === 'POST' ? { data: JSON.stringify(source ? {code, source_url:source} : {code, manual:true}) } : {}),
           anonymous: true,
           timeout: 60_000,
           onload(response) {
@@ -953,6 +1455,7 @@
     view.summary.textContent = mode === 'collapsed' ? view.note.textContent : '';
     view.collapse.setAttribute('aria-expanded', String(expanded));
     view.collapse.setAttribute('aria-label', expanded ? '折叠 Peach 详情' : '展开 Peach 详情');
+    placeSurface(view.root);
     if (focus) {
       (minimized ? view.launcher : view.collapse).focus();
       if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -967,7 +1470,7 @@
     if (!alive(view)) return;
     view.summary.textContent = panelMode === 'collapsed' ? view.note.textContent : '';
     const terminalSuccess = ['ingested', 'owned'].includes(view.state) && !view.tracking;
-    view.button.disabled = view.identity.conflict || terminalSuccess;
+    view.button.disabled = view.busy || view.identity.conflict || terminalSuccess;
     view.button.setAttribute('aria-busy', String(view.busy));
     view.button.setAttribute('aria-disabled', String(view.busy || view.button.disabled));
     view.button.textContent = view.identity.conflict ? '番号存在冲突'
@@ -987,6 +1490,7 @@
       }
       view.button.prepend(spinner);
     }
+    placeSurface(view.root);
   }
 
   function tracking(body) {
@@ -1024,7 +1528,7 @@
       const state = skipped ? 'skipped' : index < completed ? 'complete' : index === current ? failed ? 'error' : 'current' : 'pending';
       step.dataset.state = state;
       if (index === current) step.setAttribute('aria-current', 'step'); else step.removeAttribute('aria-current');
-      step.querySelector('.flow-mark path').setAttribute('d', STEP_ICON_PATHS[state === 'complete' ? 'check' : state === 'error' ? 'error' : state === 'skipped' ? 'skipped' : 'circle']);
+      step.querySelector('.flow-mark path').setAttribute('d', state === 'complete' ? STEP_ICON_PATHS.check : state === 'error' ? STEP_ICON_PATHS.error : state === 'skipped' ? STEP_ICON_PATHS.skipped : STAGE_ICON_PATHS[index]);
       step.setAttribute('aria-label', `${['排队', '搜索', '下载', '入库', '整理'][index]}，${{complete:'已完成',current:'当前阶段',error:'未完成',skipped:'未请求',pending:'待处理'}[state]}`);
     });
   }
@@ -1104,6 +1608,10 @@
   }
 
   function refresh() {
+    if(!pageInterfaceAllowed()) {
+      if(current){generation++;current.root.remove();current=null;}
+      updateEntry?.root.remove();updateEntry=null;pageKey='';return;
+    }
     const item = identity();
     const key = `${location.href}|${item?.code || ''}|${Boolean(item?.conflict)}`;
     if (key === pageKey && (!item || current?.root.isConnected)) return;
@@ -1159,13 +1667,14 @@
     flow.hidden = true;
     const stepList = element('ol', 'flow-steps');
     stepList.setAttribute('aria-label', '整体任务阶段');
-    const steps = ['排队', '搜索', '下载', '入库', '整理'].map(label => {
+    const steps = ['排队', '搜索', '下载', '入库', '整理'].map((label, index) => {
       const step = element('li', 'flow-step');
-      const mark = element('span', 'flow-mark'); mark.setAttribute('aria-hidden', 'true'); mark.append(stepMark());
+      const mark = element('span', 'flow-mark'); mark.setAttribute('aria-hidden', 'true'); mark.append(stepMark(index), stageAnimation(index));
       step.append(mark, element('span', 'flow-label', label)); stepList.append(step); return step;
     });
     flow.append(progress, stepList);
-    body.append(note, flow, button, updateSection());
+    const scan = control('识别本页全部番号'); scan.addEventListener('click', openPageActions);
+    body.append(note, flow, button, scan, updateSection({ availableOnly: true }));
     panel.append(bar, body);
     const launcher = control('展开 Peach 面板');
     launcher.classList.add('launcher');
@@ -1173,16 +1682,18 @@
     launcher.setAttribute('aria-controls', panel.id);
     launcher.setAttribute('aria-expanded', 'false');
     const logo = document.createElement('img');
+    logo.draggable=false;
     logo.src = PEACH_LOGO;
     logo.alt = '';
     logo.setAttribute('aria-hidden', 'true');
     launcher.replaceChildren(logo);
+    wireLauncher(root, launcher);
     launcher.hidden = true;
     shadow.append(panel, launcher);
     const view = { root, panel, body, launcher, collapse, summary, button, note, flow, steps, progress, progressFill, heading: label, settings: settingsButton, identity: item, url: location.href, generation, state: 'idle', busy: false, tracking: false, queryOnly: attempts.has(comparisonKey(item.code)) };
     current = view;
     refreshUpdateEntry();
-    if (settingsView?.dialog.open) {
+    if (settingsView?.dialog.open || batchView?.dialog.open) {
       root.setAttribute('data-settings-open', '');
       root.inert = true;
     }
@@ -1211,6 +1722,7 @@
   addEventListener('popstate', schedule);
   addEventListener('hashchange', schedule);
   const navigated = () => {
+    if (batchView?.dialog.open) batchView.dialog.close();
     generation++;
     pageKey = '';
     selected = null;
@@ -1222,10 +1734,13 @@
   setInterval(refresh, 750);
   refresh();
   if (typeof GM_addValueChangeListener === 'function') {
-    for (const key of [STORAGE_INSTALLED, STORAGE_UPDATES]) updateListeners.push(GM_addValueChangeListener(key, () => {
+    for (const key of [STORAGE_INSTALLED, STORAGE_UPDATES, STORAGE_APPEARANCE, STORAGE_POSITION, STORAGE_DISPLAY]) updateListeners.push(GM_addValueChangeListener(key, () => {
       updateCache = readUpdateCache(); paintAllUpdates();
+      for (const root of surfaces) if (root.isConnected) applyAppearance(root);
     }));
+    for(const key of [STORAGE_ENABLED,STORAGE_DISPLAY])updateListeners.push(GM_addValueChangeListener(key,(_key,before,after)=>{if(before!==after)applyDisplayPreference();}));
   }
+  addEventListener('resize', () => { for (const root of surfaces) if (root.isConnected) placeSurface(root); });
   document.addEventListener('visibilitychange', updateVisibility);
   addEventListener('pagehide', event => { if (!event.persisted) disposeUpdates(); });
   scheduleUpdateCheck();

@@ -1,6 +1,30 @@
 # 复用记录
 
+## 阶段动画、页面识别与外观
+
+默认密度恢复 Peach 表格采用档：14/20、500，10px 12px 单元格间距；状态文字为 14/20、400，不使用 `bui-table-sm`。头像复用 Peach 已登记的暗色例外：`avatar-neutral-background` 为主文字色 10% 混入 primary 面，前景取主文字色，24px 首字母使用 Avatar `sm` 的 12/16、600。正常、悬停和选中态均检查前景对比度；字段、表格正文、提示分别使用完整的 Body、Caption 字阶。设置与番号列表为左返回子页，沿用 Remix Icon 4.9.0 `RiArrowLeftLine`，仅主浮卡保留关闭。
+
+无人物资料时的默认头像使用同一 Remix Icon 4.9.0 的 `RiUserLine`，保留原始 SVG 路径与现有许可；图形 16px，外框与照片、首字母同为 24px，使用中性灰色。资料读取期间也使用此占位，取得人物名后替换为照片或首字母，不发起额外查询。
+
+批量表格样式与选择交互复用 Peach revision `fc6b5b4f3d9b7dc5f73d1cc503a214dd06a80d9e` 的 `DataTableFrame`、`TableSelectionHeader`、`CheckboxGlyph` 和 `frontend/src/react/styles.css` 中的默认密度 BoardUI Table。Peach 的来源表由 TanStack Table 驱动这些控件；用户脚本将相同的表头全选／半选、逐行选择、整行点击、选中背景和 48px 行高适配为原生 table 与 checkbox。16px 勾选图形、4px 圆角、主题强调色渐变和焦点环沿用现有控件，表头全选只影响仍可添加的行。头像位于番号前，缺人物资料使用默认人像；文字过长单行省略，完整番号与失败提示保留 title。无 React、TanStack 或新的运行时依赖进入安装包。
+
+底部三个操作继续复用共用 Button；图标按钮和禁用主按钮增加明确边框。图标拖动期间阻止图片的原生拖拽，圆形入口的图片不拦截指针；从桃子本身按住拖动与按钮空白处使用同一 Pointer Events 处理，位置仍保存于既有 GM 字段。
+
+待处理阶段使用同一 Remix Icon 4.9.0 的 `RiTimeLine`、`RiSearchLine`、`RiDownload2Line`、`RiInboxArchiveLine`、`RiLayoutGridLine`，重新识别使用 `RiRefreshLine`。阶段区域统一 18×18，标签固定 20px 行高，待处理图形为中性灰色。批量行固定 48px，页脚单行且不提供设置。
+
+人物信息通过 Peach 的受限只读 `/api/jav-browser/people` 获取，复用实体关联、男优排除、元数据快照和 `PreviewService.entity_image` 本地文件查找；64px 缩图复用已有 Pillow，在内存编码。快照缺失不创建 `DiscoveryMetadata`，避免其初始化恢复未完成的抓取。列表不增加封面、外站查询或后台任务；缺图使用中性灰底首字母，缺人物信息使用默认人像。
+
+阶段动画取自 [loading.dev](https://loading.dev/) 的上游 `jakubkrehel/loading` 0.3.6，固定 revision `755235bf7eea3dfb05ec4c3661088e3521ee2d75`。Clock 表示排队等待，Radar 表示搜索，LinearDots 表示传输，Gather 表示汇聚入库，Blocks 表示分块整理。保留对应路径、节奏与关键帧，仅将 React 包装改为现有原生 DOM，并使用 Peach 当前强调色。只有当前阶段动画运行，减少动效时静止。来源文件摘要和 MIT 原文分别保存为 `assets/loading-dev-source.json`、`assets/loading-dev.LICENSE`，安装脚本内联许可；不引入 React 运行时或远程资源。
+
+多番号识别复用现有 `candidates`、`comparisonKey` 与逐项 `/api/jav-browser` 请求。页面扫描由用户点击触发，候选去重后交由用户选择；服务端仍负责最终校验。普通网页采用不带来源的 `manual: true` 协议，Peach 端复用既有队列和幂等处理。未引入自动爬虫、LLM 识别、元数据预抓取或批量后台重试。
+
+外观复用 Peach 的 `peach.settings.v1` 和页面实际 `--color-accent-400` 至 `700`，只在已配对 origin 读取主题与强调色。GM 存储快照和既有跨标签监听承接同步；未取得时随系统。图标拖动使用原生 Pointer Events、指针捕获和比例位置存储，打开浮卡、设置与窗口缩放时按视口约束位置。
+
 ## 更新状态与安装感知
+
+显隐开关复用 GM 存储和跨标签变更监听，独立保存 `peach.jav.enabled` 布尔值，不覆盖原来的 JAV／所有网页范围。普通页与关闭状态仍注册「开启、检测更新、设置」三项 `GM_registerMenuCommand`；页面识别与自动检查由同一显示判据约束，手动设置和检查不受此判据拦截。关闭使当前视图代际失效、停止后续轮询并移除入口，后台已提交任务保持原有生命周期，无新增权限或依赖。
+
+作品浮卡只在发现用户脚本更新、Peach 更新或安装后待刷新时显示更新区；当前版本、检查中与检查失败留在设置窗口。用户脚本更新使用蓝色提示，Peach 更新使用橙色提示，同时可用时分别保留操作。查询与抓取期间，主操作使用原生 `disabled`，禁用态不响应 hover 或按下配色；请求结束后按真实状态恢复。
 
 更新检查复用既有 GM 存储、跨域请求和菜单入口，无新增依赖。Tampermonkey 官方 [GM_xmlhttpRequest](https://www.tampermonkey.net/documentation.php?locale=en&q=GM_xmlhttpRequest) 定义 `anonymous`、`redirect`、`finalUrl` 与返回句柄的 `abort()`；官方说明 Chrome 的 fetch 模式不保证 `timeout` 生效，因此请求另设 15 秒浏览器定时器并实际中止。固定已知域通过 [@connect](https://www.tampermonkey.net/documentation.php?locale=en&q=connect) 单独声明，`*` 继续用于用户选择的 Peach origin。
 
@@ -22,7 +46,9 @@ Sleazy 官方脚本 600821 的 JSON 元数据与 `.meta.js` 已通过严格 HTTP
 
 ## 页面内设置与控件
 
-界面复用 Peach revision `96987634e` 的 `web/css/01-base.css` 色板、按钮与输入框契约，以及 `frontend/src/ui-kit/markup.css` 的 Spinner 和 `modal.css` 的窗口层级、正文与操作条。以同许可的独立快照嵌入脚本，所有入口共用 `control()`、`surface()` 与同一份 `UI_STYLE`。设置图标逐字复用该 revision 的 `web/index.html` 中 `i-settings`：lucide-static 1.57.0，ISC 许可，许可原文随安装脚本保留，不增加运行时依赖。Peach 差异是来源页面内的右下角布局、地址与令牌校验、配对信息粘贴、同地址保留令牌和 GM 存储；运行时不拉远程样式或应用代码。
+设置弹窗与共用浮卡的控件快照对齐 Peach revision `689c6ead624f1137cde389176f807174f6b5242e` 的 BoardUI 适配：`web/board.css`、`frontend/src/react/base.css` 与已安装的 BoardUI Button、Input、theme、typography 源码。使用同一套中性色、蓝色主动作渐变、36px 表单档、10px 控件圆角、20px 弹窗圆角和正文／说明排版。原生 DOM 继续消费内嵌快照，不引入 React 或远程样式；所有入口仍共用一份 `UI_STYLE`，深浅主题只切换语义 token。旧 `geist-*` class 保留为已有 DOM 入口，不再代表旧色板。配对、令牌与请求协议不变；该修改的浏览器回归待当前预览确认后执行。
+
+设置图标保留 Peach revision `96987634e` 的 `web/index.html` 中 `i-settings`：lucide-static 1.57.0，ISC 许可，许可原文随安装脚本保留。Spinner 沿用同 revision 的 `frontend/src/ui-kit/markup.css`。Peach 差异是来源页面内的右下角布局、地址与令牌校验、配对信息粘贴、同地址保留令牌和 GM 存储；运行时不拉远程样式或应用代码。
 
 设置的模态层和焦点管理使用浏览器原生 [`HTMLDialogElement.showModal()`](https://developer.mozilla.org/en-US/docs/Web/API/HTMLDialogElement/showModal)，标题、字段、错误与按钮由 Peach 控件绘制。原生 DOM API 随目标浏览器提供，无包版本、额外依赖体积或第三方许可；需支持 Shadow DOM、dialog 与 CSS color-mix 的现代浏览器。脚本管理器的跨域连接权限确认仍由宿主管理。
 

@@ -20,6 +20,8 @@
     <nav aria-label="预览状态">
       <a href="?state=unconfigured">未配置</a><a href="?state=idle">可添加</a><a href="?state=owned">馆藏已有</a><a href="?state=failed">连接失败</a>
       <button type="button" id="open-settings">打开设置</button>
+      <button type="button" id="activate-script">开启</button>
+      <button type="button" id="check-script-update">检测更新</button>
       <button type="button" id="copy-pairing">复制模拟配对信息</button>
       <a href="?site=dmm&state=idle">DMM 商品号</a><a href="?site=mgs&state=idle">MGS 商品号</a>
     </nav>
@@ -50,7 +52,9 @@
         request.onload({status:200,responseText:JSON.stringify({ok:true,code,state:request.method === 'POST' ? 'queued' : previewState === 'owned' ? 'owned' : 'idle'})});
       }, 650),
     });
-    document.querySelector('#open-settings').addEventListener('click', () => previewMenus['配置 Peach 地址与令牌']());
+    document.querySelector('#open-settings').addEventListener('click', () => previewMenus['设置']());
+    document.querySelector('#activate-script').addEventListener('click', () => previewMenus['开启']());
+    document.querySelector('#check-script-update').addEventListener('click', () => previewMenus['检测更新']());
     document.querySelector('#copy-pairing').addEventListener('click', async event => {
       const trigger = event.currentTarget;
       try {

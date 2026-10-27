@@ -10,6 +10,7 @@ import { exportRelease } from '../scripts/export.mjs';
 
 const manifest = JSON.parse(await readFile(new URL('../jav-sites.json', import.meta.url), 'utf8'));
 const template = await readFile(new URL('../src/peach-jav.user.js', import.meta.url), 'utf8');
+const VERSION = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version;
 
 test('安装产物可解析，元数据匹配清单且每个域名覆盖 HTTPS 主域与子域', async () => {
   const result = await outputs();
@@ -17,14 +18,14 @@ test('安装产物可解析，元数据匹配清单且每个域名覆盖 HTTPS �
   assert.doesNotThrow(() => new Script(script));
   const metadata = new Map([...script.matchAll(/^\/\/ @(\w+)\s+(.+)$/gm)]
     .filter(match => match[1] !== 'match').map(match => [match[1], match[2]]));
-  assert.equal(metadata.get('version'), '0.5.2');
+  assert.equal(metadata.get('version'), VERSION);
   assert.equal(metadata.get('namespace'), 'https://github.com/peach-mitao/peach-userscript');
   assert.equal(metadata.get('source'), metadata.get('namespace'));
   assert.equal(metadata.get('supportURL'), metadata.get('namespace') + '/issues');
   const matches = [...script.matchAll(/^\/\/ @match\s+(.+)$/gm)].map(match => match[1]);
   assert.deepEqual(matches, [...manifest.sites.flatMap(site => site.domains.flatMap(domain =>
     [`https://${domain}/*`, `https://*.${domain}/*`])),
-    'https://*/integrations/peach-userscript-bridge', 'http://localhost/integrations/peach-userscript-bridge',
+    '*://*/*', 'https://*/integrations/peach-userscript-bridge', 'http://localhost/integrations/peach-userscript-bridge',
     'http://127.0.0.1/integrations/peach-userscript-bridge']);
   assert.equal(new Set(matches).size, matches.length);
 });
@@ -32,7 +33,7 @@ test('安装产物可解析，元数据匹配清单且每个域名覆盖 HTTPS �
 test('构建不依赖时间，CRLF 模板得到同一份 LF 产物，工作区产物一致', async () => {
   const first = await outputs(ROOT);
   assert.deepEqual(await outputs(ROOT), first);
-  assert.equal(render(template.replace(/\r?\n/g, '\r\n'), manifest, '0.5.2'), first.get('peach-jav.user.js'));
+  assert.equal(render(template.replace(/\r?\n/g, '\r\n'), manifest, VERSION), first.get('peach-jav.user.js'));
   await build({ check: true });
 });
 
@@ -56,7 +57,7 @@ test('站点清单无效时拒绝构建', () => {
 
 test('模板缺失、重复标记或版本漂移时拒绝构建', () => {
   for (const source of [template.replace('__PEACH_JAV_SITES__', '{}'), template + '\n// __PEACH_JAV_MATCHES__']) {
-    assert.throws(() => render(source, manifest, '0.5.2'));
+    assert.throws(() => render(source, manifest, VERSION));
   }
   assert.throws(() => render(template, manifest, '0.4.0'));
 });
