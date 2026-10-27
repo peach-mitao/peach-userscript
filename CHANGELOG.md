@@ -2,7 +2,17 @@
 
 Notable changes are grouped by version. English and Chinese describe the same behavior; source-only versions are marked explicitly. / 按版本记录面向使用者的变化；中英文保持事实一致，未单独发布的源码版本明确标注。
 
+## 0.6.2 — 2026-10-28
+
+### Fixed / 修复
+
+- Provide a description for every localized script name, satisfying Sleazy's publication validation. / 为每个本地化脚本名称提供对应语言的简介，满足 Sleazy 发布校验。
+
+[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/v0.6.1...v0.6.2)
+
 ## 0.6.1 — 2026-10-28
+
+Published on GitHub; not published on Sleazy because a localized description was missing. The corrected Sleazy release is 0.6.2. / 已在 GitHub 发布；因缺少本地化简介，未发布到 Sleazy，Sleazy 修正版本为 0.6.2。
 
 ### Fixed / 修复
 
