@@ -37,6 +37,16 @@ test('构建不依赖时间，CRLF 模板得到同一份 LF 产物，工作区�
   await build({ check: true });
 });
 
+test('本地安装制品声明固定的 Sleazy 自动更新渠道', async () => {
+  const script = (await outputs(ROOT)).get('peach-jav.user.js');
+  const base = 'https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93';
+  assert.equal(script.match(/^\/\/ @updateURL\s+(.+)$/m)?.[1], `${base}.meta.js`);
+  assert.equal(script.match(/^\/\/ @downloadURL\s+(.+)$/m)?.[1], `${base}.user.js`);
+  assert.equal(script.match(/^\/\/ @name:zh-CN\s+(.+)$/m)?.[1], 'Peach 用户脚本');
+  assert.equal(script.match(/^\/\/ @name:en\s+(.+)$/m)?.[1], 'Peach Userscript');
+  assert.equal(script.match(/^\/\/ @name\s+(.+)$/m)?.[1], 'Peach · JAV 入库');
+});
+
 test('站点清单无效时拒绝构建', () => {
   for (const change of [
     value => { value.version = 2; },

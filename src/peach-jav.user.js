@@ -1,12 +1,18 @@
 // ==UserScript==
 // @name         Peach · JAV 入库
+// @name:zh-CN   Peach 用户脚本
+// @name:zh-TW   Peach 用户脚本
+// @name:en      Peach Userscript
 // @namespace    https://github.com/peach-mitao/peach-userscript
 // @source       https://github.com/peach-mitao/peach-userscript
 // @supportURL   https://github.com/peach-mitao/peach-userscript/issues
 // @homepageURL  https://github.com/peach-mitao/peach-userscript
+// @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
+// @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.6.0
-// @description  在 JAV 作品详情页识别或选中番号，交给 Peach 下载入库。
+// @version      0.6.1
+// @description  识别网页中的番号，选择影片并交给 Peach 下载入库。
+// @description:en Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // __PEACH_JAV_MATCHES__
 // @match        *://*/*
 // @match        https://*/integrations/peach-userscript-bridge
@@ -538,7 +544,7 @@
   }
 
   // 只做粗提取；合法番号由 Peach 校验。
-  function candidates(value, maxLength = 800) {
+  function candidates(value, maxLength = 800, minSerialDigits = 1) {
     const found = new Set();
     const bounded = String(value || '').slice(0, maxLength).toUpperCase();
     let rest = bounded.replace(/\bFC2(?:[-_ ]?PPV)?[-_ ]?(\d{4,9})\b/g, (_, digits) => {
@@ -554,6 +560,7 @@
       return ' ';
     });
     for (const match of rest.matchAll(/\b((?:\d{1,5})?[A-Z]{2,12})[-_]?(\d{1,8})([A-Z]{0,2})(?=$|[^A-Z0-9])/g)) {
+      if (match[2].length < minSerialDigits) continue;
       found.add(`${match[1]}-${match[2]}${match[3]}`);
     }
     for (const match of rest.matchAll(/\b\d{6}[-_]\d{2,4}\b/g)) found.add(match[0]);
@@ -732,10 +739,11 @@
     const local = config && updateCache.peach?.base === config.base ? updateCache.peach : null;
     const remote = validVersion(updateCache.script?.version) ? updateCache.script.version : '';
     const bundled = local?.userscript?.version;
-    const version = compareVersion(bundled, remote || '0.0.0') > 0 ? bundled : remote;
+    const fromPeach = compareVersion(bundled, remote || '0.0.0') > 0;
+    const version = fromPeach ? bundled : remote;
     if (compareVersion(version, RUNNING_VERSION) > 0) return {
       key: `script:${version}`, kind: 'script', message: `用户脚本 v${version} 可更新。`,
-      href: bundled === version && config ? `${config.base}/integrations/peach-jav.user.js` : RELEASE_PAGE,
+      href: fromPeach && config ? `${config.base}/integrations/peach-jav.user.js` : RELEASE_PAGE,
     };
     if (local?.release?.state === 'available' && typeof local.release.latest_version === 'string') return {
       key: `peach:${config.base}:${local.release.latest_version}`, kind: 'peach',
@@ -951,7 +959,21 @@
 
   async function scanPage(view) {
     const codes = new Map();
-    const add = text => { for (const code of candidates(text, text.length)) if (!codes.has(comparisonKey(code))) codes.set(comparisonKey(code), code); };
+    // 详情已取得的规范身份优先，避免 DMM 商品号的补零写法覆盖它。
+    let detail = current?.url === location.href ? current.identity : identity();
+    if (detail?.resolve && !detail.conflict && configuration()) {
+      try {
+        const result = await request(configuration(), detail.code, detail.source, 'GET', true);
+        detail = {...detail, code:result.code, resolve:false};
+      } catch (error) {
+        view.peopleNote.hidden=false;view.peopleNote.textContent=`${error.message}，列表保留页面候选。`;
+      }
+    }
+    if (!view.root.isConnected) return;
+    if (detail?.code && !detail.resolve && !detail.conflict)
+      codes.set(comparisonKey(detail.code), detail.code);
+    // 整页文本按 Peach 商品号的最短序号筛选，PS4 / PS5 等单数字设备名不作为候选。
+    const add = text => { for (const code of candidates(text, text.length, 2)) if (!codes.has(comparisonKey(code))) codes.set(comparisonKey(code), code); };
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {acceptNode(node) {
       const parent = node.parentElement;
       return !parent || parent.closest('script,style,noscript,textarea,input,select,[contenteditable],aside[id^="peach-jav-"]')

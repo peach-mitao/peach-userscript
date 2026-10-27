@@ -294,6 +294,36 @@ describe('JAV 用户脚本', () => {
       } finally { await close(); }
     });
 
+    for (const example of [
+      { remote: '9.3.0', local: '9.2.0', version: '9.3.0', source: 'sleazy' },
+      { remote: '9.2.0', local: '9.3.0', version: '9.3.0', source: 'peach' },
+      { remote: '9.3.0', local: '9.3.0', version: '9.3.0', source: 'sleazy' },
+      { remote: null, local: '9.2.0', version: '9.2.0', source: 'peach' },
+      { remote: '9.2.0', local: null, version: '9.2.0', source: 'sleazy' },
+      { remote: '9.10.0', local: '9.9.0', version: '9.10.0', source: 'sleazy' },
+    ]) it(`双源更新 remote=${example.remote} local=${example.local} 采用 ${example.source} ${example.version}`, async () => {
+      const { page, close } = await open(browser, {url:'https://missav.ws/',title:'首页',html:'',updateAutomatic:false});
+      try {
+        await waitUpdates(page, 2);
+        const requests = await page.evaluate(example => {
+          const [remote, local] = window.javMock.updates;
+          if (example.remote) remote!.onload({status:200,responseText:`// ==UserScript==\n// @name Peach · JAV 入库\n// @namespace https://github.com/peach-mitao/peach-userscript\n// @version ${example.remote}\n// ==/UserScript==`});
+          else remote!.onerror();
+          if (example.local) local!.onload({status:200,responseText:JSON.stringify({runtime:{version:'1.0.0',build_id:'fixture'},
+            release:{state:'current'},userscript:{version:example.local,minimum_version:'0.5.1'}})});
+          else local!.onerror();
+          return window.javMock.updates.map(request=>({url:request.url,headers:request.headers}));
+        },example);
+        assert.equal(new URL(requests[0]!.url).hostname,'update.sleazyfork.org');
+        assert.equal(requests[0]!.headers.Authorization,undefined);
+        assert.equal(requests[1]!.url,`${BASE}/api/jav-browser/updates`);
+        const install = updatePanel(page).getByRole('link',{name:'更新用户脚本',exact:true});
+        await install.waitFor();
+        assert.equal(await install.getAttribute('href'),example.source==='peach'?`${BASE}/integrations/peach-jav.user.js`:'https://sleazyfork.org/zh-CN/scripts/600821');
+        assert.ok((await updatePanel(page).getByLabel('用户脚本更新状态').innerText()).includes(`v${example.version}`));
+      } finally { await close(); }
+    });
+
     it('跨标签安装标记和同页新实例提示刷新，发行检查不写安装标记', async () => {
       const { page, close } = await open(browser, { url: 'https://missav.ws/', title: '首页', html: '', configured: false });
       try {
@@ -1254,6 +1284,38 @@ describe('JAV 用户脚本', () => {
       await list.getByRole('button',{name:'全部加入（1）',exact:true}).click();
       await page.waitForFunction(() => window.javMock.calls.filter(call=>call.method==='POST').length===2);
       assert.deepEqual(await page.evaluate(() => window.javMock.calls.filter(call=>call.method==='POST').map(call=>JSON.parse(call.data!).code)), ['ABP-616','SSIS-057']);
+      assert.deepEqual(opened.problems,[]);
+    } finally {await opened.close();}
+  });
+
+  it('DMM 页面扫描排除设备名并复用 Peach 已解析的规范番号', async () => {
+    const opened = await open(browser,{url:'https://video.dmm.co.jp/av/content/?id=dasd00911',title:'作品详情',
+      html:'<nav>PS5 PS4</nav><p>商品番号 dasd00911</p><img alt="DASD00911">',resolved:'DASD-911'});
+    try {
+      await ready(opened.page);
+      await opened.page.locator(ROOT).getByRole('button',{name:'识别本页全部番号',exact:true}).click();
+      const list=opened.page.locator('#peach-jav-batch');
+      await list.getByRole('checkbox',{name:'选择 DASD-911',exact:true}).waitFor();
+      assert.equal(await list.locator('.batch-row').count(),1);
+      assert.equal(await list.getByRole('checkbox',{name:'选择 PS-5',exact:true}).count(),0);
+      assert.equal(await list.getByRole('checkbox',{name:'选择 PS-4',exact:true}).count(),0);
+      assert.equal(await list.getByRole('checkbox',{name:'选择 DASD-00911',exact:true}).count(),0);
+      assert.equal(await opened.page.evaluate(()=>window.javMock.calls.filter(call=>call.method==='POST').length),0);
+      assert.deepEqual(opened.problems,[]);
+    } finally {await opened.close();}
+  });
+
+  it('Peach 首次查询未完成时，页面扫描先取得 DMM 规范番号', async () => {
+    const opened = await open(browser,{url:'https://video.dmm.co.jp/av/content/?id=dasd00911',title:'作品详情',
+      html:'<nav>PS5 PS4</nav><p>商品番号 dasd00911</p>',automatic:false});
+    try {
+      await pending(opened.page,1);
+      await opened.page.locator(ROOT).getByRole('button',{name:'识别本页全部番号',exact:true}).click();
+      await pending(opened.page,2);
+      await reply(opened.page,1,body('idle','DASD-911'));
+      const list=opened.page.locator('#peach-jav-batch');
+      await list.getByRole('checkbox',{name:'选择 DASD-911',exact:true}).waitFor();
+      assert.equal(await list.locator('.batch-row').count(),1);
       assert.deepEqual(opened.problems,[]);
     } finally {await opened.close();}
   });
