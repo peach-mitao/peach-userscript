@@ -5,19 +5,50 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 jobs:
-  verify:
+  plan:
     runs-on: ubuntu-latest
+    outputs:
+      runtime: ${{ steps.plan.outputs.runtime }}
+      base: ${{ steps.plan.outputs.base }}
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v7.1.0
         with:
           node-version-file: .nvmrc
-          cache: npm
+      - id: plan
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/ci_plan.ts --base "$BASE_SHA" --event "$EVENT_NAME"
+  verify:
+    needs: plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: 文档格式与比较基线
+        if: needs.plan.outputs.runtime == 'false'
+        env:
+          BASE_SHA: ${{ needs.plan.outputs.base }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: node scripts/ci_plan.ts --base "$BASE_SHA" --event "$EVENT_NAME" --verify-docs
       - run: npm ci --ignore-scripts
+        if: needs.plan.outputs.runtime == 'true'
       - run: node node_modules/playwright-core/cli.js install --with-deps chromium
+        if: needs.plan.outputs.runtime == 'true'
       - run: npm run verify
+        if: needs.plan.outputs.runtime == 'true'
       - uses: actions/upload-artifact@v7.0.2
+        if: needs.plan.outputs.runtime == 'true'
         with:
           name: peach-userscript
           path: dist/
