@@ -10,8 +10,10 @@
 // @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
 // @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.6.1
+// @version      0.6.2
 // @description  识别网页中的番号，选择影片并交给 Peach 下载入库。
+// @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
+// @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
 // @description:en Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // __PEACH_JAV_MATCHES__
 // @match        *://*/*

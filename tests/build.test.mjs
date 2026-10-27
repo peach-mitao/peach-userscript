@@ -47,6 +47,14 @@ test('本地安装制品声明固定的 Sleazy 自动更新渠道', async () => 
   assert.equal(script.match(/^\/\/ @name\s+(.+)$/m)?.[1], 'Peach · JAV 入库');
 });
 
+test('发布元数据为每个本地化名称提供对应语言的简介', async () => {
+  const script = (await outputs(ROOT)).get('peach-jav.user.js');
+  const fields = new Map([...script.matchAll(/^\/\/ @(name|description):([^\s]+)\s+(.+)$/gm)]
+    .map(match => [`${match[1]}:${match[2]}`, match[3].trim()]));
+  for (const key of fields.keys()) if (key.startsWith('name:'))
+    assert.ok(fields.get(key.replace('name:', 'description:')), `${key} 缺少对应简介`);
+});
+
 test('站点清单无效时拒绝构建', () => {
   for (const change of [
     value => { value.version = 2; },
