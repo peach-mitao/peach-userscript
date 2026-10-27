@@ -11,9 +11,10 @@ Send video codes from supported pages to your self-hosted Peach instance.
 
 ## Features
 
-- **Recognize and add**: detect a code on supported detail pages, or submit a selected code through the script menu.
+- **Recognize and add**: detect a code on supported detail pages, or scan a page and add selected titles or all titles.
 - **Track status**: check whether a title is already in your library or queued.
 - **Continue in Peach**: Peach saves the task and handles cloud download and library import after the source page closes.
+- **Match Peach**: sync the theme and accent, move the launcher and choose where it appears; settings and update checks remain available from the script menu.
 
 ## Setup
 

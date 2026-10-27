@@ -40,6 +40,14 @@ npm run verify
 
 ## 发布与 Peach 同步
 
+已配对时，更新检查比较 Sleazy 与 Peach 随附脚本，入口指向较新版本的来源，同版本优先 Sleazy。任一来源失败仍显示另一来源已取得的更新。固定的 `@updateURL` 和 `@downloadURL` 让从 Peach 本地安装的脚本也使用 Sleazy 自动更新渠道。Sleazy 说明分别维护在 `SLEAZY.md`（英文）和 `SLEAZY.zh-CN.md`（中文），发布时填写对应语言的附加信息。
+
+发行说明按 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 区分新增、变更和修复；中英文描述同一事实，兼容性与尚未验证的范围两种语言都保留。每项可追溯到实际 PR、issue 或提交，不虚构编号；尚需用户验证的 issue 使用普通引用或 `Refs`，不使用自动关闭关键词。末尾提供上一发行标签到当前标签的 `Full Changelog` 比较链接；首发使用 `Initial release / 初始发布` 和该标签的提交历史链接。GitHub Release 与 Sleazy 更新日志从同一份版本记录整理，不能把源码版本写成已经在该平台发布；旧平台日志无法编辑时在当前说明链接 [完整版本历史](../CHANGELOG.md)。
+
+Sleazy 的中英文附加说明分别填写，按访客语言显示；历史更新日志只有一个字段，使用短双语摘要并链接完整记录，不重复粘贴两篇说明。GitHub Release 保留完整中文正文，英文放入 `details` 折叠区，两部分共同引用同一变更范围。
+
+对外名称统一为 `Peach 用户脚本` / `Peach Userscript`，由本地化 `@name` 元数据提供。默认 `@name` 与 namespace 保留原安装身份：旧版本的更新检查会校验它们，不能仅为改显示名而改掉。
+
 `dist/peach-jav.user.js` 可直接安装，`dist/jav-sites.json` 是版本化站点快照，`dist/release.json` 记录脚本版本与两个文件的 SHA256，`dist/SHA256SUMS` 用于校验制品。构建不写时间戳、不访问网络。CI 检查已提交制品与源文件一致，并上传制品。
 
 Peach 主仓库消费同一次发布的脚本与站点快照，服务端继续独立验证来源域名和作品参数。维护脚本或站点时在本仓库修改、构建、验证，递增版本后同步制品；协议说明见 [Peach API](PROTOCOL.md)。[Sleazy 发布说明](SLEAZY.md) 可用于发布页面。

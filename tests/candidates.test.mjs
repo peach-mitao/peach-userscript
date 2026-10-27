@@ -27,7 +27,10 @@ test('所有远程域名保持待复核，既有域名只标记关联，内容�
   assert.throws(() => report(manifest, registry, new Map([['fixture', Buffer.from('tampered')]])), /hash/);
 });
 
-test('来源只接受公开 Sleazy HTTPS URL、固定 hash 和 evidence 路径', () => {
+test('来源只接受公开 Sleazy 与 Greasy HTTPS URL、固定 hash 和 evidence 路径', () => {
+  assert.doesNotThrow(() => validateSources({ version: 1, sources: [{ ...source,
+    url: 'https://update.greasyfork.org/scripts/439204/x1080x-preview.user.js',
+    evidence_url: 'https://greasyfork.org/scripts/439204-x1080x-preview' }] }));
   for (const patch of [
     { url: 'https://127.0.0.1/secret' }, { url: 'https://example.invalid/script.user.js' },
     { url: source.url + '?token=secret' }, { sha256: '' }, { path: 'jav-sites.json' },

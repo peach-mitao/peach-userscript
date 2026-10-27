@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>REAL-864 作品详情</title>
+  <style>
+    :root{font:400 14px/1.6 system-ui,sans-serif;color-scheme:light dark;color:light-dark(#171717,#e7e7ea);background:light-dark(#fafafa,#101218)}
+    *{box-sizing:border-box}body{margin:0}main{max-width:960px;margin:0 auto;padding:40px 24px 400px}
+    h1{font-size:24px;font-weight:500;margin:40px 0 12px}p{max-width:640px}nav{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
+    button,a{font:inherit;color:inherit;border:1px solid light-dark(#ddd,#34363c);background:transparent;border-radius:6px;padding:8px 12px;text-decoration:none;cursor:pointer}
+    button:focus-visible,a:focus-visible{outline:2px solid #2563eb;outline-offset:2px}.meta{color:light-dark(#666,#a5a8b1)}
+    .media{aspect-ratio:16/9;background:light-dark(#eee,#181b23);display:grid;place-items:center;border-radius:8px;color:light-dark(#666,#a5a8b1);margin:24px 0}
+  </style>
+</head>
+<body>
+  <main>
+    <p class="meta">Peach 用户脚本 · 交互预览</p>
+    <p>右下角可打开设置、保存模拟地址与令牌，或查看添加状态。此页使用内存数据，刷新会还原。</p>
+    <nav aria-label="预览状态">
+      <a href="?state=unconfigured">未配置</a><a href="?state=idle">可添加</a><a href="?state=owned">馆藏已有</a><a href="?state=failed">连接失败</a>
+      <button type="button" id="open-settings">打开设置</button>
+      <button type="button" id="activate-script">开启</button>
+      <button type="button" id="check-script-update">检测更新</button>
+      <button type="button" id="copy-pairing">复制模拟配对信息</button>
+      <a href="?site=dmm&state=idle">DMM 商品号</a><a href="?site=mgs&state=idle">MGS 商品号</a>
+    </nav>
+    <h1>REAL-864 作品详情</h1>
+    <p class="meta">来源页面示意</p>
+    <div class="media">视频区域</div>
+    <p>点击右下角「配置 Peach」，在设置面板填写地址与令牌。可使用 <code>https://peach.example.com</code> 和任意模拟令牌。</p>
+    <p>可用浏览器的系统主题预览浅色与暗色，用窄窗口查看手机布局。</p>
+  </main>
+  <script>
+    const previewState = new URLSearchParams(location.search).get('state') || 'unconfigured';
+    const previewSite = new URLSearchParams(location.search).get('site');
+    if (previewSite === 'dmm' || previewSite === 'mgs') {
+      const code = previewSite === 'dmm' ? 'SSIS-519' : '300MIUM-1239';
+      document.title = code + ' 作品详情';
+      document.querySelector('h1').textContent = code + ' 作品详情';
+    }
+    const previewValues = previewState === 'unconfigured' ? {} : { 'peach.jav.base': 'https://peach.example.com', 'peach.jav.token': 'preview-only-token' };
+    const previewMenus = {};
+    Object.assign(window, {
+      GM_getValue: (key, fallback) => previewValues[key] ?? fallback,
+      GM_setValue: (key, value) => { previewValues[key] = value; },
+      GM_registerMenuCommand: (label, callback) => { previewMenus[label] = callback; },
+      GM_xmlhttpRequest: request => setTimeout(() => {
+        if (previewState === 'failed') { request.onerror(); return; }
+        const code = new URLSearchParams(location.search).get('site') === 'dmm' ? 'SSIS-519'
+          : new URLSearchParams(location.search).get('site') === 'mgs' ? '300MIUM-1239' : 'REAL-864';
+        request.onload({status:200,responseText:JSON.stringify({ok:true,code,state:request.method === 'POST' ? 'queued' : previewState === 'owned' ? 'owned' : 'idle'})});
+      }, 650),
+    });
+    document.querySelector('#open-settings').addEventListener('click', () => previewMenus['设置']());
+    document.querySelector('#activate-script').addEventListener('click', () => previewMenus['开启']());
+    document.querySelector('#check-script-update').addEventListener('click', () => previewMenus['检测更新']());
+    document.querySelector('#copy-pairing').addEventListener('click', async event => {
+      const trigger = event.currentTarget;
+      try {
+        await navigator.clipboard.writeText(JSON.stringify({peach_pairing:1,base:'https://peach.example.com',token:'preview-only-token'}));
+        trigger.textContent = '已复制模拟配对信息';
+      } catch {
+        trigger.textContent = '浏览器未允许复制';
+      }
+    });
+  </script>
+  <script>
+    const previewScript = document.createElement('script');
+    previewScript.src = '/preview.user.js?site=' + encodeURIComponent(new URLSearchParams(location.search).get('site') || 'missav');
+    document.body.append(previewScript);
+  </script>
+</body>
+</html>

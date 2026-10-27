@@ -1,0 +1,25 @@
+{
+  "repository": "https://github.com/jakubkrehel/loading",
+  "commit": "755235bf7eea3dfb05ec4c3661088e3521ee2d75",
+  "version": "0.3.6",
+  "license": "MIT",
+  "stages": {
+    "queued": "Clock",
+    "searching": "Radar",
+    "download": "LinearDots",
+    "ingest": "Gather",
+    "organize": "Blocks"
+  },
+  "adaptation": "原生 DOM 和内嵌 CSS；保留 SVG 路径、形状、周期与关键帧，仅当前阶段播放，减少动态效果时静止。",
+  "files": {
+    "src/clock.tsx": "273470d64b8e04156a29ea6d8f9e7982c7a71d7f9f0baf753e2393d5a10545ef",
+    "src/radar.tsx": "bd3bedde120c398bb9db8f69fbf2c0374e59fdece5b0b030694b49712ff0230a",
+    "src/linear-dots.tsx": "c626d522ad6f5251e4c5345dd833fa7b34bcb564a28b28bfe6a8237585c3e13b",
+    "src/gather.tsx": "9282bb645e742d9b30ea738e2e38dfd91a0fb17c089ad32362bb66886c6a822f",
+    "src/blocks.tsx": "3a691dde1be5339676e7bbaa3ffa20faf8ce4bb1fbef0fa8f0e2777e73d8b6a0",
+    "src/frame.tsx": "54e3fc0dae9b99fef40a831f60efaec84d564f4a8acf55dfdd65dc1d28b9dc0f",
+    "src/motion.ts": "38c19a071bb9a04e1f53a017609a70dbd0e1b5ea6959eccade632c7d66e50eea",
+    "src/easing.ts": "9350e6b79d7ad65ef693a7d84bb1cd6cf459d9be21daa3ca96c60f4562655a3f",
+    "LICENSE.md": "596f89eaa3780ea0451ab2870196427ee2d0b1b3d743507af0b2fbffd46e234c"
+  }
+}

@@ -54,6 +54,24 @@
       "path": "docs/evidence/sleazy-metadata/519635.json",
       "sha256": "7c8ef8be439ec18d00fca0b6fad76113b16d199fea5444d819ea0b317e3f3b7c",
       "metadata_sha256": "a008db3637609b1b19b34cc74bd1464245a0b4119b5eeb225892917acd72d628"
+    },
+    {
+      "id": "greasy-439204",
+      "url": "https://update.greasyfork.org/scripts/439204/x1080x-preview.user.js",
+      "evidence_url": "https://greasyfork.org/scripts/439204-x1080x-preview",
+      "format": "metadata",
+      "path": "docs/evidence/greasy-metadata/439204.json",
+      "sha256": "d1f2c8788647a4ce1cd65ff511e22fdacc5eb8f7fdc11c1c019a2cd5f411605d",
+      "metadata_sha256": "d463300589fa4d9dd31beac6280d07c257ec3d12f0e2c790f6e8ea3414e83811"
+    },
+    {
+      "id": "sleazy-587514",
+      "url": "https://update.sleazyfork.org/scripts/587514/%E9%80%9A%E7%94%A8%E7%95%AA%E5%8F%B7%E6%89%AB%E6%8F%8F%20%20%E5%A4%9A%E6%BA%90%E6%90%9C%E7%B4%A2.user.js",
+      "evidence_url": "https://sleazyfork.org/scripts/587514",
+      "format": "metadata",
+      "path": "docs/evidence/sleazy-metadata/587514.json",
+      "sha256": "f89aa761805ff47a2c6bfbca62f07e817e05980878da53171ef7f0b8f13fe3e4",
+      "metadata_sha256": "a64f8ccf0a2d6fb10c09d4064c0365635da559e6be12a7331b034925e7b93130"
     }
   ]
 }

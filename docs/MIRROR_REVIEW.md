@@ -1,10 +1,10 @@
 # 站点与镜像候选复核
 
-该工具帮助从热门 Sleazy 脚本发现镜像和遗漏的 JAV 源站。它只读取用户脚本元数据中 `@match`、`@include` 和 `@connect` 的显式域名，不执行代码，不接受远程代码作为 Peach 规则，也不修改 `jav-sites.json`。没有定时任务。连接声明可能包含无关服务，必须复核用途。
+该工具帮助从公开 Sleazy、Greasy 脚本发现镜像和遗漏的 JAV 源站。它只读取用户脚本元数据中 `@match`、`@include` 和 `@connect` 的显式域名，不执行代码，不接受远程代码作为 Peach 规则，也不修改 `jav-sites.json`。没有定时任务。连接声明可能包含无关服务，必须复核用途。
 
 ## 固定来源
 
-人工选择一个公开脚本版本，将源码快照保存到 `evidence/`，计算原始文件 SHA256，再在 `mirror-sources.json` 的 `sources` 中登记。当前清单包含 6 个已固定来源的元数据快照，可离线复现候选；快照保存在 `docs/evidence/sleazy-metadata/`，只包含域名声明和来源 hash，不包含第三方实现源码。
+人工选择一个公开脚本版本，将源码快照保存到 `evidence/`，计算原始文件 SHA256，再在 `mirror-sources.json` 的 `sources` 中登记。当前清单包含 8 个已固定来源的元数据快照，可离线复现候选；快照保存在 `docs/evidence/sleazy-metadata/` 与 `docs/evidence/greasy-metadata/`，只包含域名声明和来源 hash，不包含第三方实现源码。
 
 ```json
 {
@@ -16,7 +16,7 @@
 }
 ```
 
-上例为原始快照的结构说明，不是已取得的来源。脚本 ID、版本、地址与 hash 均需替换为实际证据。登记 URL 只能是公开 Sleazy HTTPS 地址，不带凭据、查询或片段。记录热门程度、抓取日期、版本和站点归属证据时，不保存登录信息、令牌或私有页面。元数据快照使用 `format: metadata`，并额外固定 `metadata_sha256`，候选工具同时核对元数据与来源 hash 关联。
+上例为原始快照的结构说明，不是已取得的来源。脚本 ID、版本、地址与 hash 均需替换为实际证据。登记 URL 只能是公开 Sleazy 或 Greasy HTTPS 地址，不带凭据、查询或片段。记录热门程度、抓取日期、版本和站点归属证据时，不保存登录信息、令牌或私有页面。元数据快照使用 `format: metadata`，并额外固定 `metadata_sha256`，候选工具同时核对元数据与来源 hash 关联。
 
 ## 生成候选
 
@@ -32,7 +32,7 @@ npm run candidates
 npm run candidates -- --fetch
 ```
 
-网络获取只访问登记的原始 Sleazy 地址，拒绝重定向，单次超时 15 秒，大小上限 2 MB，无自动重试。文件 hash 不符即失败；已有快照不会覆盖。缺失的元数据快照须从本地取证重新生成，不通过网络补写。无需网络即可重放同一批元数据快照并得到相同结果。
+网络获取只访问登记的原始 Sleazy 或 Greasy 地址，拒绝重定向，单次超时 15 秒，大小上限 2 MB，无自动重试。文件 hash 不符即失败；已有快照不会覆盖。缺失的元数据快照须从本地取证重新生成，不通过网络补写。无需网络即可重放同一批元数据快照并得到相同结果。
 
 结果在 `candidates/mirrors.json`，包含来源 URL、快照 SHA256、提取规则、已登记站点关联及未解析的模式。新站点的 `registered_site` 为 `null`。所有域名都标记为 `candidate`、`review: required`、`confidence: unverified`，包括已登记域名。`evidence/` 与 `candidates/` 默认不进入 Git；需要公开证据时，只提交复核所需的最小文本和公开 URL，并遵守来源许可。
 

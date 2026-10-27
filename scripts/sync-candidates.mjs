@@ -6,7 +6,8 @@ import { ROOT, validateManifest, validDomain } from './build.mjs';
 
 const MAX_BYTES = 2_000_000;
 export const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
-const sourceHosts = new Set(['sleazyfork.org', 'www.sleazyfork.org', 'update.sleazyfork.org']);
+const sourceHosts = new Set(['sleazyfork.org', 'www.sleazyfork.org', 'update.sleazyfork.org',
+  'greasyfork.org', 'www.greasyfork.org', 'update.greasyfork.org']);
 
 export function confined(root, path) {
   if (typeof path !== 'string' || !path || isAbsolute(path)) throw new Error('文件路径必须相对仓库根目录');
@@ -24,13 +25,13 @@ export function validateSources(registry) {
     try { url = new URL(source.url); evidence = new URL(source.evidence_url); } catch { throw new Error('候选来源 URL 无效'); }
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(source.id || '') || ids.has(source.id)
       || !/^[a-f0-9]{64}$/.test(source.sha256 || '') || typeof source.path !== 'string'
-      || !(source.format === 'metadata' ? source.path.startsWith('docs/evidence/sleazy-metadata/')
+      || !(source.format === 'metadata' ? /^docs\/evidence\/(?:sleazy|greasy)-metadata\//.test(source.path)
         && /^[a-f0-9]{64}$/.test(source.metadata_sha256 || '') : source.format === undefined && source.path.startsWith('evidence/'))
       || url.protocol !== 'https:' || !sourceHosts.has(url.hostname)
       || url.username || url.password || url.search || url.hash || url.port
       || evidence.protocol !== 'https:' || !sourceHosts.has(evidence.hostname) || evidence.port
       || evidence.username || evidence.password || evidence.search || evidence.hash) {
-      throw new Error('来源须包含唯一 ID、固定 SHA256、evidence/ 路径和公开 Sleazy URL');
+      throw new Error('来源须包含唯一 ID、固定 SHA256、evidence/ 路径和公开 Sleazy 或 Greasy URL');
     }
     ids.add(source.id);
   }
