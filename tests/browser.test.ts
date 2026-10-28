@@ -248,7 +248,7 @@ describe('JAV 用户脚本', () => {
         await answerMetadata(page, '9.1.0');
         await page.waitForFunction(() => document.querySelector('#peach-jav-updates')?.shadowRoot?.textContent?.includes('v9.1.0 可更新'));
         assert.equal(await updatePanel(page).getByRole('link', { name: '更新用户脚本' }).getAttribute('href'),
-          'https://sleazyfork.org/zh-CN/scripts/600821');
+          'https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js');
         assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.installed-version']), VERSION);
         await page.evaluate(() => window.javMock.menus['检测更新']!());
         await waitUpdates(page, 2);
@@ -330,7 +330,7 @@ describe('JAV 用户脚本', () => {
         assert.equal(requests[1]!.url,`${BASE}/api/jav-browser/updates`);
         const install = updatePanel(page).getByRole('link',{name:'更新用户脚本',exact:true});
         await install.waitFor();
-        assert.equal(await install.getAttribute('href'),example.source==='peach'?`${BASE}/integrations/peach-jav.user.js`:'https://sleazyfork.org/zh-CN/scripts/600821');
+        assert.equal(await install.getAttribute('href'),example.source==='peach'?`${BASE}/integrations/peach-jav.user.js`:'https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js');
         assert.ok((await updatePanel(page).getByLabel('用户脚本更新状态').innerText()).includes(`v${example.version}`));
       } finally { await close(); }
     });
