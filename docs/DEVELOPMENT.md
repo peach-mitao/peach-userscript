@@ -48,7 +48,7 @@ Sleazy 的中英文附加说明分别填写，按访客语言显示；历史更�
 
 对外名称以英文优先：默认 `@name` 与 `@description` 使用英文 `Peach Userscript`，`zh-CN`、`zh-TW` 由本地化元数据提供。Sleazy 会忽略与脚本默认语言相同的本地化名称，因此发布页的默认语言须保持英语，否则对应语言页面显示默认名。namespace 是安装身份，保持不变。0.6.3 之前的更新检查只接受旧名 `Peach · JAV 入库`；这些安装在脚本管理器按 `@updateURL` 升级前，Sleazy 来源显示未取得，升级后同时接受新旧两个名称。
 
-Sleazy 从 GitHub 同步：源码取 [最新 Release 的安装脚本](https://github.com/peach-mitao/peach-userscript/releases/latest/download/peach-jav.user.js)，默认附加信息取 `main` 分支的 `docs/SLEAZY.md`，`zh-CN` 附加信息取 `docs/SLEAZY.zh-CN.md`。因此发布即创建带四个制品的 GitHub Release，Sleazy 定期同步后生效；需要立即生效时在 Sleazy 管理页手动同步。
+Sleazy 从 GitHub 同步：源码取 [最新 Release 的安装脚本](https://github.com/peach-mitao/peach-userscript/releases/latest/download/peach-jav.user.js)，默认附加信息取 `main` 分支的 `docs/SLEAZY.md`，`zh-CN` 附加信息取 `docs/SLEAZY.zh-CN.md`。因此发布即创建带四个制品的 GitHub Release。仓库的 `release` webhook 会通知 Sleazy 立即同步，密钥由 Sleazy 账号的 webhook 设置页生成，只保存在 GitHub 仓库设置中；通知失败时 Sleazy 仍按定期同步更新，也可在其管理页手动同步。
 
 `dist/peach-jav.user.js` 可直接安装，`dist/jav-sites.json` 是版本化站点快照，`dist/release.json` 记录脚本版本与两个文件的 SHA256，`dist/SHA256SUMS` 用于校验制品。构建不写时间戳、不访问网络。CI 检查已提交制品与源文件一致，并上传制品。
 
