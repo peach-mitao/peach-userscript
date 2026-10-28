@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全漏洞 / Security vulnerability
+    url: https://github.com/peach-mitao/peach-userscript/security/advisories/new
+    about: 私下报告漏洞，不要公开利用细节。 / Report vulnerabilities privately.
+  - name: Peach 应用问题 / Peach app issues
+    url: https://github.com/peach-mitao/peach/issues/new/choose
+    about: 下载、入库与 Peach 设置页的问题请到主仓库反馈。 / Report download, import and Peach settings issues in the app repository.
