@@ -42,7 +42,7 @@ function body(state: State, code = 'SSIS-057'): Body {
 }
 
 async function open(browser: Browser, options: {
-  url?: string; title?: string; html?: string; configured?: boolean; viewport?: typeof VIEWPORTS[number]; initial?: State; script?: string; resolved?: string; automatic?: boolean; updateAutomatic?: boolean; updateValues?: Record<string, string | boolean>;
+  url?: string; title?: string; html?: string; quirks?: boolean; configured?: boolean; viewport?: typeof VIEWPORTS[number]; initial?: State; script?: string; resolved?: string; automatic?: boolean; updateAutomatic?: boolean; updateValues?: Record<string, string | boolean>;
 } = {}) {
   const viewport = options.viewport || VIEWPORTS[0]!;
   const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
@@ -51,7 +51,8 @@ async function open(browser: Browser, options: {
   page.on('pageerror', error => problems.push(error.message));
   // 所有页面均为内存夹具，不访问来源站点或 Peach 服务。
   await context.route('**/*', route => route.fulfill({
-    contentType: 'text/html; charset=utf-8', body: `<!doctype html><html><head><meta charset="utf-8"><title>${options.title || 'SSIS-057 作品详情'}</title></head><body>${options.html ?? '<h1>SSIS-057 作品详情</h1>'}</body></html>`,
+    // FANZA 等来源页没有 doctype，按怪异模式渲染。
+    contentType: 'text/html; charset=utf-8', body: `${options.quirks ? '' : '<!doctype html>'}<html><head><meta charset="utf-8"><title>${options.title || 'SSIS-057 作品详情'}</title></head><body>${options.html ?? '<h1>SSIS-057 作品详情</h1>'}</body></html>`,
   }));
   await page.addInitScript(({ configured, token, base, initial, resolved, automatic, version, updateAutomatic, updateValues }) => {
     const listeners = new Map<number, { key: string; callback: (key: string, oldValue: string | boolean, newValue: string | boolean, remote: boolean) => void }>();
@@ -362,7 +363,7 @@ describe('JAV 用户脚本', () => {
           document.dispatchEvent(new Event('visibilitychange'));
         });
         assert.equal(await page.evaluate(() => window.javMock.updates.length), 1);
-        assert.equal((await updatePanel(page).getByLabel('用户脚本更新状态').innerText()).includes('9.5.0'), false);
+        assert.equal(await page.evaluate(() => document.querySelector('#peach-jav-updates')!.shadowRoot!.textContent!.includes('9.5.0')), false);
         await page.clock.fastForward(86400_001);
         await waitUpdates(page, 2);
       } finally { await close(); }
@@ -1282,6 +1283,41 @@ describe('JAV 用户脚本', () => {
       await page.locator('#peach-jav-settings').waitFor({state:'detached'});
       assert.equal(await page.locator('#peach-jav-settings').count(), 0);
       assert.equal(await page.evaluate(() => window.javMock.calls.length), 0);
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
+  it('列表页图标先展开入口面板，本页番号返回后回到面板，怪异模式下字号与底栏不变形', async () => {
+    const opened = await open(browser, {url:'https://javdb.com/', title:'JavDB', quirks:true, updateAutomatic:false,
+      html:'<p>SSIS-057 ABP-616</p>'});
+    const {page} = opened;
+    const entry = page.locator('#peach-jav-updates');
+    try {
+      assert.equal(await page.evaluate(() => document.compatMode), 'BackCompat');
+      await entry.getByRole('button', {name:'Peach 设置与更新'}).click();
+      const scan = entry.getByRole('button', {name:'识别本页全部番号', exact:true});
+      await scan.waitFor();
+      assert.equal(await page.locator('#peach-jav-batch').count(), 0);
+      await scan.click();
+      const list = page.locator('#peach-jav-batch');
+      await list.getByRole('checkbox',{name:'选择 ABP-616',exact:true}).waitFor();
+      const fonts = await list.evaluate(host => {
+        const root = host.shadowRoot!;
+        return [getComputedStyle(root.querySelector('.body')!).fontSize, getComputedStyle(root.querySelector('td')!).fontSize];
+      });
+      assert.equal(fonts[1], fonts[0]);
+      await list.getByRole('button', {name:'返回 Peach 主界面', exact:true}).click();
+      await list.waitFor({state:'detached'});
+      await scan.waitFor();
+      assert.equal(await entry.getByRole('button', {name:'Peach 设置与更新'}).isVisible(), false);
+      await entry.getByRole('button', {name:'Peach 设置', exact:true}).click();
+      await page.evaluate(() => document.getAnimations().forEach(animation => animation.finish()));
+      const gap = await settingsDialog(page).evaluate(dialog =>
+        dialog.getBoundingClientRect().bottom - dialog.querySelector('form')!.getBoundingClientRect().bottom);
+      assert.ok(gap <= 1, `设置底栏下方空出 ${gap}px`);
+      await settingsDialog(page).getByRole('button', {name:'取消', exact:true}).click();
+      await entry.getByRole('button', {name:'收起', exact:true}).click();
+      await entry.getByRole('button', {name:'Peach 设置与更新'}).waitFor();
       assert.deepEqual(opened.problems, []);
     } finally { await opened.close(); }
   });
