@@ -7,7 +7,20 @@ Notable changes are grouped by version. English and Chinese describe the same be
 ### Fixed / 修复
 
 - Page-wide scans accept only codes written with a separator, matching Peach's validation. Usernames, navigation labels and domains such as `jay925`, `TOP250` and `hhd800.com` are no longer listed as codes. / 整页扫描只收原文带分隔符的番号，与 Peach 校验一致；`jay925`、`TOP250`、`hhd800.com` 这类用户名、导航与域名不再列为番号。
-- Long page-code lists keep a maximum height and scroll inside the table with a fixed header. / 本页番号较多时表格限高，在表内滚动并保留表头。
+- Long page-code lists keep a maximum height and scroll inside the table with a fixed header, using Peach's overlay scrollbar. / 本页番号较多时表格限高，用 Peach 的覆盖滚动条在表内滚动并保留表头。
+- Row statuses use short Board UI chips with Peach's status colors; the full message stays in the tooltip, and handled rows are unchecked. / 行状态改为 Board UI 短标签与 Peach 状态配色，完整说明放在悬停提示，已处理的行取消勾选。
+
+### Added / 新增
+
+- Statuses refresh automatically after submission for up to an hour, including download progress in the page-code list. / 提交后自动刷新状态，最长一小时，本页列表也显示下载进度。
+- Failures say whether the magnet or the cloud drive is at fault. A failed magnet can be switched for the next one from the card or by adding the row again. / 失败时区分磁力问题与网盘问题；磁力失效可在浮卡或再次加入时换一个磁力。
+- Performers listed on the detail page are matched with Peach's local people, so titles outside the library show performer avatars. / 详情页的出演者与 Peach 本地人物匹配，馆藏外的作品也能显示头像。
+- The card title shows performer avatars, stacked like Peach's title cards with the same hover spread; rescanning spins its icon. / 浮卡标题显示人物头像，沿用 Peach 作品卡的叠放与悬停展开；重新识别时图标旋转。
+- Adding plays Peach's rising start tone, and each title that finishes importing plays Peach's success chime; both can be turned off in settings. / 点加入时播放 Peach 的上扬开始音，每部影片完成入库时播放 Peach 的成功音效，均可在设置中关闭。
+
+### Compatibility / 兼容性
+
+- Magnet switching, failure causes and performer matching need a Peach release newer than 0.51.0; Peach 0.51.0 and earlier ignore the new fields and keep retrying the same magnet. / 换磁力、失败原因与出演者匹配需要 0.51.0 之后的 Peach 版本；0.51.0 及更早版本忽略新字段，重试仍使用原磁力。
 
 [Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/v0.6.4...v0.6.5)
 

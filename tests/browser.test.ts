@@ -22,6 +22,7 @@ type Call = { method: string; url: string; headers: Record<string, string>; anon
 type MockRequest = Call & { onload(value: unknown): void; ontimeout(): void; onerror(): void; onabort?(): void };
 type Mock = {
   peopleItems: Record<string, {name:string;avatar?:string}[]>;
+  peopleRequests: string[];
   calls: Call[];
   reports: MockRequest[];
   updates: MockRequest[];
@@ -56,7 +57,7 @@ async function open(browser: Browser, options: {
     const listeners = new Map<number, { key: string; callback: (key: string, oldValue: string | boolean, newValue: string | boolean, remote: boolean) => void }>();
     let nextListener = 0;
     const mock: Mock = {
-      calls: [], reports: [], pending: [], updates: [], automatic, updateAutomatic, menus: {}, peopleItems:{},
+      calls: [], reports: [], pending: [], updates: [], automatic, updateAutomatic, menus: {}, peopleItems:{}, peopleRequests:[],
       values: { ...(configured ? { 'peach.jav.base': base, 'peach.jav.token': token } : {}), ...updateValues },
       changed(key, value, remote = false) {
         const previous = mock.values[key] ?? '';
@@ -79,6 +80,7 @@ async function open(browser: Browser, options: {
       GM_registerMenuCommand: (label: string, callback: () => void) => { mock.menu = callback; mock.menus[label] = callback; },
       GM_xmlhttpRequest: (request: MockRequest) => {
         if(new URL(request.url).pathname==='/api/jav-browser/people'){
+          mock.peopleRequests.push(request.url);
           setTimeout(()=>request.onload({status:200,responseText:JSON.stringify({ok:true,source:'local-cache',items:Object.fromEntries(new URL(request.url).searchParams.get('codes')!.split(',').map(code=>[code,mock.peopleItems[code]||[]]))})}),0);
           return {abort:()=>request.onabort?.()};
         }
@@ -119,8 +121,10 @@ async function pairingStorage(page: Page) {
     'peach.jav.updates': updates,
     'peach.jav.display': display,
     'peach.jav.enabled': enabled,
+    'peach.jav.success-sound': sound,
     ...pairing
   } = values;
+  if (sound !== undefined) assert.equal(typeof sound, 'boolean');
   if (installed !== undefined) assert.equal(installed, VERSION);
   if (attempted !== undefined) assert.match(String(attempted), /^\d+$/);
   if (updates !== undefined) assert.deepEqual(JSON.parse(String(updates)), { script: { version: VERSION } });
@@ -1130,7 +1134,7 @@ describe('JAV 用户脚本', () => {
     } finally { await opened.close(); }
   });
 
-  it('后台状态轮询有次数上限且不创建 POST，馆藏已有时不可加入', async () => {
+  it('后台状态轮询先密后疏、最长一小时且不创建 POST，馆藏已有时不可加入', async () => {
     const opened = await open(browser, { initial: 'queued' });
     try {
       await pending(opened.page, 1);
@@ -1139,13 +1143,17 @@ describe('JAV 用户脚本', () => {
         await opened.page.clock.fastForward(2100);
         await pending(opened.page, index + 2);
       }
-      await opened.page.clock.fastForward(10);
-      await ready(opened.page, '查询 Peach 状态');
-      const calls = await opened.page.evaluate(() => window.javMock.calls);
-      assert.equal(calls.length, 31);
-      assert.ok(calls.every(call => call.method === 'GET'));
-      await opened.page.clock.fastForward(60_000);
+      await opened.page.clock.fastForward(2100);
       assert.equal(await opened.page.evaluate(() => window.javMock.calls.length), 31);
+      await opened.page.clock.fastForward(13_000);
+      await pending(opened.page, 32);
+      await opened.page.clock.runFor(60 * 60_000);
+      const calls = await opened.page.evaluate(() => window.javMock.calls);
+      assert.ok(calls.length > 32 && calls.length < 300, `轮询次数 ${calls.length}`);
+      assert.ok(calls.every(call => call.method === 'GET'));
+      await ready(opened.page, '查询 Peach 状态');
+      await opened.page.clock.runFor(10 * 60_000);
+      assert.equal(await opened.page.evaluate(() => window.javMock.calls.length), calls.length);
     } finally { await opened.close(); }
     const owned = await open(browser, { initial: 'owned' });
     try {
@@ -1308,6 +1316,113 @@ describe('JAV 用户脚本', () => {
     } finally {await opened.close();}
   });
 
+  it('提交后的行显示短状态与对应颜色，完整说明在悬停提示，已处理的行取消勾选', async () => {
+    const opened = await open(browser, {url:'https://javdb.com/', html:'<p>SSIS-057 ABP-616 IPX-001</p>', automatic:false});
+    const {page} = opened;
+    try {
+      await page.evaluate(() => window.javMock.menus['开启']!());
+      const list = page.locator('#peach-jav-batch');
+      const status = (code: string) => list.locator('.batch-row', {hasText: code}).locator('.batch-row-status');
+      const chip = async (code: string) => status(code).evaluate(node => ({text: node.textContent, color: (node as HTMLElement).dataset.chip, title: (node as HTMLElement).title}));
+      await list.getByRole('checkbox',{name:'选择 SSIS-057',exact:true}).check();
+      assert.deepEqual(await chip('ABP-616'), {text:'待加入', color:'plain', title:'待加入'});
+      await list.getByRole('button',{name:'全部加入（3）',exact:true}).click();
+      await pending(page, 1);
+      assert.deepEqual(await chip('SSIS-057'), {text:'提交中', color:'blue', title:'正在交给 Peach…'});
+      await reply(page, 0, body('owned', 'SSIS-057'));
+      await pending(page, 2);
+      await page.evaluate(() => window.javMock.reply(1, {}, 503));
+      await pending(page, 3);
+      await reply(page, 2, {...body('no_match', 'IPX-001'), message:'未找到可自动下载的磁力，可重试'});
+      await list.locator('.geist-note', {hasText: '已处理 3/3 项'}).waitFor();
+      assert.deepEqual(await chip('SSIS-057'), {text:'已有', color:'lime', title:'馆藏已有该番号影片'});
+      assert.deepEqual(await chip('ABP-616'), {text:'服务不可用', color:'rose', title:'Peach 服务暂时不可用，请稍后查询状态。'});
+      assert.deepEqual(await chip('IPX-001'), {text:'无资源', color:'yellow', title:'未找到可自动下载的磁力，可重试'});
+      assert.equal(await list.getByRole('checkbox',{name:'选择 SSIS-057',exact:true}).isChecked(), false);
+      assert.equal(await list.getByRole('button',{name:'全部加入（2）',exact:true}).count(), 1);
+      const widths = await status('ABP-616').evaluate(node => ({chip: node.getBoundingClientRect().right, cell: node.closest('td')!.getBoundingClientRect().right}));
+      assert.ok(widths.chip <= widths.cell, `状态未完整显示：${JSON.stringify(widths)}`);
+      assert.deepEqual(opened.problems,[]);
+    } finally {await opened.close();}
+  });
+
+  it('列表提交后自动查询进行中的行，磁力失效的行再次加入时换一个磁力', async () => {
+    const opened = await open(browser, {url:'https://javdb.com/', html:'<p>SSIS-057 ABP-616</p>', automatic:false});
+    const {page} = opened;
+    try {
+      await page.evaluate(() => window.javMock.menus['开启']!());
+      const list = page.locator('#peach-jav-batch');
+      const chip = (code: string) => list.locator('.batch-row', {hasText: code}).locator('.batch-row-status');
+      await list.getByRole('button',{name:'全部加入（2）',exact:true}).click();
+      await pending(page, 1);
+      await reply(page, 0, body('queued', 'SSIS-057'));
+      await pending(page, 2);
+      await page.evaluate(() => window.javMock.reply(1, {ok:true, code:'ABP-616', state:'failed', cause:'magnet', failure:'no_source', message:'没有可用下载源'}));
+      await list.locator('.geist-note', {hasText: '1 项磁力失效，再次加入会换一个磁力'}).waitFor();
+      assert.equal(await chip('ABP-616').textContent(), '磁力失效');
+      assert.equal(await chip('ABP-616').getAttribute('title'), '磁力问题：没有可用下载源。可以换一个磁力。');
+      await page.clock.fastForward(2100);
+      await pending(page, 3);
+      assert.equal(await page.evaluate(() => window.javMock.calls[2]!.method), 'GET');
+      await page.evaluate(() => window.javMock.reply(2, {ok:true, code:'SSIS-057', state:'submitted',
+        download:{state:'remote_running', label:'网盘下载中', progress:.42}}));
+      await list.locator('.batch-row-status', {hasText: '下载中 42%'}).waitFor();
+      await list.getByRole('button',{name:'全部加入（1）',exact:true}).click();
+      await page.waitForFunction(() => window.javMock.calls.some(call => call.method === 'POST' && JSON.parse(call.data!).code === 'ABP-616' && JSON.parse(call.data!).switch === true));
+      assert.equal(await chip('ABP-616').getAttribute('title'), '正在换一个磁力…');
+      assert.deepEqual(opened.problems,[]);
+    } finally {await opened.close();}
+  });
+
+  for (const enabled of [true, false]) it(`点加入${enabled ? '播放开始音，影片完成入库再播放成功音' : '与完成入库都按设置不出声'}`, async () => {
+    const opened = await open(browser, {url:'https://javdb.com/', html:'<p>SSIS-057</p>', automatic:false,
+      updateValues: enabled ? {} : {'peach.jav.success-sound': false}});
+    const {page} = opened;
+    try {
+      await page.evaluate(() => {
+        const tones: number[] = [];
+        (window as unknown as {tones: number[]}).tones = tones;
+        class FakeContext {
+          state = 'running'; currentTime = 0; destination = {};
+          createOscillator() { return {type:'', frequency:{setValueAtTime:(value: number) => tones.push(value), exponentialRampToValueAtTime(){}}, connect(){}, start(){}, stop(){}}; }
+          createGain() { return {gain:{setValueAtTime(){}, exponentialRampToValueAtTime(){}}, connect(){}}; }
+        }
+        Object.assign(window, {AudioContext: FakeContext});
+        window.javMock.menus['开启']!();
+      });
+      const list = page.locator('#peach-jav-batch');
+      await list.getByRole('button',{name:'全部加入（1）',exact:true}).click();
+      await pending(page, 1);
+      assert.deepEqual(await page.evaluate(() => (window as unknown as {tones: number[]}).tones), enabled ? [550] : []);
+      await reply(page, 0, body('submitted', 'SSIS-057'));
+      await page.clock.fastForward(2100);
+      await pending(page, 2);
+      await reply(page, 1, body('ingested', 'SSIS-057'));
+      await list.locator('.batch-row-status', {hasText: '已入库'}).waitFor();
+      assert.deepEqual(await page.evaluate(() => (window as unknown as {tones: number[]}).tones), enabled ? [550, 523, 523 * 1.25] : []);
+      assert.deepEqual(opened.problems,[]);
+    } finally {await opened.close();}
+  });
+
+  it('单个人物头像悬停不抬起，两枚以上才抬起让位', async () => {
+    const opened = await open(browser, {url:'https://javdb.com/', html:'<p>SSIS-057 ABP-616</p>'});
+    const {page} = opened;
+    try {
+      await page.evaluate(() => { window.javMock.peopleItems = {'SSIS-057':[{name:'Alice'}], 'ABP-616':[{name:'Alice'},{name:'Bella'}]}; window.javMock.menus['开启']!(); });
+      const list = page.locator('#peach-jav-batch');
+      const lifted = async (code: string) => {
+        const avatar = list.locator('.batch-row', {hasText: code}).locator('.batch-person').first();
+        await avatar.waitFor();
+        await avatar.hover();
+        return avatar.evaluate(node => getComputedStyle(node).getPropertyValue('--lift-scale').trim());
+      };
+      await list.locator('.batch-row', {hasText: 'ABP-616'}).getByRole('img', {name: 'Bella', exact: true}).waitFor();
+      assert.equal(await lifted('SSIS-057'), '');
+      assert.equal(await lifted('ABP-616'), '1.05');
+      assert.deepEqual(opened.problems,[]);
+    } finally {await opened.close();}
+  });
+
   it('候选较多时表格限高，在表内滚动并保留表头', async () => {
     const codes = Array.from({length:30}, (_, index) => `ABP-${String(index + 100)}`).join(' ');
     const opened = await open(browser, {url:'https://javdb.com/', html:`<p>${codes}</p>`});
@@ -1323,6 +1438,39 @@ describe('JAV 用户脚本', () => {
       assert.equal(metrics.scrolls, true);
       assert.ok(metrics.height <= 482, `表格高度 ${metrics.height}`);
       assert.ok(metrics.headTop <= 1, `表头偏移 ${metrics.headTop}`);
+      assert.deepEqual(opened.problems,[]);
+    } finally {await opened.close();}
+  });
+
+  it('DMM 详情页把出演者随番号查询人物，浮卡标题与本页列表都显示', async () => {
+    const opened = await open(browser,{url:'https://video.dmm.co.jp/av/content/?id=dasd00911',title:'作品详情',resolved:'DASD-911',
+      html:'<table><tr><th>出演者：</th><td><a href="/av/list/?actress=1">河北彩花（河北彩伽）</a></td></tr><tr><th>メーカー品番：</th><td>DASD-911</td></tr></table>'});
+    const {page} = opened;
+    try {
+      await page.evaluate(() => { window.javMock.peopleItems = {'DASD-911': [{name:'河北彩花'}]}; });
+      await ready(page);
+      await page.locator(ROOT).locator('.bar-title').getByRole('img',{name:'河北彩花',exact:true}).waitFor();
+      await page.locator(ROOT).getByRole('button',{name:'识别本页全部番号',exact:true}).click();
+      const list = page.locator('#peach-jav-batch');
+      await list.locator('.batch-row').first().getByRole('img',{name:'河北彩花',exact:true}).waitFor();
+      const queried = await page.evaluate(() => window.javMock.peopleRequests.map(url => new URL(url).searchParams.getAll('performers')));
+      assert.ok(queried.some(names => names.length === 1 && names[0] === '河北彩花（河北彩伽）'), JSON.stringify(queried));
+      assert.ok(queried.every(names => names.length === 0 || names[0] === '河北彩花（河北彩伽）'));
+      assert.deepEqual(opened.problems,[]);
+    } finally {await opened.close();}
+  });
+
+  it('JavDB 详情页的出演者保留 ♀/♂ 标记交给 Peach 判别', async () => {
+    const opened = await open(browser,{url:'https://javdb.com/v/AbC123',title:'SSIS-839 | JavDB',
+      html:'<h2 class="title">SSIS-839 標題</h2><div class="panel-block"><strong>番號:</strong><span class="value">SSIS-839</span></div>'
+        + '<div class="panel-block"><strong>演員:</strong><span class="value"><a href="/actors/a">河北彩花</a><strong class="symbol female">♀</strong>'
+        + '<a href="/actors/b">男優</a><strong class="symbol male">♂</strong></span></div>'});
+    const {page} = opened;
+    try {
+      await ready(page);
+      await page.waitForFunction(() => window.javMock.peopleRequests.length > 0);
+      const queried = await page.evaluate(() => new URL(window.javMock.peopleRequests[0]!).searchParams.getAll('performers'));
+      assert.deepEqual(queried, ['河北彩花♀', '男優♂']);
       assert.deepEqual(opened.problems,[]);
     } finally {await opened.close();}
   });
