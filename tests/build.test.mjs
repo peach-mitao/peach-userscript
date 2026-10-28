@@ -46,6 +46,9 @@ test('本地安装制品声明固定的 Sleazy 自动更新渠道', async () => 
   assert.equal(script.match(/^\/\/ @name:en\s+(.+)$/m)?.[1], 'Peach Userscript');
   assert.equal(script.match(/^\/\/ @name:zh-TW\s+(.+)$/m)?.[1], 'Peach 使用者腳本');
   assert.equal(script.match(/^\/\/ @name\s+(.+)$/m)?.[1], 'Peach Userscript');
+  assert.equal(script.match(/^\/\/ @author\s+(.+)$/m)?.[1], 'longmeidao');
+  assert.equal(script.match(/^\/\/ @icon\s+(.+)$/m)?.[1],
+    'https://raw.githubusercontent.com/peach-mitao/peach-userscript/main/assets/peach-logo-64.png');
 });
 
 test('发布元数据为每个本地化名称提供对应语言的简介', async () => {

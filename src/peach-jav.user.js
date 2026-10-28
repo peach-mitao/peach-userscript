@@ -4,13 +4,15 @@
 // @name:zh-TW   Peach 使用者腳本
 // @name:en      Peach Userscript
 // @namespace    https://github.com/peach-mitao/peach-userscript
+// @author       longmeidao
+// @icon         https://raw.githubusercontent.com/peach-mitao/peach-userscript/main/assets/peach-logo-64.png
 // @source       https://github.com/peach-mitao/peach-userscript
 // @supportURL   https://github.com/peach-mitao/peach-userscript/issues
 // @homepageURL  https://github.com/peach-mitao/peach-userscript
 // @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
 // @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.6.3
+// @version      0.6.4
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
