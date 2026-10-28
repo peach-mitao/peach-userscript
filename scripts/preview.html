@@ -18,12 +18,12 @@
     <p class="meta">Peach 用户脚本 · 交互预览</p>
     <p>右下角可打开设置、保存模拟地址与令牌，或查看添加状态。此页使用内存数据，刷新会还原。</p>
     <nav aria-label="预览状态">
-      <a href="?state=unconfigured">未配置</a><a href="?state=idle">可添加</a><a href="?state=owned">馆藏已有</a><a href="?state=failed">连接失败</a>
+      <a href="?state=unconfigured">未配置</a><a href="?state=idle">可添加</a><a href="?state=owned">馆藏已有</a><a href="?state=failed">连接失败</a><a href="?state=magnet">磁力失效</a>
       <button type="button" id="open-settings">打开设置</button>
       <button type="button" id="activate-script">开启</button>
       <button type="button" id="check-script-update">检测更新</button>
       <button type="button" id="copy-pairing">复制模拟配对信息</button>
-      <a href="?site=dmm&state=idle">DMM 商品号</a><a href="?site=mgs&state=idle">MGS 商品号</a>
+      <a href="?site=dmm&state=idle">DMM 商品号</a><a href="?site=mgs&state=idle">MGS 商品号</a><a href="?state=idle&scan=javdb">JavDB 整页扫描</a><a href="?state=idle&scan=states">本页番号行状态</a>
     </nav>
     <h1>REAL-864 作品详情</h1>
     <p class="meta">来源页面示意</p>
@@ -39,6 +39,32 @@
       document.title = code + ' 作品详情';
       document.querySelector('h1').textContent = code + ' 作品详情';
     }
+    if (new URLSearchParams(location.search).get('scan') === 'javdb') {
+      // 仿 JavDB 详情页：导航、磁链、相关作品与短评用户名，外加 30 部相关作品用于查看表格滚动。
+      const related = Array.from({length: 30}, (_, index) => `<li>ABP-${100 + index}</li>`).join('');
+      document.querySelector('main').insertAdjacentHTML('beforeend', `<section aria-label="整页扫描样例">
+        <h2>整页扫描样例</h2><nav>TOP250 演员 系列</nav>
+        <p>磁链：hhd800.com@FC2-PPV-4302474.mp4 · FC2PPV 4302474</p>
+        <p>相关作品：FC2-4091275 · FC2-4162241 · Exclusive50%OFF!</p>
+        <p>短评：jay925、hush666、lexburner69、anhyt88888888、guangdao19450806、xxxc11、top10</p>
+        <ul>${related}</ul></section>`);
+    }
+    // 行状态样例：每个番号提交后返回一种结果，部分番号带模拟人物资料。
+    const ROW_STATES = {'REAL-864':'owned','FC2-PPV-4302474':'queued','FC2-PPV-4091275':'searching','FC2-PPV-4162241':'submitted',
+      'ABP-100':'ingested','ABP-101':'no_match','ABP-102':'failed-magnet','ABP-103':'failed-cloud','ABP-104':'offline'};
+    // 提交后的行随轮询往前走；换磁力的行从排队重新开始。
+    const ROW_FLOW = ['queued','searching','remote_running:.1','remote_running:.4','remote_running:.8','landed','ingested'];
+    const rowStep = {};
+    const rowBody = code => {
+      const step = ROW_FLOW[Math.min(rowStep[code] ?? 0, ROW_FLOW.length - 1)], [state, progress] = step.split(':');
+      if (['queued','searching','ingested'].includes(state)) return {ok:true, code, state};
+      return {ok:true, code, state:'submitted', download:{state, label:state === 'landed' ? '文件已可访问' : '网盘下载中', progress:Number(progress)}};
+    };
+    const FAILURES = {'failed-magnet':{cause:'magnet', failure:'no_source', message:'没有可用下载源或进度长时间未更新'},
+      'failed-cloud':{cause:'cloud', failure:'quota', message:'下载额度已用完'}};
+    const ROW_PEOPLE = {'ABP-100':[{name:'Alice'},{name:'Bella'}],'ABP-101':[{name:'Alice'},{name:'Bella'},{name:'Cora'},{name:'Dana'}]};
+    if (new URLSearchParams(location.search).get('scan') === 'states')
+      document.querySelector('main').insertAdjacentHTML('beforeend', `<section aria-label="行状态样例"><h2>行状态样例</h2><dl><dt>出演者：</dt><dd><a href="#">河北彩花（河北彩伽）</a></dd></dl><p>${Object.keys(ROW_STATES).slice(1).join(' ')}</p></section>`);
     const previewValues = previewState === 'unconfigured' ? {} : { 'peach.jav.base': 'https://peach.example.com', 'peach.jav.token': 'preview-only-token' };
     const previewMenus = {};
     Object.assign(window, {
@@ -47,8 +73,37 @@
       GM_registerMenuCommand: (label, callback) => { previewMenus[label] = callback; },
       GM_xmlhttpRequest: request => setTimeout(() => {
         if (previewState === 'failed') { request.onerror(); return; }
+        if (new URLSearchParams(location.search).get('scan') === 'states') {
+          const url = new URL(request.url);
+          if (url.pathname.endsWith('/people')) {
+            // 模拟 Peach：按番号预置的人物优先，其余按详情页出演者去掉括号别名后返回。
+            const page = url.searchParams.getAll('performers').map(name => ({name: name.replace(/[（(].*?[）)]/g, '').replace('♀', '').trim()}));
+            const items = Object.fromEntries(url.searchParams.get('codes').split(',').map(code => [code, ROW_PEOPLE[code] || page]));
+            request.onload({status:200,responseText:JSON.stringify({ok:true,source:'local-cache',items})}); return;
+          }
+          if (request.method === 'POST') {
+            const data = JSON.parse(request.data), code = data.code;
+            if (data.switch === true) { ROW_STATES[code] = 'flow'; rowStep[code] = 0; }
+            const state = ROW_STATES[code] || 'queued';
+            if (state === 'offline') { request.onerror(); return; }
+            if (FAILURES[state]) { request.onload({status:200,responseText:JSON.stringify({ok:true,code,state:'failed',...FAILURES[state]})}); return; }
+            if (['queued','searching','submitted','flow'].includes(state)) {
+              rowStep[code] = {searching:1, submitted:2}[state] ?? 0;
+              request.onload({status:200,responseText:JSON.stringify(rowBody(code))}); return;
+            }
+            request.onload({status:200,responseText:JSON.stringify({ok:true,code,state,...(state === 'no_match' ? {message:'未找到可自动下载的磁力，可重试'} : {})})}); return;
+          }
+          const polled = url.searchParams.get('code');
+          if (polled && polled in rowStep) {
+            rowStep[polled] += 1;
+            request.onload({status:200,responseText:JSON.stringify(rowBody(polled))}); return;
+          }
+        }
         const code = new URLSearchParams(location.search).get('site') === 'dmm' ? 'SSIS-519'
           : new URLSearchParams(location.search).get('site') === 'mgs' ? '300MIUM-1239' : 'REAL-864';
+        if (previewState === 'magnet' && request.method !== 'POST') {
+          request.onload({status:200,responseText:JSON.stringify({ok:true,code,state:'failed',cause:'magnet',failure:'no_source',message:'没有可用下载源或进度长时间未更新'})}); return;
+        }
         request.onload({status:200,responseText:JSON.stringify({ok:true,code,state:request.method === 'POST' ? 'queued' : previewState === 'owned' ? 'owned' : 'idle'})});
       }, 650),
     });
@@ -68,6 +123,19 @@
   <script>
     const previewScript = document.createElement('script');
     previewScript.src = '/preview.user.js?site=' + encodeURIComponent(new URLSearchParams(location.search).get('site') || 'missav');
+    // 状态总览用：auto=list 自动打开本页番号，auto=submit 再点全部加入。
+    const previewAuto = new URLSearchParams(location.search).get('auto');
+    if (previewAuto) previewScript.addEventListener('load', async () => {
+      const shadow = id => document.getElementById(id)?.shadowRoot;
+      const until = async test => { for (let i = 0; i < 100 && !test(); i++) await new Promise(r => setTimeout(r, 100)); };
+      await until(() => shadow('peach-jav-action')?.querySelector('.bar'));
+      if (previewAuto === 'settings') { previewMenus['设置'](); return; }
+      [...shadow('peach-jav-action').querySelectorAll('button')].find(b => /识别本页全部番号/.test(b.getAttribute('aria-label') || b.textContent))?.click();
+      if (previewAuto !== 'submit') return;
+      await until(() => shadow('peach-jav-batch')?.querySelector('.batch-row'));
+      await new Promise(r => setTimeout(r, 600));
+      [...shadow('peach-jav-batch').querySelectorAll('button')].find(b => b.textContent.startsWith('全部加入'))?.click();
+    });
     document.body.append(previewScript);
   </script>
 </body>

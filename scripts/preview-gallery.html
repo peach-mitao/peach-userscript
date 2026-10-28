@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Peach 用户脚本 · 状态总览</title>
+  <style>
+    :root{font:400 14px/1.6 system-ui,sans-serif;color-scheme:light dark;color:light-dark(#171717,#e7e7ea);background:light-dark(#fafafa,#101218)}
+    body{margin:0;padding:24px}h1{font-size:20px;font-weight:500;margin:0 0 4px}p{margin:0 0 16px;color:light-dark(#666,#a5a8b1)}
+    main{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:20px}figure{margin:0}
+    figcaption{margin-bottom:6px;font-weight:500}figcaption a{font-weight:400;margin-left:8px;color:inherit}
+    iframe{width:100%;height:760px;border:1px solid light-dark(#ddd,#34363c);border-radius:12px;background:light-dark(#fafafa,#101218)}
+  </style>
+</head>
+<body>
+  <h1>Peach 用户脚本 · 状态总览</h1>
+  <p>每一格都是真实脚本加内存模拟接口，可直接操作；深浅色跟随浏览器。提交后的格子会自动刷新状态，刷新本页即可重放。</p>
+  <main><figure><figcaption>浮卡：未配置 <a href="/?state=unconfigured" target="_blank">单独打开</a></figcaption><iframe src="/?state=unconfigured" title="浮卡：未配置" loading="lazy"></iframe></figure><figure><figcaption>浮卡：可添加 <a href="/?state=idle" target="_blank">单独打开</a></figcaption><iframe src="/?state=idle" title="浮卡：可添加" loading="lazy"></iframe></figure><figure><figcaption>浮卡：馆藏已有 <a href="/?state=owned" target="_blank">单独打开</a></figcaption><iframe src="/?state=owned" title="浮卡：馆藏已有" loading="lazy"></iframe></figure><figure><figcaption>浮卡：磁力失效（换一个磁力） <a href="/?state=magnet" target="_blank">单独打开</a></figcaption><iframe src="/?state=magnet" title="浮卡：磁力失效（换一个磁力）" loading="lazy"></iframe></figure><figure><figcaption>浮卡：连接失败 <a href="/?state=failed" target="_blank">单独打开</a></figcaption><iframe src="/?state=failed" title="浮卡：连接失败" loading="lazy"></iframe></figure><figure><figcaption>浮卡：DMM 商品号 <a href="/?site=dmm&state=idle" target="_blank">单独打开</a></figcaption><iframe src="/?site=dmm&state=idle" title="浮卡：DMM 商品号" loading="lazy"></iframe></figure><figure><figcaption>设置：加入完成音效开关 <a href="/?state=idle&auto=settings" target="_blank">单独打开</a></figcaption><iframe src="/?state=idle&auto=settings" title="设置：加入完成音效开关" loading="lazy"></iframe></figure><figure><figcaption>本页番号：提交前（叠放头像、待加入） <a href="/?state=idle&scan=states&auto=list" target="_blank">单独打开</a></figcaption><iframe src="/?state=idle&scan=states&auto=list" title="本页番号：提交前（叠放头像、待加入）" loading="lazy"></iframe></figure><figure><figcaption>本页番号：提交后自动刷新（失败分类、换磁力） <a href="/?state=idle&scan=states&auto=submit" target="_blank">单独打开</a></figcaption><iframe src="/?state=idle&scan=states&auto=submit" title="本页番号：提交后自动刷新（失败分类、换磁力）" loading="lazy"></iframe></figure><figure><figcaption>本页番号：30 条候选（限高与覆盖滚动条） <a href="/?state=idle&scan=javdb&auto=list" target="_blank">单独打开</a></figcaption><iframe src="/?state=idle&scan=javdb&auto=list" title="本页番号：30 条候选（限高与覆盖滚动条）" loading="lazy"></iframe></figure></main>
+</body>
+</html>

@@ -12,10 +12,14 @@ const server = createServer(async (request, response) => {
       const site = url.searchParams.get('site');
       const fixture = site === 'dmm' ? 'https://video.dmm.co.jp/av/content/?id=ssis00519'
         : site === 'mgs' ? 'https://www.mgstage.com/product/product_detail/300MIUM-1239/' : 'https://missav.ws/en/real-864';
+      // 状态总览把各状态放进 iframe；正式脚本拒绝在框架里运行，只在预览构建里放开。
       const script = files.get('peach-jav.user.js').replace("  'use strict';", `  'use strict';
-  const location = new URL(${JSON.stringify(fixture)});`);
+  const location = new URL(${JSON.stringify(fixture)});`).replace('if (window.top !== window.self) return;', '');
       response.setHeader('Content-Type', 'text/javascript; charset=utf-8');
       response.end(script);
+    } else if (url.pathname === '/gallery') {
+      response.setHeader('Content-Type', 'text/html; charset=utf-8');
+      response.end(await readFile(new URL('./preview-gallery.html', import.meta.url)));
     } else {
       response.setHeader('Content-Type', 'text/html; charset=utf-8');
       response.end(await readFile(new URL('./preview.html', import.meta.url)));
