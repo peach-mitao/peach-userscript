@@ -1295,6 +1295,38 @@ describe('JAV 用户脚本', () => {
     } finally {await opened.close();}
   });
 
+  it('整页扫描只收带分隔符的番号，不把用户名、导航和域名补成番号', async () => {
+    const opened = await open(browser, {url:'https://javdb.com/', html:'<nav>TOP250</nav><p>hhd800.com@FC2-PPV-4302474.mp4</p>'
+      + '<p>Exclusive50%OFF!</p><p>jay925 hush666 lexburner69 guangdao19450806</p><p>FC2-4091275 SSIS-057 ssis058</p>'});
+    const {page} = opened;
+    try {
+      await page.evaluate(() => window.javMock.menus['开启']!());
+      const list = page.locator('#peach-jav-batch');
+      await list.getByRole('checkbox',{name:'选择 SSIS-057',exact:true}).waitFor();
+      assert.deepEqual(await list.locator('.batch-row-code').allTextContents(), ['FC2-PPV-4302474','FC2-PPV-4091275','SSIS-057']);
+      assert.deepEqual(opened.problems,[]);
+    } finally {await opened.close();}
+  });
+
+  it('候选较多时表格限高，在表内滚动并保留表头', async () => {
+    const codes = Array.from({length:30}, (_, index) => `ABP-${String(index + 100)}`).join(' ');
+    const opened = await open(browser, {url:'https://javdb.com/', html:`<p>${codes}</p>`});
+    const {page} = opened;
+    try {
+      await page.evaluate(() => window.javMock.menus['开启']!());
+      const list = page.locator('#peach-jav-batch');
+      await list.getByRole('checkbox',{name:'选择 ABP-129',exact:true}).waitFor({state:'attached'});
+      const frame = list.locator('.batch-list');
+      const metrics = await frame.evaluate(node => { node.scrollTop = node.scrollHeight;
+        const head = node.querySelector('thead')!.getBoundingClientRect(), box = node.getBoundingClientRect();
+        return {scrolls: node.scrollHeight > node.clientHeight, height: box.height, headTop: Math.round(head.top - box.top)}; });
+      assert.equal(metrics.scrolls, true);
+      assert.ok(metrics.height <= 482, `表格高度 ${metrics.height}`);
+      assert.ok(metrics.headTop <= 1, `表头偏移 ${metrics.headTop}`);
+      assert.deepEqual(opened.problems,[]);
+    } finally {await opened.close();}
+  });
+
   it('DMM 页面扫描排除设备名并复用 Peach 已解析的规范番号', async () => {
     const opened = await open(browser,{url:'https://video.dmm.co.jp/av/content/?id=dasd00911',title:'作品详情',
       html:'<nav>PS5 PS4</nav><p>商品番号 dasd00911</p><img alt="DASD00911">',resolved:'DASD-911'});

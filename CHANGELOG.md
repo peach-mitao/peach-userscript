@@ -2,6 +2,15 @@
 
 Notable changes are grouped by version. English and Chinese describe the same behavior; source-only versions are marked explicitly. / 按版本记录面向使用者的变化；中英文保持事实一致，未单独发布的源码版本明确标注。
 
+## 0.6.5 — 2026-10-28
+
+### Fixed / 修复
+
+- Page-wide scans accept only codes written with a separator, matching Peach's validation. Usernames, navigation labels and domains such as `jay925`, `TOP250` and `hhd800.com` are no longer listed as codes. / 整页扫描只收原文带分隔符的番号，与 Peach 校验一致；`jay925`、`TOP250`、`hhd800.com` 这类用户名、导航与域名不再列为番号。
+- Long page-code lists keep a maximum height and scroll inside the table with a fixed header. / 本页番号较多时表格限高，在表内滚动并保留表头。
+
+[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/v0.6.4...v0.6.5)
+
 ## 0.6.4 — 2026-10-28
 
 ### Fixed / 修复

@@ -12,7 +12,7 @@
 // @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
 // @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.6.4
+// @version      0.6.5
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -274,7 +274,9 @@
     fieldset.display-scope{margin:0;padding:0;border:0;display:grid;gap:8px;min-width:0}
     .display-scope legend{font:var(--board-body-medium);margin-bottom:8px}.display-scope label{display:flex;align-items:center;gap:8px;cursor:pointer}
     .display-scope input{accent-color:var(--color-accent-500);width:16px;height:16px;margin:0;flex:none}
-    .batch-list{position:relative;border:1px solid var(--line);border-radius:var(--control-radius);overflow:hidden;background:var(--color-background-primary-default)}
+    .batch-list{position:relative;border:1px solid var(--line);border-radius:var(--control-radius);overflow:auto;overscroll-behavior:contain;
+      max-height:min(480px,calc(100dvh - 320px));min-height:97px;scrollbar-width:thin;scrollbar-color:var(--line) transparent;background:var(--color-background-primary-default)}
+    .batch-list thead th{position:sticky;top:0;z-index:1}
     .bui-table{width:100%;border-collapse:collapse;text-align:left;table-layout:fixed}.bui-table col:first-child{width:40px}.bui-table col:last-child{width:72px}
     .bui-table th,.bui-table td{height:48px;padding:10px 12px;vertical-align:middle;font:var(--board-body-medium);white-space:nowrap;text-align:left}
     .bui-table th{color:var(--ink);background:var(--surface);border-bottom:1px solid var(--line)}.bui-table td{color:var(--ink)}
@@ -549,8 +551,9 @@
     note.textContent = message;
   }
 
-  // 只做粗提取；合法番号由 Peach 校验。
-  function candidates(value, maxLength = 800, minSerialDigits = 1) {
+  // 只做粗提取；合法番号由 Peach 校验。separated 用于整页文本：与 Peach 的 is_jav_code 一致，
+  // 只收原文带连字符的厂牌与素人番号，用户名、导航、域名里的「字母+数字」不补分隔符。
+  function candidates(value, maxLength = 800, separated = false) {
     const found = new Set();
     const bounded = String(value || '').slice(0, maxLength).toUpperCase();
     let rest = bounded.replace(/\bFC2(?:[-_ ]?PPV)?[-_ ]?(\d{4,9})\b/g, (_, digits) => {
@@ -565,10 +568,9 @@
       found.add(`${prefix}-S${digits}`);
       return ' ';
     });
-    for (const match of rest.matchAll(/\b((?:\d{1,5})?[A-Z]{2,12})[-_]?(\d{1,8})([A-Z]{0,2})(?=$|[^A-Z0-9])/g)) {
-      if (match[2].length < minSerialDigits) continue;
-      found.add(`${match[1]}-${match[2]}${match[3]}`);
-    }
+    const shape = separated ? /\b((?:\d{3})?[A-Z]{2,8})-(\d{2,5})([A-Z]{0,2})(?=$|[^A-Z0-9])/g
+      : /\b((?:\d{1,5})?[A-Z]{2,12})[-_]?(\d{1,8})([A-Z]{0,2})(?=$|[^A-Z0-9])/g;
+    for (const match of rest.matchAll(shape)) found.add(`${match[1]}-${match[2]}${match[3]}`);
     for (const match of rest.matchAll(/\b\d{6}[-_]\d{2,4}\b/g)) found.add(match[0]);
     return found;
   }
@@ -978,8 +980,8 @@
     if (!view.root.isConnected) return;
     if (detail?.code && !detail.resolve && !detail.conflict)
       codes.set(comparisonKey(detail.code), detail.code);
-    // 整页文本按 Peach 商品号的最短序号筛选，PS4 / PS5 等单数字设备名不作为候选。
-    const add = text => { for (const code of candidates(text, text.length, 2)) if (!codes.has(comparisonKey(code))) codes.set(comparisonKey(code), code); };
+    // 整页文本只收原文带分隔符的番号；PS4、TOP250、jay925 这类设备名、导航与用户名不作为候选。
+    const add = text => { for (const code of candidates(text, text.length, true)) if (!codes.has(comparisonKey(code))) codes.set(comparisonKey(code), code); };
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {acceptNode(node) {
       const parent = node.parentElement;
       return !parent || parent.closest('script,style,noscript,textarea,input,select,[contenteditable],aside[id^="peach-jav-"]')
