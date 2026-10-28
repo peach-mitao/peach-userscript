@@ -18,7 +18,7 @@ Send video codes from supported pages to your self-hosted Peach instance.
 
 ## Setup
 
-1. Install [Tampermonkey](https://www.tampermonkey.net/) and the [userscript](https://raw.githubusercontent.com/peach-mitao/peach-userscript/main/dist/peach-jav.user.js). In Chrome, Edge and other Chromium browsers, turn on **Allow User Scripts** or developer mode in Tampermonkey's extension details; see the [Tampermonkey permission guide](https://www.tampermonkey.net/faq.php#Q209).
+1. Install [Tampermonkey](https://www.tampermonkey.net/) and the [userscript](https://raw.githubusercontent.com/peach-mitao/peach-userscript/main/dist/peach-jav.user.js). In Chrome, Edge and other Chromium browsers, turn on **Allow User Scripts** or developer mode in Tampermonkey's extension details; see the [Tampermonkey permission guide](https://www.tampermonkey.net/faq.php?locale=en&q=Q209).
 2. Configure a download channel, target folder and mount path in Peach.
 3. Enable browser integration in Peach's download settings and generate a dedicated token.
 4. Enter your Peach address and token in the script menu, then allow the connection.
