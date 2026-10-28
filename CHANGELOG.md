@@ -7,6 +7,7 @@ Notable changes are grouped by version. English and Chinese describe the same be
 ### Fixed / 修复
 
 - Declare the script author and the Peach icon, so userscript managers and Sleazy show them instead of a blank author and the default icon. / 声明脚本作者与 Peach 图标，脚本管理器与 Sleazy 不再显示空作者和默认图标。
+- Setup now links the Tampermonkey permission guide for Chromium browsers. / 配置步骤补充 Chromium 浏览器的 Tampermonkey 权限设置说明。
 
 [Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/v0.6.3...v0.6.4)
 

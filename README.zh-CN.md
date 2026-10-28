@@ -18,7 +18,7 @@
 
 ## 配置
 
-1. 安装 [Tampermonkey](https://www.tampermonkey.net/) 和[用户脚本](https://raw.githubusercontent.com/peach-mitao/peach-userscript/main/dist/peach-jav.user.js)。
+1. 安装 [Tampermonkey](https://www.tampermonkey.net/) 和[用户脚本](https://raw.githubusercontent.com/peach-mitao/peach-userscript/main/dist/peach-jav.user.js)。Chrome、Edge 等 Chromium 浏览器还需在 Tampermonkey 扩展详情中开启「允许用户脚本」或开发者模式，见 [Tampermonkey 权限设置说明](https://www.tampermonkey.net/faq.php#Q209)。
 2. 在 Peach 配置下载渠道、目标目录与挂载路径。
 3. 在 Peach 的下载设置中启用浏览器添加，并生成专用令牌。
 4. 在脚本菜单填写 Peach 地址和令牌，允许脚本连接该地址。
