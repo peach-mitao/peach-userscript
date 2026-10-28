@@ -9,7 +9,8 @@ Send video codes from supported pages to your self-hosted Peach instance.
 ## Features
 
 - **Recognize and add**: detect codes on supported detail pages, or scan the current page and add selected titles or all titles.
-- **Track status**: check your library and follow queue, search, download and import progress. Peach continues after the source page closes.
+- **Track status**: check your library, see performers, and follow queue, search, download and import progress as it refreshes. Peach continues after the source page closes.
+- **Recover from failures**: see whether the magnet or the cloud drive failed, and switch to another magnet when the magnet is at fault.
 - **Keep the page tidy**: move the Peach icon, choose where it appears, or hide it completely. Open settings and check updates from the userscript menu.
 - **Match Peach**: sync light or dark mode and the accent color with your paired Peach instance.
 

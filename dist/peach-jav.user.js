@@ -12,7 +12,7 @@
 // @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
 // @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.6.4
+// @version      0.6.5
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -291,10 +291,11 @@
   const STORAGE_POSITION = 'peach.jav.position';
   const STORAGE_APPEARANCE = 'peach.jav.appearance';
   const ROOT_ID = 'peach-jav-action';
-  const SCRIPT_VERSION = "0.6.4";
+  const SCRIPT_VERSION = "0.6.5";
   // 0.6.3 起默认名改为英文；发布页切换前仍返回原名。
   const PUBLISHED_NAMES = ['Peach Userscript', 'Peach · JAV 入库'];
   const PEACH_LOGO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAYi0lEQVR42uWbabBl13XXf3s459zhDf16Urdb8+C2WlY8T4lDS4VNKEhsEniqghDj2JTiYIrgwganIHlpk2IySZEiCaaAxE4IH/oBValymShOIjV4iKxSLMnqbs2tHtTq+Y13OOfsvRYf9rn33ddqybIs4STcqtPnvnNv77vXf/3XuPc2/Nl4mYm7Nu+VP+cvy348C9grfrqA3b8fPwHOd4Xsny7BF4ADyOjBddfRstPd2cpIVhhbzWW9pQcfpH41qfXqjDWP3X9uY8xDO1EWUdgQ5iVf8zgWiQBXvSO7Lc/0g8aaO7yxezHMYY13aG2MXjA+HFXhj4py+je/9ZWV5VdqFt89APM49qGTGrvSa/9+/KFDxBeZpGEBwwFk9k3Zmzvd8E9dxgfzjsl8bnAZeA/WgjXgjFLXymAdyudb7zn+J4M/ngTve8KAm987tcPY4RtiZW4MpZ0x2No6njPOP/bM/WtPXknLlwu/4232n+Rt/UxrWvOsDVnbBJ9hvMc4i3EODJa6VFlfE3pLpqen23uPH+mfucxB/j8BwFz9blp+1r0/U/0olvc6r1uNMahYNBo0GGKttYg+KthFW2W/cez+3lkWsBxoJjuPZZG48y3mN9tb9MOtKbSYMZLnOGfBWpM070BqQ9mDKojUona4ZB469of61u8mKrhXTPsjyNQtvDPr6pdnture2a3aLrpG8g4x66pknSiuI+oL8a7Q3c7xFyPxQ3N7isHyb4dvJLvA8yXijre7/9ydk490Zqk7s8bmBdbbRHnvDdYayp5huKooivXEWrBx4H5r+Zh+ef9+/PHjL9PPvCoAHEm3bCcrNucni4xWkRvJM2OLzLrMGeudtd4b63PU5ajJNFqn0+riX9myO993zZbt/+vsN3rllrf6j3dn5Z91Z6m7sybLMow14JwhyyxSW9aWoB4oLgefGYIo5cAofff3lo7LueMfBg69MgbYV0h/3b8ff/F+XcvU3RPBr62rXlwVc7EXWZPI0EUqHwmZGFOobXXxU7NGpmap8tlw12r30uKe2zpvKlrxs91plekt1rdyS+YMWQ44YXk1cuZcoFdHYiFoJqiVqNZYG/IvPn2oenR+HvftHPCr6gMUDAfnrblrUQDlJq654XaO7plqdba7LlO0TWYdZIrkkQElazpgJQ7oRaEWCENidQkXV+16a1anujsU14IIeAeUBlYLWpLTyTPyzIAXKlPpUhhw5mI8e/KL3AZcAuy9Cwv2jl84EI15jZ3gwfl5d9fiYgTQu+/Olq9p/0Ct/NCx3tJPT/t8dtoUWhhnrBpEIKoSEXpasqw9TscVjtUXeCKc4/D6WXnsTN8WBXrr7sLc4Ldxs7+K6/1OtulWtmXTTBctvPMYY1Gg1KDrVGYQwlNv3L7nP/QdX9318Z//hjFGAfTgQWfuuiu+JgDowXln7lqMuvB3Wuele7c4d7dz9rYi81RBCCqIUXQcjDQNrmDE4NTgsFg1RBEuxXUeXD+poRyYN3V3MudnaWUdyDzqIRqDGFCTvKExBmMsDkfmHc5belWNMeYhZ83n/bD8/NZP/+sVXViwHDig5mVGhZcFgM7PO7O4GJ//2bvv9Ln/lVaR3z6MSq0iznuxznnrHGaUqWBQFNXmEkFFiDGiEtEoOFFygbLsszzoI5kn77TJizbOZVjrMDaNmcZNdzUGUVWjJkqMrrDWZM4xLKtnRfXA7k/+4ucBdGHBmgMH5LsG4N6F/f7OA4fCyU//3X9Y5NkvO+9NiYYsy6zPC2uzDOMdxo00ZWFkjKoggqogUdAY0BCRUBNDIISKqioZrK9T15Fiepr29Cx5q43zHmP9GIAxCMZCo14VIYYosazFqfjcWgZl+TtQ/tTuT/1S7+WAYF6O8M9+6qM/v226c2C1rsUVGUWrZV1RYPMM4zw4i7FuY4KT7FEFlQREDBATABICEgNS1wwHfVaWlqmC0N2+k6m5OfKijXUO4/wmBhhjk5mZNLZGQeqaUFYShmWcyXy22ht8vSP6V7f87L9a+nYgmG9H+2c+8aEPbZ2Z+kJfJPhW7vJ227jWhvApP22yFrMZgDELVMYgEANITGyI6S6hZrC+zoVzF6mMZ+vVVzM9N4cvCozL0m9Yh22AmBxbJSIxIlVFLCvq/rDqoPlqr//VPbva71v80pF6/uCivFiEuGIeoAsLlsVFOfUzP763VWSfK1WiK7zL2y3jWwUuz7A+CW+sbe4uTdQ5cBm4DYCSFpvL+ea7Hus81mf4PGdqZoYdO7ZhqwErFy9R1yF9nmXYLMdmOSbLx3+75pnLC1xR4NstfKdNMd3OB4ZqS7v9A6dO9n79rsXFyOJB+x0nQga0svbfd1p5W60hLwrjihybTQg+StKNBefBesalm8/SM+fBuOa9S9+xLjFlbDJprKmZaXZs30p96QIrK6vUdY0xJjFr/FuJDYydpMdaj/EZrshwrRZ5t531VOqZdv6TZ3/xE3/d3HVX1IPz7mWZwCjcHf8Hf/v9nenW79fWxqLTclm3iysKrE9CGdto2zrwGYrBZEUzamOkxiTKq0BdN04xQKjT88YMkJD8gwQ0BM6cOMWKZlz1hn3Mbp3DFu2xGYycLJPmJdKYQg0SkKom9Puia+umv9o7uafj9vHJf9vHGC4Pjy9kwOF9ChCdfsp7q95bfJ4lr2waOx8JR9J8vb7G2jcfYPjME5AVaaJZThz0WHvwa8TVFcjyBPfYXzRjGCYEStXfth3b8IM1Vi9epKpqjOqGvoy5THsb/6aZGayzZK3caiuP26Zb117olR8zxuh9CwvuJU1g5DFP/cyP7/Xe3dkPEZc5Z30TjsatyURLBXCecPE82u9RnTxGdfwpTN7CeE+4dB5ZWWbwxGG0rhoKp/87AsCYNGljUrKjquStgrmZLoNzp+n3+8QQNkRVbWLgpKvV8XOjDRjWkrdbNnin68+d+MTz7/++7p0HDkS9jPWXMeA+C1Ab+dGZVu6dJXrvsakTsQl9jMH4DFTxM1tSApTnlM8+TlxdAp/h2lOYPCf21ymfOzb+/nisTddIxJRKTs1M4wY91i9doi7LcT6xIf1IaAVJd9OYg5H0zHtvY1VKa315z6A79T5AmZ+3LwHAHZIw1b8kqjjnjHXJ7kboGzaAiL01wODntmPb7SbECdVTj6IquNktaEP3+vlTSDVIzkwv73SP6L2RO/jc0y08/fNnGA4HxLoGiSmUNmFVR6F18q4CGtPdQHXutDoVFRM/AHDfuXNXZoCCMQcOyPGf/ltzKG+uJWKdtWPtX0a5/mOPsv7VeymPPYHrTFHsvibR3HnCudPUJ5/Gzcxh2+0U63vrhHOnUzRQ2Vxfju4iY80aoNtto2vL9FZXCWU5zhuQCDGOc4rEjpRmp88EMMT1Narz52xwzqDy/TqPu/PQoTDp/McALDbUsD7sbXk7FyWqc8YY09jdJOVU0NUVrLUMn3iU6uQztK69CdtqI8MBqlA+9hCEinzrDrQqQZXqueMgdfPrOsFkSUJneXKQze/krYJcagbLl6jKEqnrDRBUUm2gTXIVGxaIoDFiraE6cxqtKhNQbJZd39/1o7sBFhauAMCOfYka0cSb25nFWqLZFG50nNsbaymuvR6JAWMsvYfvR8sB7RvfgAz7KBCWLlE++Sj5VXuSVhTCxfPE5YtJSJmgsSpYS//wo1THnk0+RyLOWdqZo1pZGpuBhDqNtXKJ9Qe/ig56iVETbABF64rqzGmssUZilLmtW1r59rlbAH7hyPwLAbhjbIn2WmdSPZe0P2lbia5aVeQ7d+Jn55CqRgcD1h84RLH7arLZrcR+D4xlePQhjAHXmUaqEh2WVKdOJB8izXgxYrKM8tljDA8fJi5dapYRFIPSKjLorVH2+4RymFiAEleWKI89wfDIQyABEzdyC2sN9aULhJUVMAaLkaktM6yeu7AXgH3nXgjAfWMA5GpUGBW1G7m8XnYJnZtvwcSIsY7quRMMH3uY7t7vQ8sKFSWsLFM+c5T8qt3ooIcxlvq542h/PWlJYrKCEKhPn8IWWSqeJI5/I8s8LpRU/R51VaJ1hYYaqYfYoqBeOk9cW27Y2fgBVcpTJ1KhFAK+0yHEmguPP33dJmE3MeDITgWQGLapJvRNE1rMJi+bWCBVjd+yheKa65BeH+tb9B5+AKSm9bprkbVVjMuonjwK1mCsB4nElRWqU8+mTDKk5o0MB8j6WmNuyYObhnXWWTKJhH6fUFdIXSUQYkAkIlVNXFtNrAkBayCsLjN8/nmMc2gdsN0WvTPnkbLcdpn8L8wENWqBCoqazfSXcSzW2Ey8qmjfdDOu3UarCo3C+gNfoX3dDVgs1AEZDqke+xZWFa2TAyyfOIoMe+Ouka6vIoN+g22zktaAYABvlNhfTz6gYUD6mkCoieuraW6hBmPoPfV4mo8IxhrChUvI8hrO0fq2xZAjjr3pxhUBwTiTJuaz5L2rGuM9nb23IsMBxjjqs2cpn32c4pa9SL8PqsjaGloN0VCjosSlJQbf+mZqpBgIly6iVb0pDI4THBRngHJArKrkA0KNQZEQURHC8iU01tgiZ/jcScqTpzDep4ghQuz1X3TdxL/gicRgRBomNnHVGgg1g4ceQdfX8ddeR3bDTdhOFymH5FftIt+5m+r5U5g8Z/D4UfzOXRhrkLJsxpWmOaIY5ymffByb5bT3vZHq1HEMBo0hpcabegiaFi/qCg0VGlwqphoHinPU58+h5ZDQ77P28DdT0yTGiY5UAjMqgxcHoPGM1ujpZPOoNk7FiMEQicvLxItLhKVLDJ9+guLGW8hvvAlabbq33Ub13Em0HCatnjwOzqPjeJ+0mfqEYIxl8OjDVKeOJ89vHVR1k3TJRpSQJmkKNRpS80TqVCBpCGnoumblgfuJvXW0DqlLFaVpmAgapQHVnJ2MeFf2ATVPq6RWUypVmxhrlKl3v4385uuIGOLKOv2HHmT1979E78H7MXlOZ98+dNCHGFGTNEoI4/CU3sdxGawK4fz5lBg22Z1p2JJAiOM5GIloqCDWEFKUQQStA6pQLy2hdUwV66ZsMTZtuIiN8tTlTnCDAU0UsMjRqq6JzlkJAZWQmhhBMdbSuf1Wsqt20jv8GGF1DXp9Bg99k/LJx/Fbt2KsSRMdZ826kUxdllSpaqoApWnljwGIjfDSZH4x+cW6RmuffIAKREVpkiljUWkKogkfkhigrhdqJNSHAe6445Bw6HIADi4KBmZyHrpUVet5q5iKIaiGkPJhl36A4ZBs+xyz730X/ceeZPj0sxifpSTnxAnI/EZuPwnA5X9PgIA2LagQm/xAximvhoAGQdVACMnThzqFyygTfcemR6gTY4uCRMlEbK8Mp3uhPgowXpmeNAFjUF1YsNOf+/I5E+WBXFVjXUvytBtUBEWb8nTq9luZeddb03+u6tQhCjFRfXSPk383V53uJkQIAiGizTVKaIgbzyTGRpsBjTXEGjsqeibGGN9jsnsSeyRXUSvh0NsffL6v87jJrtAV+wEZ+j+8iolV0BR2GhBGrSuSfUq/T75zG1t+8F24ogW9IVrHZJd12HgfYnofYtLmxN+bhI+S0u8QUtu8DkidvjsJDI0JGNFG4NgIPCqGNi4JYmIdTaZyMJXDL9UQOXAokrpW/321V64RogtlpaN+foPouH8HigwGuHaLmfe8LXV2yroRfEPAkcZfcNXSCB7HmjPOIXWN1LEBICBNxsi43K0xVpL/qDeE17Hw47lKJmLXqvKEs9yjYO44tHkbjb28E6zz827Xf/mjs0T5nSkwoayjlNVYeBowdOTZGxD8bJf2629C+kOIkjQXIlpLo3VJmmyoOmbC6Kpi6uflGVJWSfAqLZzEOqR0egRACGnXSJYlcKNOOEwZm4AEkZaIcTH8+rV/fGpw3/7N9L9yU3TfoiqYTMJne/1yKGVl636pUlWbGRDDJhBif0Dr5qtx3S4M6zSJSXpfJvgkEzQIlCmTs5lHyibmj0AIMfVRR1lpDBgVsulOAjVupn0DhngRu1xWZ13o/8craf+KAJgDCPPzdtd/+8ozVR1+bUrVlv0yhv4QraokeJgQfoKWNnN0b7sZ7VeYqGgtyISmNwu94ROIipaBbNuW1BiqAlI1JlDVxKgpG40hVZ8SU0m+dSrVrHHSDzRxv47SlmhVwsIND68sM4+90orxlRdGFhdFFxZs11efWe4PT7gQXNUrJQ7K5O1DSmpSmKqTZ1ZB+n1aN+6muO516GofK4w1rEFS7j7hH6R5ThWwzpHv3k4clI3pBLSsiWVFVMUCJsbG+0dkOCSbysm3dNHhRmqsMRJCjG0Vf6mqvv76D5z5TwfnceZFttD5F1sV0iNH7PbFb6ye+LF33O2c+71KYgxGjVExNh+tB5pkmyYtW6OKxMjMe/YR1/tUp85huy1klPSwEffHnX5j0H5F6/YbsUVOGJQp5JWJ/mFYo95jUGwUTAgYR/pONExfv53q4gpSpxwiiqgVZSBhYFz1UXMA0ZdYAXvRTVIHjhzRe/fv92/+va89+fGbdrW2ePcXBlUI1uBM060Z9+Bko1+Q+nVK64bdxNUB9ZmLTRfcbHSDR53xKGhZ07p+F51briYOKjQqUkdiWVOVFcNBSWwX5K2CwlhyZ/AoVhNLfGbJOjn982vEOqBRQtuI70n42K2PXPyyzuPMkRffQ/SSu8Q+f/y43rF/v3/zPV/7g7M37HjnjHV7B3UIzhg77haNcvJx6azjmN6+fheu2yYuraP9EoJggiQ7VsW1cjp7r6V90x5kGJLzCsn267KmHFQM64Cd6ZA5R2EtmQWHYCQVOFpHslZOPt2ivzaoOzFkF0P1q7cfvvgv7t2Pv+FLL7171LysTVHAk3/5ndNdF+5rF/lbhkZCu+29zR3WbazVmcllq4bqNs+QqqY+v0K8tAZVwGQOO93Gz3TBO2RYIaO8PUTqKjAY1vR6JT2g2LmFdubptHLahcM7g51cpIlCjFJ365g9d+bC797wv5/5azI/71hclG+3VeblbZFZwJoDyLM/9Ibduevc28rc3hIJRdt7l9m0bm/MxGiG8XJ8lLSK5Fz6uRFLYmpnEWS80UGbqq0sA71hzdqgIrQLOlu6tL2n0/IUucPZtJwGoKJUdag7UbOV9d4f7n7dVT/MFw5VwMvaJ2S+0x1iT/7gbdd0Ov6ebuZuLZE6K1xmJ0GYHHSySGkEn1zKGhcssQEkRkId6ZeBXhlYqyP5TId2O6ddeNq5J/c2aV/TOmIVQt0VspXB4A90afWDex58vt8ETXnVt8mNdo08+o7rdm2Znfrd2dy/syda+9xkzlusNRPObnIRc7PQYxDixgYqjWkT1bCK9KvIWi2UBrpTLVpFRrtwtDOHtxajhiCqMcY4peqXhoPF/qlnfuL1T1F+J8K/oo2SB+dxdy0S7923Y+qmHXNfmMvzH1uLKt4rWWasHa0iTx5smWDCZsepY+cZVahqYVBFegGWQyTLHd1WRqvwdDJH4RzWGIJI1KiukMhaXf7SNV858cnR6vp3Ivwr3i0+8gkAx7//ps+0vf85rEGNhMwZn6zBXAEAJkygAUCTD6ijMKyF9SAsByhRZnNHkSfh297hrSGIhkLEh1APhlr+/Wu/fvY3tNl9/nL3Br4q2+W12edvDiBPv/uaH+mY7HNT3r9uPcborFrvzGhH22WmsLFzTCQlRkGUMiq9IKxEZTUqXWeY8o7CO9re4qwRgC2I7dflI8M4+Mh1f7Ly4L378Xe++EGM1/7ARDOB8M03bd2zK+/+u47zf6NUiCrBJ5PdOO7VMCC5A01baUWpBNYlCb4WUktrzjvazpI7o96Y2HHGWwloKH/1nFz89JsfoTf67e/5mSGdyLVPvmXXTzhj/2Xbuj2rAhaNzuLMeG9fMtKoEFQpFQYNAP0glCHSspYpZyksMbfGbXWGWqrDSPmPbnxk9Z5Xau+v6ZGZSZN46Mbuztlu++fE+I8Vzvv1KM22X+MAxCgBQwUMJV19UYYhRYTCmlhY7PbMGlTWWlS/PLiw9G/e/jx9TUduxLxK5wZf9WNzk2x45A2zb8PmC+Lcj1gs64IaECxWwNQYhgoDhX4QrWIUD24uM1hUu0b+a67lP3/P0XTmSF+iqvtTdW5QmyN0o8n+n1u2vi9494/F+vdbY+mJIqKhNrihooMoUon6TuqJa9fq/2y76rM/fHTt/pGfueMQ0bwGp0Vf04OTozJ0ZKtf3LvtzmDcx0vlA87abC1CKYJFGYbQL1QWM6u/9pFjqw8AHAR3GPTAq2Dr39OTowfBzbNht79149wbA+bDQ9W/WWusrOpv51J94adOlk9fCbg/N6+D4CabE7+ylZnPXkV38vOFV36O6c/OawHswv6NbtQC+P8vBL+Ss9Tv8QHu/wvjLwl2m7L1ZAAAAABJRU5ErkJggg==";
+  const STORAGE_SOUND = 'peach.jav.success-sound';
   const STORAGE_INSTALLED = 'peach.jav.installed-version';
   const STORAGE_UPDATES = 'peach.jav.updates';
   const STORAGE_CHECKED = 'peach.jav.update-attempted-at';
@@ -329,6 +330,63 @@
     queued: '已排队', searching: '正在搜磁力', submitted: '云下载中',
     ingested: '已加入 Peach 馆藏', owned: '馆藏已有该番号影片', failed: '任务失败', no_match: '未找到资源', idle: '可以加入 Peach 馆藏',
   };
+  // 本页番号的行状态：短标签与 BoardUI Chip 颜色，配色沿用 Peach 活动页 StatusBadge
+  // （完成绿、失败红、进行中蓝、需留意黄）。表格行底色与 neutral Chip 同为三级背景，排队改用 soft；
+  // 未提交的「待加入」不是任务状态，只用次级文字。完整说明放在悬停提示。
+  const ROW_STATES = {
+    pending: ['待加入', 'plain'], sending: ['提交中', 'blue'],
+    queued: ['排队中', 'soft'], searching: ['搜索中', 'blue'], submitted: ['下载中', 'blue'],
+    importing: ['入库中', 'blue'], organizing: ['整理中', 'blue'],
+    ingested: ['已入库', 'lime'], owned: ['已有', 'lime'], no_match: ['无资源', 'yellow'], failed: ['失败', 'rose'],
+  };
+  // 提示音沿用 Peach `ui-kit/sounds.ts` 的配方，Web Audio 当场合成、不带音频文件：点加入用 toggle-on
+  // 的一声上扬表示开始，一部影片完成入库用 success 的大三度两音。默认开启，与 Peach 界面音效一致，可在设置中关闭。
+  const SOUNDS = {
+    start: [{from:550, to:650, duration:0.08, volume:0.15, start:0}],
+    success: [{from:523, duration:0.12, volume:0.18, start:0}, {from:523 * 1.25, duration:0.12, volume:0.18, start:0.2}],
+  };
+  let soundContext = null;
+  function playSound(name) {
+    if (GM_getValue(STORAGE_SOUND, true) === false) return;
+    const Context = globalThis.AudioContext || globalThis.webkitAudioContext;
+    if (!Context) return;
+    try {
+      soundContext ||= new Context();
+      if (soundContext.state === 'suspended') soundContext.resume()?.catch?.(() => {});
+      const now = soundContext.currentTime;
+      for (const {from, to = from, duration, volume, start} of SOUNDS[name]) {
+        const osc = soundContext.createOscillator(), gain = soundContext.createGain(), at = now + start;
+        osc.type = 'sine'; osc.frequency.setValueAtTime(from, at);
+        if (to !== from) osc.frequency.exponentialRampToValueAtTime(to, at + duration);
+        gain.gain.setValueAtTime(volume, at); gain.gain.exponentialRampToValueAtTime(0.001, at + duration);
+        osc.connect(gain); gain.connect(soundContext.destination);
+        osc.start(at); osc.stop(at + duration + 0.01);
+      }
+    } catch { /* 浏览器不允许出声时静默跳过。 */ }
+  }
+
+  // 云下载可能要几十分钟：前 1 分钟每 2 秒查一次，之后每 15 秒一次，最长跟踪 1 小时；页面在后台时暂停。
+  const POLL_LIMIT = 60 * 60_000;
+  async function pollWait(count) {
+    await new Promise(resolve => setTimeout(resolve, count < 30 ? 2000 : 15_000));
+    while (document.hidden) await new Promise(resolve => document.addEventListener('visibilitychange', resolve, {once:true}));
+  }
+  // 失败原因来自 Peach 下载任务：磁力本身的问题换一个磁力，网盘一侧的问题修好后重试。
+  function failureText(body) {
+    const detail = typeof body.message === 'string' ? body.message.slice(0, 120) : LABELS[body.state];
+    return body.cause === 'magnet' ? `磁力问题：${detail}。可以换一个磁力。`
+      : body.cause === 'cloud' ? `网盘问题：${detail}。请在 Peach 检查网盘后重试。` : detail;
+  }
+  function errorLabel(error) {
+    if (error?.kind === 'http') return [401, 403].includes(error.status) ? '令牌无效' : error.status >= 500 ? '服务不可用'
+      : error.status === 429 ? '请求过多' : '请求失败';
+    return {invalid_response:'返回无效', network:'连接失败', client_exception:'连接失败', timeout:'请求超时', abort:'已中止'}[error?.kind] || '失败';
+  }
+  function setRowState(item, state, detail = '', label = '') {
+    const [text, color] = ROW_STATES[state] || ROW_STATES.failed;
+    item.row.dataset.state = state; item.status.dataset.chip = color;
+    item.status.textContent = label || text; item.status.title = detail || label || text;
+  }
   const attempts = new Set();
   let generation = 0;
   let current = null;
@@ -385,7 +443,11 @@
     if(current)present(current,'expanded',true);else openPageActions();
   }
 
-  const DARK_STYLE = `color-scheme:dark;--color-text-primary:oklch(98.5% 0 0);--color-text-secondary:oklch(70.8% 0 0);--color-text-tertiary:oklch(43.9% 0 0);
+  const DARK_STYLE = `color-scheme:dark;--field-ring-hover:rgba(255,255,255,.24);
+      --color-status-lime-background:color-mix(in srgb,oklch(27.4% .072 132.109) 60%,transparent);--color-status-lime-text:oklch(76.8% .233 130.85);
+      --color-status-yellow-background:color-mix(in srgb,oklch(28.6% .066 53.813) 60%,transparent);--color-status-yellow-text:oklch(79.5% .184 86.047);
+      --color-status-rose-background:color-mix(in srgb,oklch(27.1% .105 12.094) 60%,transparent);--color-status-rose-text:oklch(64.5% .246 16.439);
+      --color-status-blue-background:color-mix(in srgb,oklch(28.2% .091 267.935) 60%,transparent);--color-status-blue-text:oklch(80.9% .105 251.813);--color-text-primary:oklch(98.5% 0 0);--color-text-secondary:oklch(70.8% 0 0);--color-text-tertiary:oklch(43.9% 0 0);
       --color-border-checkbox-default:oklch(43.9% 0 0);--color-border-checkbox-hover:oklch(55.6% 0 0);
       --color-background-full:#121212;--color-background-primary-default:oklch(26.9% 0 0);--color-background-primary-hover:#40404099;
       --color-background-secondary-default:oklch(20.5% 0 0);--color-background-tertiary-default:oklch(26.9% 0 0);
@@ -412,8 +474,13 @@
       --board-font:'Inter Variable','Inter','Segoe UI','Microsoft YaHei UI','Microsoft YaHei','PingFang SC','Hiragino Sans GB','Noto Sans CJK SC','Noto Sans SC','Source Han Sans SC',sans-serif;
       --board-body:400 14px/20px var(--board-font);--board-body-medium:500 14px/20px var(--board-font);--board-caption:400 12px/16px var(--board-font);--board-caption-semibold:600 12px/16px var(--board-font);--board-heading:500 20px/26px var(--board-font);
       --board-blue:linear-gradient(180deg,var(--color-accent-500),var(--color-accent-600));--board-blue-hover:linear-gradient(180deg,var(--color-accent-400),var(--color-accent-500));--board-blue-active:linear-gradient(180deg,var(--color-accent-600),var(--color-accent-700));
-      --modal-ease:cubic-bezier(0,0,.2,1);
-      --control-radius:10px;--surface-radius:16px;--floating-radius:20px;--control-h:36px;
+      --modal-ease:cubic-bezier(0,0,.2,1);--board-motion:.3s cubic-bezier(.4,0,.2,1);--spring-press-ms:208;
+      --spring-press:linear(0,0.1659,0.4268,0.6816,0.8795,1.0066,1.084,1.0861,1.069,1.0457,1.0241,1.0079,0.998,0.9933,0.9923,0.9934,0.9954,0.9973,0.9995,1.0003,1.0006,1.0007,1.0005,1.0004,1);
+      --field-ring-hover:rgba(0,0,0,.21);
+      --color-status-lime-background:oklch(93.8% .127 124.321);--color-status-lime-text:oklch(45.3% .124 130.933);
+      --color-status-yellow-background:oklch(94.5% .129 101.54);--color-status-yellow-text:oklch(47.6% .114 61.907);
+      --color-status-rose-background:oklch(89.2% .058 10.001);--color-status-rose-text:oklch(45.5% .188 13.697);
+      --color-status-blue-background:oklch(88.2% .059 254.128);--color-status-blue-text:oklch(42.4% .199 265.638);--pill-radius:999px;--control-radius:10px;--surface-radius:16px;--floating-radius:20px;--control-h:36px;
       --fs-sm:13px;--fs-md:14px;--fs-lg:16px;--fs-xl:20px;--fieldset-bar-h:52px;
       position:fixed;inset:auto max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) auto;
       z-index:2147483647;width:min(320px,calc(100% - 32px));font:var(--board-body);color:var(--ink);color-scheme:light;text-align:left;-webkit-font-smoothing:antialiased}
@@ -453,7 +520,7 @@
     .bar{min-height:var(--fieldset-bar-h);padding:8px 16px 8px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
     .bar.subpage-bar{justify-content:flex-start;gap:8px}
     .bar strong{font-weight:500;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
-    .bar-heading{display:grid;min-width:0;gap:2px}.bar-summary{font:var(--board-caption);color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .bar-heading{display:grid;min-width:0;gap:2px}.bar-title{display:flex;align-items:center;gap:8px;min-width:0}.bar-summary{font:var(--board-caption);color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .bar-actions{display:flex;gap:4px;flex:none}
     .bar-actions [data-collapse-chevron]{transition:transform .2s ease-in-out}
     .bar-actions [aria-expanded="false"] [data-collapse-chevron]{transform:rotate(180deg)}
@@ -485,8 +552,21 @@
     fieldset.display-scope{margin:0;padding:0;border:0;display:grid;gap:8px;min-width:0}
     .display-scope legend{font:var(--board-body-medium);margin-bottom:8px}.display-scope label{display:flex;align-items:center;gap:8px;cursor:pointer}
     .display-scope input{accent-color:var(--color-accent-500);width:16px;height:16px;margin:0;flex:none}
-    .batch-list{position:relative;border:1px solid var(--line);border-radius:var(--control-radius);overflow:hidden;background:var(--color-background-primary-default)}
-    .bui-table{width:100%;border-collapse:collapse;text-align:left;table-layout:fixed}.bui-table col:first-child{width:40px}.bui-table col:last-child{width:72px}
+    .batch-frame{position:relative;min-width:0}
+    .batch-list{position:relative;border:1px solid var(--line);border-radius:var(--control-radius);overflow:auto;overscroll-behavior:contain;
+      max-height:min(480px,calc(100dvh - 320px));min-height:97px;scrollbar-width:none;background:var(--color-background-primary-default)}
+    .batch-list::-webkit-scrollbar{display:none}
+    .ovtrack{position:absolute;z-index:2;pointer-events:none}.ovtrack[hidden]{display:none}
+    @media (pointer:fine){.ovtrack{pointer-events:auto}}
+    .ovtrack.ov-y{right:0;top:8px;bottom:8px;width:12px}
+    .ovthumb{position:absolute;border-radius:var(--pill-radius);background:var(--field-ring-hover);cursor:default;transition:width .15s cubic-bezier(.4,0,.2,1)}
+    .ov-y .ovthumb{right:0;top:0;width:3px}.ov-y:hover .ovthumb,.ov-y.dragging .ovthumb{width:6px}
+    .ui-ov-edges{position:absolute;pointer-events:none;z-index:1;overflow:hidden;border-radius:0 0 calc(var(--control-radius) - 1px) calc(var(--control-radius) - 1px)}.ui-ov-edges[hidden]{display:none}
+    .ui-ov-edges>span{position:absolute;left:0;right:0;height:16px;visibility:hidden;backdrop-filter:blur(2px)}
+    .ui-ov-edge-top{top:0;mask-image:linear-gradient(#000,transparent)}.ui-ov-edge-bottom{bottom:0;mask-image:linear-gradient(transparent,#000)}
+    .ui-ov-edges.ui-can-scroll-top>.ui-ov-edge-top,.ui-ov-edges.ui-can-scroll-bottom>.ui-ov-edge-bottom{visibility:visible}
+    .batch-list thead th{position:sticky;top:0;z-index:1;border-bottom:0;box-shadow:inset 0 -1px 0 var(--line)}
+    .bui-table{width:100%;border-collapse:collapse;text-align:left;table-layout:fixed}.bui-table col:first-child{width:40px}.bui-table col:last-child{width:108px}
     .bui-table th,.bui-table td{height:48px;padding:10px 12px;vertical-align:middle;font:var(--board-body-medium);white-space:nowrap;text-align:left}
     .bui-table th{color:var(--ink);background:var(--surface);border-bottom:1px solid var(--line)}.bui-table td{color:var(--ink)}
     .bui-table .batch-row:not(:last-child){border-bottom:1px solid var(--line)}.batch-row{height:48px;cursor:pointer;transition:background-color .15s ease}
@@ -501,10 +581,46 @@
     .ui-pcheck input:indeterminate+span::after{content:'';position:absolute;top:6px;left:3px;width:8px;height:2px;border-radius:1px;background:#fff}
     .ui-pcheck input:focus-visible+span{outline:2px solid var(--tungsten);outline-offset:2px}.ui-pcheck:has(input:disabled){cursor:default}.ui-pcheck input:disabled+span{opacity:.5}
     @media(hover:hover) and (pointer:fine){.ui-pcheck:hover input:not(:disabled)+span{border-color:var(--color-border-checkbox-hover)}.ui-pcheck:hover input:is(:checked,:indeterminate):not(:disabled)+span{border-color:transparent;background:var(--board-blue-hover)}}
-    .batch-row-main{display:flex;align-items:center;gap:8px;min-width:0;flex:1}.batch-row-code{font:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}.batch-row-status{display:block;font:var(--board-body);color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-    .batch-row[data-state=failed] .batch-row-status{color:var(--drop)}.batch-footer{flex-wrap:nowrap;gap:8px}.batch-footer .geist-button.icon{padding:0;border:1px solid var(--color-border-button-default);background:var(--color-background-primary-default);box-shadow:var(--elevation-xs)}
+    .batch-row-main{display:flex;align-items:center;gap:8px;min-width:0;flex:1;container:identity/inline-size}
+    /* 叠放头像沿用 Peach 作品卡 .mavstack（web/css/12-cards.css、25-motion.css），按 24px 头像等比换算：
+       常态步长 10px，指到的一枚抬起放大，右侧邻座逐枚让开；窄单元格只留两枚，与播放队列的窄场景一致。 */
+    .batch-people{--ring:var(--row-bg,var(--ground));--lift-motion:calc(var(--spring-press-ms) * 1ms) var(--spring-press)}
+    .batch-people:has(:hover){--lift-motion:var(--board-motion)}
+    .batch-people>.batch-person{box-shadow:0 0 0 2px var(--ring);transform:translate(var(--lift-x,0),var(--lift-y,0)) scale(var(--lift-scale,1));transition:transform var(--lift-motion)}
+    .batch-people>.batch-person+.batch-person{margin-left:-14px}
+    .batch-people>.batch-person:nth-child(1){z-index:5}.batch-people>.batch-person:nth-child(2){z-index:4}.batch-people>.batch-person:nth-child(3){z-index:3}
+    .batch-people>.batch-person:nth-child(4){z-index:2}.batch-people>.batch-person:nth-child(5){z-index:1}
+    .batch-people:has(>.batch-person:nth-child(2))>.batch-person:hover{z-index:6;--lift-y:-2.5px;--lift-scale:1.05}
+    .batch-people>.batch-person:hover+.batch-person{--lift-y:-1.1px;--lift-x:6px}
+    .batch-people>.batch-person:hover+.batch-person+.batch-person{--lift-y:-.5px;--lift-x:12px}
+    .batch-people>.batch-person:hover+.batch-person+.batch-person+.batch-person{--lift-x:18px}
+    .batch-people>.batch-person:hover+.batch-person+.batch-person+.batch-person+.batch-person{--lift-x:24px}
+    @container identity (max-width:179px){.batch-people>.batch-person:nth-child(n+3){display:none}.batch-row-code{--cap:2}}
+    /* 头像右侧紧跟番号：展开时番号随最后一枚头像同步右移，距离为 6px ×（显示枚数 − 指到的序号）。 */
+    :is(.batch-row-code,.bar-title>strong){transition:transform calc(var(--spring-press-ms) * 1ms) var(--spring-press)}
+    :is(.batch-row-main,.bar-title):has(.batch-person:hover) :is(.batch-row-code,.bar-title>strong){transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.3s;transform:translateX(calc(6px * (min(var(--count,1),var(--cap,5)) - var(--hovered,1))))}
+    :is(.batch-row-main,.bar-title):has(>.batch-people>.batch-person:nth-child(2)) :is(.batch-row-code,.bar-title>strong){--count:2}
+    :is(.batch-row-main,.bar-title):has(>.batch-people>.batch-person:nth-child(3)) :is(.batch-row-code,.bar-title>strong){--count:3}
+    :is(.batch-row-main,.bar-title):has(>.batch-people>.batch-person:nth-child(4)) :is(.batch-row-code,.bar-title>strong){--count:4}
+    :is(.batch-row-main,.bar-title):has(>.batch-people>.batch-person:nth-child(5)) :is(.batch-row-code,.bar-title>strong){--count:5}
+    :is(.batch-row-main,.bar-title):has(>.batch-people>.batch-person:nth-child(1):hover) :is(.batch-row-code,.bar-title>strong){--hovered:1}
+    :is(.batch-row-main,.bar-title):has(>.batch-people>.batch-person:nth-child(2):hover) :is(.batch-row-code,.bar-title>strong){--hovered:2}
+    :is(.batch-row-main,.bar-title):has(>.batch-people>.batch-person:nth-child(3):hover) :is(.batch-row-code,.bar-title>strong){--hovered:3}
+    :is(.batch-row-main,.bar-title):has(>.batch-people>.batch-person:nth-child(4):hover) :is(.batch-row-code,.bar-title>strong){--hovered:4}
+    :is(.batch-row-main,.bar-title):has(>.batch-people>.batch-person:nth-child(5):hover) :is(.batch-row-code,.bar-title>strong){--hovered:5}
+    .batch-row{--row-bg:var(--color-background-primary-default)}.batch-row[data-board-selected]{--row-bg:var(--surface)}
+    @media(hover:hover) and (pointer:fine){.batch-row:not([aria-disabled=true]):hover{--row-bg:var(--color-background-primary-hover)}}.batch-row-code{font:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}.batch-row-status{min-width:0}
+    .batch-footer{flex-wrap:nowrap;gap:8px}.batch-footer .geist-button.icon{padding:0;border:1px solid var(--color-border-button-default);background:var(--color-background-primary-default);box-shadow:var(--elevation-xs)}
+    .batch-footer [data-spinning] svg{animation:peach-jav-spin .7s linear infinite}@keyframes peach-jav-spin{to{transform:rotate(1turn)}}
     .batch-footer .geist-button.primary:disabled{border:1px solid var(--color-border-button-default);background:var(--color-background-primary-default)}
-    .batch-people{display:flex;align-items:center;gap:4px;flex:none;min-width:24px}.batch-person{position:relative;display:grid;place-items:center;width:24px;height:24px;flex:none;border-radius:50%;overflow:hidden;background:var(--color-avatar-neutral-background);color:var(--color-text-primary);font:var(--board-caption-semibold)}.batch-person img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+    .chip{display:inline-flex;align-items:center;justify-content:center;border-radius:6px;padding:2px 6px;font:var(--board-body-medium);white-space:nowrap}
+    .chip[data-chip=plain]{color:var(--color-text-secondary)}
+    .chip[data-chip=soft]{background:var(--color-background-secondary-default);color:var(--color-text-secondary)}
+    .chip[data-chip=lime]{background:var(--color-status-lime-background);color:var(--color-status-lime-text)}
+    .chip[data-chip=yellow]{background:var(--color-status-yellow-background);color:var(--color-status-yellow-text)}
+    .chip[data-chip=rose]{background:var(--color-status-rose-background);color:var(--color-status-rose-text)}
+    .chip[data-chip=blue]{background:var(--color-status-blue-background);color:var(--color-status-blue-text)}
+    .batch-people{display:flex;align-items:center;gap:0;flex:none;min-width:24px}.batch-person{position:relative;display:grid;place-items:center;width:24px;height:24px;flex:none;border-radius:50%;overflow:hidden;background:var(--color-avatar-neutral-background);color:var(--color-text-primary);font:var(--board-caption-semibold)}.batch-person img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
     .batch-person>svg{width:16px;height:16px;fill:currentColor}
     .batch-empty{font:var(--board-body);color:var(--muted)}
     .geist-note{font:var(--board-body);color:var(--ink-2);overflow-wrap:anywhere}
@@ -760,8 +876,9 @@
     note.textContent = message;
   }
 
-  // 只做粗提取；合法番号由 Peach 校验。
-  function candidates(value, maxLength = 800, minSerialDigits = 1) {
+  // 只做粗提取；合法番号由 Peach 校验。separated 用于整页文本：与 Peach 的 is_jav_code 一致，
+  // 只收原文带连字符的厂牌与素人番号，用户名、导航、域名里的「字母+数字」不补分隔符。
+  function candidates(value, maxLength = 800, separated = false) {
     const found = new Set();
     const bounded = String(value || '').slice(0, maxLength).toUpperCase();
     let rest = bounded.replace(/\bFC2(?:[-_ ]?PPV)?[-_ ]?(\d{4,9})\b/g, (_, digits) => {
@@ -776,12 +893,61 @@
       found.add(`${prefix}-S${digits}`);
       return ' ';
     });
-    for (const match of rest.matchAll(/\b((?:\d{1,5})?[A-Z]{2,12})[-_]?(\d{1,8})([A-Z]{0,2})(?=$|[^A-Z0-9])/g)) {
-      if (match[2].length < minSerialDigits) continue;
-      found.add(`${match[1]}-${match[2]}${match[3]}`);
-    }
+    const shape = separated ? /\b((?:\d{3})?[A-Z]{2,8})-(\d{2,5})([A-Z]{0,2})(?=$|[^A-Z0-9])/g
+      : /\b((?:\d{1,5})?[A-Z]{2,12})[-_]?(\d{1,8})([A-Z]{0,2})(?=$|[^A-Z0-9])/g;
+    for (const match of rest.matchAll(shape)) found.add(`${match[1]}-${match[2]}${match[3]}`);
     for (const match of rest.matchAll(/\b\d{6}[-_]\d{2,4}\b/g)) found.add(match[0]);
     return found;
+  }
+
+  // 纵向覆盖滚动条：沿用 Peach `ui-kit/overlay-scrollbar.ts` 的轨道、滑块、边缘渐隐与拖动规则；
+  // 吸顶表头不参与滚动，轨道与上边缘渐隐从表头下沿算起。
+  function overlayScrollbar(container) {
+    const host = container.parentElement;
+    const edges = element('div', 'ui-ov-edges'); edges.hidden = true; edges.setAttribute('aria-hidden', 'true');
+    edges.append(element('span', 'ui-ov-edge-top'), element('span', 'ui-ov-edge-bottom'));
+    const track = element('div', 'ovtrack ov-y'); track.hidden = true; track.setAttribute('aria-hidden', 'true');
+    const thumb = element('div', 'ovthumb'); track.append(thumb); host.append(edges, track);
+    let range = 0, travel = 0, frame = null;
+    const paint = () => {
+      const top = container.scrollTop, above = range > 1 && top > 1, below = range > 1 && top < range - 1;
+      edges.hidden = !above && !below;
+      edges.classList.toggle('ui-can-scroll-top', above); edges.classList.toggle('ui-can-scroll-bottom', below);
+      if (range > 1) thumb.style.transform = `translateY(${travel > 0 ? Math.max(0, Math.min(1, top / range)) * travel : 0}px)`;
+    };
+    const sync = () => {
+      const head = container.querySelector(':scope>table>thead')?.offsetHeight ?? 0;
+      const left = container.offsetLeft, top = container.offsetTop + container.clientTop + head, width = container.clientWidth;
+      const height = container.clientHeight - head, content = container.scrollHeight - head;
+      range = content - height; travel = 0;
+      Object.assign(edges.style, {left:`${left + container.clientLeft}px`, top:`${top}px`, width:`${width}px`, height:`${height}px`});
+      if (range <= 1) { track.hidden = true; paint(); return; }
+      track.hidden = false;
+      const trackSize = Math.max(0, height - 16);
+      Object.assign(track.style, {top:`${top + 8}px`, height:`${trackSize}px`,
+        right:`${host.clientWidth - left - container.clientLeft - width}px`});
+      // 内容很长时滑块保留 24px 下限，保证仍可拖动。
+      const thumbSize = Math.min(trackSize, Math.max(24, height / content * trackSize));
+      travel = trackSize - thumbSize; thumb.style.height = `${thumbSize}px`; paint();
+    };
+    container.addEventListener('scroll', () => { if (frame === null) frame = requestAnimationFrame(() => { frame = null; paint(); }); }, {passive:true});
+    const resize = new ResizeObserver(sync); resize.observe(container);
+    new MutationObserver(() => { for (const child of container.children) resize.observe(child); requestAnimationFrame(sync); })
+      .observe(container, {childList:true, subtree:true});
+    track.addEventListener('pointerdown', event => {
+      const trackRect = track.getBoundingClientRect(), thumbRect = thumb.getBoundingClientRect();
+      const distance = trackRect.height - thumbRect.height, scrollRange = container.scrollHeight - container.clientHeight;
+      if (distance <= 0 || scrollRange <= 0) return;
+      // 按在滑块上保持按住的那一点，按在轨道空白处则把滑块中心挪过来。
+      const grab = event.clientY >= thumbRect.top && event.clientY <= thumbRect.bottom ? event.clientY - thumbRect.top : thumbRect.height / 2;
+      const to = moved => { container.scrollTop = Math.max(0, Math.min(scrollRange, (moved.clientY - trackRect.top - grab) / distance * scrollRange)); };
+      const stop = () => { track.classList.remove('dragging'); track.removeEventListener('pointermove', to);
+        track.removeEventListener('pointerup', stop); track.removeEventListener('pointercancel', stop); };
+      track.classList.add('dragging'); track.setPointerCapture(event.pointerId);
+      track.addEventListener('pointermove', to); track.addEventListener('pointerup', stop); track.addEventListener('pointercancel', stop);
+      to(event); event.preventDefault();
+    });
+    return sync;
   }
 
   function comparisonKey(code) {
@@ -835,6 +1001,30 @@
       return value.slice(0, 800);
     }
     return text;
+  }
+
+  const PERFORMER_LABELS = new Set(['出演者', '出演', '演員', '演员', '女優', '女优', 'actress', 'actresses', 'cast', 'performer', 'performers', 'stars']);
+  // 详情页出演者：按字段标签读取，优先取链接文字。JavDB 在名字后用 ♀/♂ 标性别，原样带给 Peach 判别。
+  function performerNames(url = new URL(location.href)) {
+    const site = siteFor(url), names = [];
+    for (const selector of site?.selectors || []) {
+      for (const field of [...document.querySelectorAll(selector)].slice(0, 40)) {
+        if (!field.matches('th, dt, strong, b, .header')) continue;
+        const label = (field.textContent || '').trim().split(/[:：]/, 1)[0].trim().toLowerCase();
+        if (!PERFORMER_LABELS.has(label)) continue;
+        const holders = ['TH', 'DT'].includes(field.tagName) ? [field.nextElementSibling]
+          : [field.parentElement, field.parentElement?.nextElementSibling];
+        for (const holder of holders) {
+          const links = [...(holder?.querySelectorAll('a') || [])].filter(link => !link.contains(field));
+          for (const link of links) {
+            const mark = link.nextElementSibling?.textContent?.trim();
+            names.push(`${link.textContent.trim()}${mark === '♂' || mark === '♀' ? mark : ''}`);
+          }
+          if (links.length) break;
+        }
+      }
+    }
+    return [...new Set(names.filter(name => name && name.length <= 60))].slice(0, 10);
   }
 
   function automaticIdentity(url, site) {
@@ -1187,10 +1377,10 @@
       }
     }
     if (!view.root.isConnected) return;
-    if (detail?.code && !detail.resolve && !detail.conflict)
-      codes.set(comparisonKey(detail.code), detail.code);
-    // 整页文本按 Peach 商品号的最短序号筛选，PS4 / PS5 等单数字设备名不作为候选。
-    const add = text => { for (const code of candidates(text, text.length, 2)) if (!codes.has(comparisonKey(code))) codes.set(comparisonKey(code), code); };
+    view.detailCode = detail?.code && !detail.resolve && !detail.conflict ? detail.code : '';
+    if (view.detailCode) codes.set(comparisonKey(view.detailCode), view.detailCode);
+    // 整页文本只收原文带分隔符的番号；PS4、TOP250、jay925 这类设备名、导航与用户名不作为候选。
+    const add = text => { for (const code of candidates(text, text.length, true)) if (!codes.has(comparisonKey(code))) codes.set(comparisonKey(code), code); };
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {acceptNode(node) {
       const parent = node.parentElement;
       return !parent || parent.closest('script,style,noscript,textarea,input,select,[contenteditable],aside[id^="peach-jav-"]')
@@ -1216,8 +1406,8 @@
       const main = element('span', 'batch-row-main');
       const people = element('span', 'batch-people');
       people.append(defaultPersonAvatar());
-      const status = element('span', 'batch-row-status');
-      status.textContent='待加入';
+      const status = element('span', 'batch-row-status chip');
+      status.dataset.chip='plain';status.textContent='待加入';status.title='待加入';
       const result=element('td');result.append(status);
       const codeLabel=element('span','batch-row-code',code);codeLabel.title=code;
       main.append(people,codeLabel);identity.append(main);row.append(selection,identity,result);
@@ -1233,6 +1423,72 @@
     void loadPagePeople(view);
   }
 
+  // 只读 Peach 本地人物资料；setAbort 收到可中止当前请求的函数，结束时收到 null。
+  function requestPeople(config, codes, setAbort = () => {}, performers = []) {
+    return new Promise((resolve,reject)=>{
+      let handle, timer, finished=false;
+      const finish=(error,value)=>{if(finished)return;finished=true;clearTimeout(timer);setAbort(null);error?reject(error):resolve(value);};
+      const abort=()=>{finish(new Error('本地女优资料未取得'));handle?.abort?.();};
+      setAbort(abort); timer=setTimeout(abort,5000);
+      const names=codes.length===1?performers.map(name=>`&performers=${encodeURIComponent(name)}`).join(''):'';
+      handle=GM_xmlhttpRequest({method:'GET',url:`${config.base}/api/jav-browser/people?codes=${encodeURIComponent(codes.join(','))}${names}`,anonymous:true,redirect:'error',timeout:5000,
+        headers:{Accept:'application/json',Authorization:`Bearer ${config.token}`},
+        onload(response){try{if(response.status!==200||response.responseText.length>2*1024*1024)throw new Error();
+          const data=JSON.parse(response.responseText);if(data.ok!==true||data.source!=='local-cache'||!data.items)throw new Error();finish(null,data);
+        }catch{finish(new Error('本地女优资料未取得'));}},onerror:()=>finish(new Error('本地女优资料未取得')),ontimeout:()=>finish(new Error('本地女优资料未取得')),onabort:()=>finish(new Error('本地女优资料未取得'))});
+    });
+  }
+
+  // 人物头像按 Peach 作品卡的叠放头像排列，最多五位；无人物资料显示默认人像。
+  function renderPeople(target, people) {
+    if (!Array.isArray(people) || people.some(person=>!person||typeof person.name!=='string'||!person.name.trim()||person.name.length>200)) throw new Error('本地女优资料格式无效');
+    target.replaceChildren(...(people.length ? [] : [defaultPersonAvatar()]));
+    target.title = people.map(person => person.name).join('、');
+    for (const person of people.slice(0,5)) {
+      const avatar=element('span','batch-person',Array.from(person.name.trim())[0].toLocaleUpperCase());
+      avatar.title=person.name;avatar.setAttribute('role','img');avatar.setAttribute('aria-label',person.name);
+      if (typeof person.avatar==='string' && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(person.avatar) && person.avatar.length<32000) {
+        const image=element('img');image.alt='';image.src=person.avatar;image.addEventListener('error',()=>image.remove(),{once:true});avatar.append(image);
+      }
+      target.append(avatar);
+    }
+  }
+
+  function applyRowStatus(item, body) {
+    const download = body.download;
+    // 只在本次跟踪中由进行中变为已入库时响；提交即返回已入库（早已加过）不响。
+    if (body.state === 'ingested' && ['queued', 'searching', 'submitted', 'importing'].includes(item.row.dataset.state)) playSound('success');
+    item.cause = body.state === 'failed' ? body.cause || '' : '';
+    item.tracking = tracking(body);
+    item.done = !['failed', 'no_match'].includes(body.state);
+    if (body.state === 'failed') setRowState(item, 'failed', failureText(body), {magnet:'磁力失效', cloud:'网盘问题'}[item.cause] || '失败');
+    else if (body.state === 'no_match') setRowState(item, 'no_match', failureText(body));
+    else if (body.state === 'submitted' && ['remote_done', 'landed'].includes(download?.state)) setRowState(item, 'importing', download.label || '入库中');
+    else if (body.state === 'submitted' && download?.state === 'remote_running' && typeof download.progress === 'number' && Number.isFinite(download.progress)) {
+      const percent = Math.round(Math.min(1, Math.max(0, download.progress)) * 100);
+      setRowState(item, 'submitted', `网盘下载中 ${percent}%`, `下载中 ${percent}%`);
+    } else if (item.tracking && body.state === 'ingested') setRowState(item, 'organizing', download?.postprocess_label || '整理中');
+    else setRowState(item, body.state, LABELS[body.state]);
+  }
+
+  // 提交后自动查询仍在进行的行；再次提交会让上一轮跟踪退出。
+  async function trackRows(view) {
+    const config = configuration(), generation = (view.trackGeneration = (view.trackGeneration || 0) + 1);
+    if (!config) return;
+    const url = new URL(location.href), site = siteFor(url), source = site ? sourcePage(url, site) : '';
+    const started = Date.now();
+    for (let count = 0; Date.now() - started < POLL_LIMIT; count++) {
+      if (!view.rows.some(item => item.tracking)) return;
+      await pollWait(count);
+      for (const item of view.rows.filter(row => row.tracking)) {
+        if (!view.root.isConnected || view.trackGeneration !== generation) return;
+        try { applyRowStatus(item, await request(config, item.code, source, 'GET')); }
+        catch { /* 连接异常时保留最近一次确认的状态，下一轮再查。 */ }
+      }
+      if (view.root.isConnected && view.trackGeneration === generation && !view.busy) view.paint();
+    }
+  }
+
   async function loadPagePeople(view) {
     const config=configuration(), rows=view.rows;
     if (!config || !rows.length) return;
@@ -1240,34 +1496,18 @@
       if (!view.root.isConnected || view.rows !== rows) return;
       const chunk=rows.slice(start,start+50), codes=chunk.map(item=>item.code);
       try {
-        const body=await new Promise((resolve,reject)=>{
-          let handle, timer, finished=false;
-          const finish=(error,value)=>{if(finished)return;finished=true;clearTimeout(timer);view.peopleAbort=null;error?reject(error):resolve(value);};
-          view.peopleAbort=()=>{finish(new Error('本地女优资料未取得'));handle?.abort?.();};
-          timer=setTimeout(view.peopleAbort,5000);
-          handle=GM_xmlhttpRequest({method:'GET',url:`${config.base}/api/jav-browser/people?codes=${encodeURIComponent(codes.join(','))}`,anonymous:true,redirect:'error',timeout:5000,
-            headers:{Accept:'application/json',Authorization:`Bearer ${config.token}`},
-            onload(response){try{if(response.status!==200||response.responseText.length>2*1024*1024)throw new Error();
-              const data=JSON.parse(response.responseText);if(data.ok!==true||data.source!=='local-cache'||!data.items)throw new Error();finish(null,data);
-            }catch{finish(new Error('本地女优资料未取得'));}},onerror:()=>finish(new Error('本地女优资料未取得')),ontimeout:()=>finish(new Error('本地女优资料未取得')),onabort:()=>finish(new Error('本地女优资料未取得'))});
-        });
+        const body=await requestPeople(config, codes, abort => { view.peopleAbort = abort; });
         if (!view.root.isConnected || view.rows !== rows) return;
-        for (const item of chunk) {
-          const people=body.items[item.code];
-          if (!Array.isArray(people) || people.some(person=>!person||typeof person.name!=='string'||!person.name.trim()||person.name.length>200)) throw new Error('本地女优资料格式无效');
-          item.people.replaceChildren(...(people.length ? [] : [defaultPersonAvatar()]));
-          for (const person of people.slice(0,3)) {
-            const avatar=element('span','batch-person',Array.from(person.name.trim())[0].toLocaleUpperCase());
-            avatar.title=person.name;avatar.setAttribute('role','img');avatar.setAttribute('aria-label',person.name);
-            if (typeof person.avatar==='string' && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(person.avatar) && person.avatar.length<32000) {
-              const image=element('img');image.alt='';image.src=person.avatar;image.addEventListener('error',()=>image.remove(),{once:true});avatar.append(image);
-            }
-            item.people.append(avatar);
-          }
-          if(people.length>3){const more=element('span','batch-person',`+${people.length-3}`);more.title=people.slice(3).map(person=>person.name).join('、');item.people.append(more);}
-        }
+        for (const item of chunk) renderPeople(item.people, body.items[item.code]);
       } catch(error) { if(view.root.isConnected && view.rows===rows){view.peopleNote.hidden=false;view.peopleNote.textContent=`${error.message}，仍可选择番号加入。`;} return; }
     }
+    // 不在馆藏的作品只能靠详情页的出演者名字找到本地人物。
+    const names=performerNames(), item=view.detailCode && rows.find(row=>comparisonKey(row.code)===comparisonKey(view.detailCode));
+    if (!item || !names.length) return;
+    try {
+      const body=await requestPeople(config, [item.code], abort => { view.peopleAbort = abort; }, names);
+      if (view.root.isConnected && view.rows === rows) renderPeople(item.people, Object.values(body.items)[0]);
+    } catch { /* 保留按番号取得的结果。 */ }
   }
 
   function openPageActions() {
@@ -1294,7 +1534,8 @@
     header.append(selection,numberHeader,statusHeader);head.append(header);
     const list=element('tbody');table.append(columns,head,list);tableFrame.append(table);
     const peopleNote=element('p','hint');peopleNote.hidden=true;peopleNote.setAttribute('role','status');
-    body.append(note, tip, tableFrame, peopleNote);
+    const tableHost=element('div','batch-frame');tableHost.append(tableFrame);
+    body.append(note, tip, tableHost, peopleNote);overlayScrollbar(tableFrame);
     const footer = element('footer', 'footer batch-footer');
     const rescan = control('重新识别', {icon:'refresh'}); rescan.title='重新识别';
     const addSelected = control('加入所选', {primary:true});
@@ -1324,31 +1565,38 @@
       if (!chosen.length) return;
       const config = configuration();
       if (!config) { note.textContent='配对信息已失效，请重新设置。'; return; }
+      playSound('start');
       view.busy=true; view.paint();
       const url = new URL(location.href), site = siteFor(url);
       const source = site ? sourcePage(url, site) : '';
       let handled=0, failed=0;
       for (const item of chosen) {
         if (!root.isConnected || !dialog.open) break;
-        item.status.textContent='正在交给 Peach…';
+        const switching = item.cause === 'magnet';
+        setRowState(item, 'sending', switching ? '正在换一个磁力…' : '正在交给 Peach…');
         try {
-          const result = await request(config, item.code, source, 'POST');
+          const result = await request(config, item.code, source, 'POST', false, switching ? {switch:true} : {});
           if (!root.isConnected) break;
-          item.row.dataset.state=result.state; item.status.textContent=LABELS[result.state];
-          item.done=!['failed','no_match'].includes(result.state);
+          applyRowStatus(item, result);
           if (!item.done) failed++;
         } catch (error) {
           if (!root.isConnected) break;
-          item.row.dataset.state='failed'; item.status.textContent=error.message; failed++;
+          setRowState(item, 'failed', error.message, errorLabel(error)); failed++;
         }
-        item.status.title=item.status.textContent;
+        // 已处理的行取消勾选：完成项不再可选，未完成项留待重新勾选或全部加入。
+        item.input.checked=false;
         handled++; note.textContent=`已处理 ${handled}/${chosen.length} 项${failed ? `，${failed} 项未完成` : ''}。`;
       }
+      const magnets = view.rows.filter(item => item.cause === 'magnet').length;
+      if (magnets && root.isConnected) note.textContent += `${magnets} 项磁力失效，再次加入会换一个磁力。`;
       view.busy=false; view.paint();
+      void trackRows(view);
     };
     addSelected.addEventListener('click', () => { void submit(false); });
     addAll.addEventListener('click', () => { void submit(true); });
-    rescan.addEventListener('click', () => { view.peopleAbort?.();peopleNote.hidden=true;view.busy=true; view.paint(); note.textContent='正在识别本页番号…'; void scanPage(view); });
+    // 识别通常很快，图标至少转满一圈，识别结束后转完当前这一圈再停。
+    rescan.addEventListener('animationiteration', () => { if (!view.busy) delete rescan.dataset.spinning; });
+    rescan.addEventListener('click', () => { rescan.dataset.spinning = ''; view.peopleAbort?.();peopleNote.hidden=true;view.busy=true; view.paint(); note.textContent='正在识别本页番号…'; void scanPage(view); });
     close.addEventListener('click', () => dialog.close());
     dialog.addEventListener('close', () => {
       view.peopleAbort?.();
@@ -1422,6 +1670,13 @@
     display.append(element('p', 'hint', '所有网页模式需要脚本管理器允许在 HTTP／HTTPS 网页运行；普通网页内容只在点击识别后读取。'));
     display.append(element('p','hint','彻底关闭后不显示浮卡和图标。可从篡改猴菜单选择「开启」恢复，后台任务继续处理。'));
     body.append(display);
+    const sound = element('fieldset', 'display-scope');
+    sound.append(element('legend', '', '提示音'));
+    const soundOption = element('label'), soundInput = element('input');
+    Object.assign(soundInput, {type:'checkbox', name:'peach-success-sound', checked:GM_getValue(STORAGE_SOUND, true) !== false});
+    soundOption.append(soundInput, document.createTextNode('点加入和影片完成入库时播放提示音'));
+    sound.append(soundOption);
+    body.append(sound);
     const appearanceNote = element('p', 'hint', appearance()
       ? `外观已同步 Peach：${{system:'跟随系统',light:'浅色',dark:'深色'}[appearance().theme]}，强调色 ${appearance().accent}。`
       : '外观暂随系统。请在同一浏览器打开一次已配对的 Peach，以同步深浅色和强调色；之后修改会自动同步。');
@@ -1562,6 +1817,7 @@
         GM_setValue(STORAGE_BASE, config.base);
         if(range !== 'off')GM_setValue(STORAGE_DISPLAY,range);
         GM_setValue(STORAGE_ENABLED,range !== 'off');
+        GM_setValue(STORAGE_SOUND,soundInput.checked);
       } catch {
         error.textContent = '设置未能保存，请检查脚本管理器的存储权限后重试。';
         error.hidden = false;
@@ -1629,13 +1885,13 @@
     } catch { /* GM 存储不可用时保留原操作的错误反馈。 */ }
   }
 
-  function request(config, code, source, method, resolveIdentity = false) {
+  function request(config, code, source, method, resolveIdentity = false, extra = {}) {
     return new Promise((resolve, reject) => {
       const started = performance.now();
       const fail = (kind, message, status = 0) => {
         rememberError(config, resolveIdentity ? '' : code, source, resolveIdentity ? 'IDENTIFY' : method,
           kind, performance.now() - started, status);
-        reject(new Error(message));
+        reject(Object.assign(new Error(message), { kind, status }));
       };
       const headers = { Authorization: `Bearer ${config.token}`, Accept: 'application/json' };
       if (method === 'POST') headers['Content-Type'] = 'application/json';
@@ -1645,7 +1901,7 @@
           url: resolveIdentity ? `${config.base}/api/jav-browser/identify?source_url=${encodeURIComponent(source)}${code ? `&code=${encodeURIComponent(code)}` : ''}`
             : `${config.base}/api/jav-browser${method === 'GET' ? `?code=${encodeURIComponent(code)}` : ''}`,
           headers,
-          ...(method === 'POST' ? { data: JSON.stringify(source ? {code, source_url:source} : {code, manual:true}) } : {}),
+          ...(method === 'POST' ? { data: JSON.stringify({...(source ? {code, source_url:source} : {code, manual:true}), ...extra}) } : {}),
           anonymous: true,
           timeout: 60_000,
           onload(response) {
@@ -1717,6 +1973,7 @@
       : terminalSuccess ? '已有该影片'
       : view.busy ? '正在查询 Peach'
       : view.queryOnly || ACTIVE.has(view.state) ? '查询 Peach 状态'
+      : view.state === 'failed' && view.cause === 'magnet' ? '换一个磁力'
       : ['failed', 'no_match'].includes(view.state) ? '重试加入 Peach 馆藏' : '加入 Peach 馆藏';
     if (view.busy) {
       const spinner = element('span', 'ui-geist-spinner');
@@ -1777,8 +2034,11 @@
       view.identity.code = body.code;
       view.identity.resolve = false;
       view.heading.textContent = body.code;
+      view.loadPeople(body.code);
     }
+    if (body.state === 'ingested' && ACTIVE.has(view.state)) playSound('success');
     view.state = body.state;
+    view.cause = body.state === 'failed' ? body.cause || '' : '';
     view.tracking = tracking(body);
     view.queryOnly = view.tracking;
     if (!view.queryOnly) attempts.delete(comparisonKey(view.identity.code));
@@ -1795,6 +2055,7 @@
         label += ` · ${percent}%`;
       }
     }
+    if (['failed', 'no_match'].includes(body.state) && body.stage !== 'submitting') label = failureText(body);
     view.statusText = label;
     view.note.textContent = label;
     view.note.dataset.variant = body.state === 'failed' || download?.postprocess_state === 'failed' ? 'error' : 'secondary';
@@ -1808,6 +2069,7 @@
     view.busy = true;
     view.note.dataset.variant = 'secondary';
     if (method === 'POST') {
+      playSound('start');
       attempts.add(comparisonKey(view.identity.code));
       view.queryOnly = true;
       view.note.textContent = '正在交给 Peach';
@@ -1816,13 +2078,14 @@
       view.progress.setAttribute('aria-valuetext', '等待 Peach 确认任务状态');
     }
     render(view);
-    const deadline = Date.now() + 120_000;
+    const deadline = Date.now() + POLL_LIMIT;
     try {
-      let body = await request(config, view.identity.code, view.identity.source, method, Boolean(view.identity.resolve));
+      let body = await request(config, view.identity.code, view.identity.source, method, Boolean(view.identity.resolve),
+        method === 'POST' && view.cause === 'magnet' ? {switch:true} : {});
       if (!alive(view)) return;
       applyState(view, body);
-      for (let count = 0; tracking(body) && count < 30 && Date.now() < deadline; count++) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
+      for (let count = 0; tracking(body) && Date.now() < deadline; count++) {
+        await pollWait(count);
         if (!alive(view)) return;
         body = await request(config, view.identity.code, view.identity.source, 'GET');
         if (!alive(view)) return;
@@ -1869,7 +2132,22 @@
     const summary = element('span', 'bar-summary');
     summary.hidden = true;
     const heading = element('div', 'bar-heading');
-    heading.append(label, summary);
+    const title = element('div', 'bar-title');
+    // 与本页番号列表相同的人物头像；资料未取得时保留默认人像。商品号要等 Peach 解析出番号后再查。
+    let titlePeople = null;
+    const loadTitlePeople = code => {
+      const config = configuration();
+      if (!titlePeople || !code || !config) return;
+      requestPeople(config, [code], undefined, performerNames()).then(body => { if (root.isConnected) renderPeople(titlePeople, Object.values(body.items)[0]); }).catch(() => {});
+    };
+    if (!item.conflict && (item.code || item.resolve)) {
+      titlePeople = element('span', 'batch-people');
+      titlePeople.append(defaultPersonAvatar());
+      title.append(titlePeople);
+      if (!item.resolve) loadTitlePeople(item.code);
+    }
+    title.append(label);
+    heading.append(title, summary);
     const actions = element('div', 'bar-actions');
     const settingsButton = control('Peach 设置', { icon: 'settings' });
     settingsButton.addEventListener('click', configure);
@@ -1929,7 +2207,7 @@
     wireLauncher(root, launcher);
     launcher.hidden = true;
     shadow.append(panel, launcher);
-    const view = { root, panel, body, launcher, collapse, summary, button, note, flow, steps, progress, progressFill, heading: label, settings: settingsButton, identity: item, url: location.href, generation, state: 'idle', busy: false, tracking: false, queryOnly: attempts.has(comparisonKey(item.code)) };
+    const view = { root, panel, body, launcher, collapse, summary, button, note, flow, steps, progress, progressFill, heading: label, loadPeople: loadTitlePeople, settings: settingsButton, identity: item, url: location.href, generation, state: 'idle', busy: false, tracking: false, queryOnly: attempts.has(comparisonKey(item.code)) };
     current = view;
     refreshUpdateEntry();
     if (settingsView?.dialog.open || batchView?.dialog.open) {
