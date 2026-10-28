@@ -2,6 +2,19 @@
 
 Notable changes are grouped by version. English and Chinese describe the same behavior; source-only versions are marked explicitly. / 按版本记录面向使用者的变化；中英文保持事实一致，未单独发布的源码版本明确标注。
 
+## 0.6.6 — 2026-10-28
+
+### Changed / 变更
+
+- **Update** opens the Sleazy install file directly, so the userscript manager shows the update prompt instead of the script page. / 「更新用户脚本」直接打开 Sleazy 安装文件，脚本管理器随即弹出更新确认，不再跳到脚本主页。
+- **Settings** keep only the hints needed to pair and to turn the icon back on. / 设置页只保留配对和恢复图标所需的提示。
+
+### Fixed / 修复
+
+- With a Peach release newer than 0.51.0 (from 2026-10-28 evening), switching magnets searches every source instead of stopping at the first high-definition result, and performer avatars are framed on the detected face like Peach's own avatars. / 配合 2026-10-28 晚间之后的 Peach，换磁力时会查完所有来源，不再在第一条高清结果处提前结束；人物头像按人脸取景，与 Peach 一致。
+
+[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/v0.6.5...v0.6.6)
+
 ## 0.6.5 — 2026-10-28
 
 ### Fixed / 修复

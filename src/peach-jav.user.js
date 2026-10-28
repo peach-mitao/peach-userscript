@@ -12,7 +12,7 @@
 // @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
 // @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.6.5
+// @version      0.6.6
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -88,7 +88,8 @@
   const STORAGE_INSTALLED = 'peach.jav.installed-version';
   const STORAGE_UPDATES = 'peach.jav.updates';
   const STORAGE_CHECKED = 'peach.jav.update-attempted-at';
-  const RELEASE_PAGE = 'https://sleazyfork.org/zh-CN/scripts/600821';
+  // 更新入口直接打开 Sleazy 的安装文件，与 @downloadURL 相同，脚本管理器随即弹出更新确认。
+  const RELEASE_INSTALL = 'https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js';
   const RELEASE_META = 'https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js';
   const infoVersion = typeof GM_info === 'object' && validVersion(GM_info?.script?.version) ? GM_info.script.version : SCRIPT_VERSION;
   const RUNNING_VERSION = compareVersion(SCRIPT_VERSION, infoVersion) <= 0 ? SCRIPT_VERSION : infoVersion;
@@ -939,7 +940,7 @@
     const version = fromPeach ? bundled : remote;
     if (compareVersion(version, RUNNING_VERSION) > 0) return {
       key: `script:${version}`, kind: 'script', message: `用户脚本 v${version} 可更新。`,
-      href: fromPeach && config ? `${config.base}/integrations/peach-jav.user.js` : RELEASE_PAGE,
+      href: fromPeach && config ? `${config.base}/integrations/peach-jav.user.js` : RELEASE_INSTALL,
     };
     if (local?.release?.state === 'available' && typeof local.release.latest_version === 'string') return {
       key: `peach:${config.base}:${local.release.latest_version}`, kind: 'peach',
@@ -1428,11 +1429,11 @@
       body.append(wrapper);
       return { wrapper, input, help };
     }
-    const address = field('peach-base', 'Peach 地址', '可直接粘贴 Peach 复制的配对信息，自动填好地址与令牌。', 'url');
+    const address = field('peach-base', 'Peach 地址', '可粘贴配对信息，一并填好令牌。', 'url');
     address.input.placeholder = 'https://peach.example.com';
     address.input.value = String(GM_getValue(STORAGE_BASE, '') || '');
     address.input.autofocus = true;
-    const secret = field('peach-token', '专用令牌', '在 Peach 配置 → 下载渠道 → 浏览器添加 JAV 中生成。', 'password');
+    const secret = field('peach-token', '专用令牌', '在 Peach 配置 → 下载渠道 → 浏览器添加 JAV 生成。', 'password');
     secret.input.placeholder = saved ? '已保存，留空保留' : '粘贴专用令牌';
     const secretRow = element('div', 'secret');
     secret.input.replaceWith(secretRow);
@@ -1456,8 +1457,7 @@
       Object.assign(radio, {type:'radio', name:'peach-display', value, checked:displayValue === value});
       option.append(radio, document.createTextNode(title)); display.append(option);
     }
-    display.append(element('p', 'hint', '所有网页模式需要脚本管理器允许在 HTTP／HTTPS 网页运行；普通网页内容只在点击识别后读取。'));
-    display.append(element('p','hint','彻底关闭后不显示浮卡和图标。可从篡改猴菜单选择「开启」恢复，后台任务继续处理。'));
+    display.append(element('p','hint','关闭后从篡改猴菜单「开启」恢复。'));
     body.append(display);
     const sound = element('fieldset', 'display-scope');
     sound.append(element('legend', '', '提示音'));
@@ -1466,10 +1466,6 @@
     soundOption.append(soundInput, document.createTextNode('点加入和影片完成入库时播放提示音'));
     sound.append(soundOption);
     body.append(sound);
-    const appearanceNote = element('p', 'hint', appearance()
-      ? `外观已同步 Peach：${{system:'跟随系统',light:'浅色',dark:'深色'}[appearance().theme]}，强调色 ${appearance().accent}。`
-      : '外观暂随系统。请在同一浏览器打开一次已配对的 Peach，以同步深浅色和强调色；之后修改会自动同步。');
-    body.append(appearanceNote);
     const error = element('p', 'geist-note');
     error.id = 'peach-settings-error';
     error.dataset.variant = 'error';
