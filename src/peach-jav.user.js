@@ -276,7 +276,7 @@
     .display-scope input{accent-color:var(--color-accent-500);width:16px;height:16px;margin:0;flex:none}
     .batch-list{position:relative;border:1px solid var(--line);border-radius:var(--control-radius);overflow:auto;overscroll-behavior:contain;
       max-height:min(480px,calc(100dvh - 320px));min-height:97px;scrollbar-width:thin;scrollbar-color:var(--line) transparent;background:var(--color-background-primary-default)}
-    .batch-list thead th{position:sticky;top:0;z-index:1}
+    .batch-list thead th{position:sticky;top:0;z-index:1;border-bottom:0;box-shadow:inset 0 -1px 0 var(--line)}
     .bui-table{width:100%;border-collapse:collapse;text-align:left;table-layout:fixed}.bui-table col:first-child{width:40px}.bui-table col:last-child{width:72px}
     .bui-table th,.bui-table td{height:48px;padding:10px 12px;vertical-align:middle;font:var(--board-body-medium);white-space:nowrap;text-align:left}
     .bui-table th{color:var(--ink);background:var(--surface);border-bottom:1px solid var(--line)}.bui-table td{color:var(--ink)}
