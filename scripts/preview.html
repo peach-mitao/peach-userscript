@@ -23,7 +23,7 @@
       <button type="button" id="activate-script">开启</button>
       <button type="button" id="check-script-update">检测更新</button>
       <button type="button" id="copy-pairing">复制模拟配对信息</button>
-      <a href="?site=dmm&state=idle">DMM 商品号</a><a href="?site=mgs&state=idle">MGS 商品号</a><a href="?state=idle&scan=javdb">JavDB 整页扫描</a><a href="?state=idle&scan=states">本页番号行状态</a>
+      <a href="?site=dmm&state=idle">DMM 商品号</a><a href="?site=mgs&state=idle">MGS 商品号</a><a href="?state=idle&scan=javdb">JavDB 整页扫描</a><a href="?state=idle&scan=states">本页番号行状态</a><a href="?site=list&state=idle&scan=javdb">JavDB 首页</a>
     </nav>
     <h1>REAL-864 作品详情</h1>
     <p class="meta">来源页面示意</p>
@@ -72,6 +72,11 @@
       GM_setValue: (key, value) => { previewValues[key] = value; },
       GM_registerMenuCommand: (label, callback) => { previewMenus[label] = callback; },
       GM_xmlhttpRequest: request => setTimeout(() => {
+        // update=1 模拟 Sleazy 上有新版本，查看更新提醒。
+        if (new URLSearchParams(location.search).get('update') === '1' && request.url.includes('update.sleazyfork.org/')) {
+          request.onload({status:200,finalUrl:request.url,responseText:'// ==UserScript==\n// @name Peach Userscript\n// @namespace https://github.com/peach-mitao/peach-userscript\n// @version 9.9.9\n// ==/UserScript=='});
+          return;
+        }
         if (previewState === 'failed') { request.onerror(); return; }
         if (new URLSearchParams(location.search).get('scan') === 'states') {
           const url = new URL(request.url);

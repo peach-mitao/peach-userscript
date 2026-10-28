@@ -12,7 +12,7 @@
 // @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
 // @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.6.6
+// @version      0.6.7
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -191,6 +191,8 @@
   let updateError = '';
   let updateChecking = false;
   let updateDismissed = '';
+  // 没有单部作品浮卡的页面，图标展开的是入口面板；本页番号返回时回到这里。
+  let entryOpen = false;
   let updateGeneration = 0;
   let updateTimer;
   let updateDisposed = false;
@@ -410,7 +412,7 @@
     .chip[data-chip=yellow]{background:var(--color-status-yellow-background);color:var(--color-status-yellow-text)}
     .chip[data-chip=rose]{background:var(--color-status-rose-background);color:var(--color-status-rose-text)}
     .chip[data-chip=blue]{background:var(--color-status-blue-background);color:var(--color-status-blue-text)}
-    .batch-people{display:flex;align-items:center;gap:0;flex:none;min-width:24px}.batch-person{position:relative;display:grid;place-items:center;width:24px;height:24px;flex:none;border-radius:50%;overflow:hidden;background:var(--color-avatar-neutral-background);color:var(--color-text-primary);font:var(--board-caption-semibold)}.batch-person img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+    .batch-people{display:flex;align-items:center;gap:0;flex:none;min-width:24px;isolation:isolate}.batch-person{position:relative;display:grid;place-items:center;width:24px;height:24px;flex:none;border-radius:50%;overflow:hidden;background:var(--color-avatar-neutral-background);color:var(--color-text-primary);font:var(--board-caption-semibold)}.batch-person img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
     .batch-person>svg{width:16px;height:16px;fill:currentColor}
     .batch-empty{font:var(--board-body);color:var(--muted)}
     .geist-note{font:var(--board-body);color:var(--ink-2);overflow-wrap:anywhere}
@@ -431,8 +433,8 @@
     dialog[data-closing],dialog[data-closing]::backdrop{opacity:0;transition-duration:120ms}
     dialog[data-closing]{transform:scale(.98)}
     @starting-style{dialog[open],dialog[open]::backdrop{opacity:0}dialog[open]{transform:scale(.98)}}
-    form{display:flex;flex-direction:column;max-height:calc(100dvh - 34px)}
-    dialog .bar{border-bottom:1px solid var(--line);flex:none}dialog .body{padding-top:20px;overflow:auto;overscroll-behavior:contain}dialog .footer{flex:none}
+    form{display:flex;flex-direction:column;max-height:calc(100dvh - 34px);margin:0}dialog>form,dialog>div{position:relative}
+    dialog .bar{border-bottom:1px solid var(--line);flex:none}dialog .body{padding-top:20px;overflow:auto;overscroll-behavior:contain;scrollbar-width:none}dialog .body::-webkit-scrollbar{display:none}dialog .footer{flex:none}
     @media(max-width:760px){.geist-input{font-size:var(--fs-lg)}}
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
   `;
@@ -692,9 +694,11 @@
 
   // 纵向覆盖滚动条：沿用 Peach `ui-kit/overlay-scrollbar.ts` 的轨道、滑块、边缘渐隐与拖动规则；
   // 吸顶表头不参与滚动，轨道与上边缘渐隐从表头下沿算起。
-  function overlayScrollbar(container) {
+  function overlayScrollbar(container, { square = false } = {}) {
     const host = container.parentElement;
     const edges = element('div', 'ui-ov-edges'); edges.hidden = true; edges.setAttribute('aria-hidden', 'true');
+    // 表格框底部是圆角；弹窗主体上下接标题栏和底栏，渐隐不带圆角。
+    if (square) edges.style.borderRadius = '0';
     edges.append(element('span', 'ui-ov-edge-top'), element('span', 'ui-ov-edge-bottom'));
     const track = element('div', 'ovtrack ov-y'); track.hidden = true; track.setAttribute('aria-hidden', 'true');
     const thumb = element('div', 'ovthumb'); track.append(thumb); host.append(edges, track);
@@ -1029,23 +1033,28 @@
     if (!pageInterfaceAllowed()) {updateEntry?.root.remove();updateEntry=null;return;}
     if (current) { updateEntry?.root.remove(); updateEntry = null; return; }
     const model = updateModel();
-    const expanded = document.visibilityState !== 'hidden' && model.kind !== 'current' && updateDismissed !== model.key;
+    const expanded = document.visibilityState !== 'hidden' && (entryOpen || model.kind !== 'current' && updateDismissed !== model.key);
     if (!updateEntry?.root.isConnected) {
-      const entry = surface('peach-jav-updates', 'Peach 更新');
+      const entry = surface('peach-jav-updates', 'Peach');
       const launcher = control('Peach 设置与更新');
       launcher.setAttribute('aria-label', 'Peach 设置与更新');
       launcher.classList.add('launcher');
       const logo = element('img'); logo.src = PEACH_LOGO; logo.alt = ''; logo.draggable=false;
       launcher.replaceChildren(logo);
       wireLauncher(entry.root, launcher);
-      launcher.addEventListener('click', openPageActions);
       const panel = element('section', 'panel');
       const bar = element('header', 'bar');
-      const later = control('稍后', { icon: 'close' });
-      later.addEventListener('click', () => { updateDismissed = updateModel().key; refreshUpdateEntry(); });
-      bar.append(element('strong', '', 'Peach 更新'), later);
-      const body = element('div', 'body'); body.append(updateSection());
-      const settings = control('Peach 设置'); settings.addEventListener('click', configure); body.append(settings);
+      const later = control('收起', { icon: 'close' });
+      later.addEventListener('click', () => {
+        const shown = updateModel();
+        if (shown.kind !== 'current') updateDismissed = shown.key;
+        entryOpen = false; refreshUpdateEntry(); updateEntry?.launcher.focus();
+      });
+      bar.append(element('strong', '', 'Peach'), later);
+      const scan = control('识别本页全部番号', { primary: true }); scan.addEventListener('click', openPageActions);
+      const settings = control('Peach 设置'); settings.addEventListener('click', configure);
+      const body = element('div', 'body'); body.append(updateSection({ availableOnly: true }), scan, settings);
+      launcher.addEventListener('click', () => { entryOpen = true; refreshUpdateEntry(); later.focus(); });
       panel.append(bar, body); entry.shadow.append(panel, launcher);
       updateEntry = { ...entry, launcher, panel };
     }
@@ -1304,6 +1313,7 @@
     if (!configuration()) { configure(); return; }
     if (batchView?.dialog.open) { batchView.dialog.focus(); return; }
     if (settingsView?.dialog.open) settingsView.dialog.close();
+    if (!current) entryOpen = true;
     const previousFocus=current?.root.shadowRoot?.activeElement || updateEntry?.root.shadowRoot?.activeElement || document.activeElement;
     const {root, shadow} = surface('peach-jav-batch', 'Peach 页面番号');
     const dialog = element('dialog'); dialog.setAttribute('aria-label', '本页番号');
@@ -1331,7 +1341,7 @@
     const addSelected = control('加入所选', {primary:true});
     const addAll = control('全部加入');
     footer.append(rescan, addAll, addSelected);
-    form.append(bar, body, footer); dialog.append(form); shadow.append(dialog);
+    form.append(bar, body, footer); dialog.append(form); shadow.append(dialog); overlayScrollbar(body, {square:true});
     const view = {root, dialog, note, list, tableFrame, peopleNote, rows:[], busy:true, paint() {
       const available = view.rows.filter(item => !item.done);
       const chosen = available.filter(item => item.input.checked);
@@ -1504,6 +1514,7 @@
     form.append(bar, body, footer);
     dialog.append(form);
     shadow.append(dialog);
+    overlayScrollbar(body, {square:true});
     let closing = false;
     let closeGeneration = 0;
     settingsView = { root, dialog, base: address.input, reopen() {
@@ -1609,7 +1620,7 @@
         return;
       }
       dismiss();
-      panelMode = 'minimized';
+      panelMode = 'minimized'; entryOpen = false;
       pageKey = '';
       refresh();
       paintAllUpdates();
@@ -1843,6 +1854,8 @@
     if (['failed', 'no_match'].includes(body.state) && body.stage !== 'submitting') label = failureText(body);
     view.statusText = label;
     view.note.textContent = label;
+    // 可以加入时按钮自己说明；不能加入时按钮会变成不可用并给出原因，这行只在其他状态显示。
+    view.note.hidden = body.state === 'idle' && body.stage !== 'submitting';
     view.note.dataset.variant = body.state === 'failed' || download?.postprocess_state === 'failed' ? 'error' : 'secondary';
     render(view);
   }
@@ -1857,7 +1870,7 @@
       playSound('start');
       attempts.add(comparisonKey(view.identity.code));
       view.queryOnly = true;
-      view.note.textContent = '正在交给 Peach';
+      view.note.textContent = '正在交给 Peach'; view.note.hidden = false;
       renderFlow(view, { state: 'pending' });
       view.progress.removeAttribute('aria-valuenow');
       view.progress.setAttribute('aria-valuetext', '等待 Peach 确认任务状态');
@@ -1886,7 +1899,7 @@
           view.progress.setAttribute('aria-valuetext', '连接异常，任务状态待确认');
         } else view.progress.setAttribute('aria-valuetext', view.progress.hasAttribute('aria-valuenow')
           ? '连接异常，显示最近一次确认的阶段' : '连接异常，任务状态待确认');
-        view.note.textContent = error.message;
+        view.note.textContent = error.message; view.note.hidden = false;
         view.note.dataset.variant = 'error';
       }
     } finally {

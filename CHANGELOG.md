@@ -2,6 +2,21 @@
 
 Notable changes are grouped by version. English and Chinese describe the same behavior; source-only versions are marked explicitly. / 按版本记录面向使用者的变化；中英文保持事实一致，未单独发布的源码版本明确标注。
 
+## 0.6.7 — 2026-10-28
+
+### Changed / 变更
+
+- **Launcher** on pages without a single title, such as the JavDB home page, opens a small panel with **Scan this page** and **Settings** instead of jumping straight into the page list; going back from the list returns to that panel. / 没有单部作品的页面（如 JavDB 首页）点图标先展开入口面板，内含「识别本页全部番号」和设置，不再直接进入本页番号；从本页番号返回时回到面板。
+- **Card** drops the “可以加入 Peach 馆藏” line; the button already says it, and shows the reason when adding is not possible. / 浮卡去掉「可以加入 Peach 馆藏」这行，按钮本身已说明，不能加入时按钮会给出原因。
+- **Settings** and the page list scroll with the same overlay scrollbar as the table. / 设置页与本页番号的弹窗主体改用与表格相同的覆盖滚动条。
+
+### Fixed / 修复
+
+- **Settings** no longer leave a blank strip below the footer on pages rendered in quirks mode, such as FANZA. / FANZA 等按怪异模式渲染的页面上，设置页底栏下方不再多出一截空白。
+- **Page list** avatars no longer scroll over the sticky header. / 本页番号滚动时，头像不再盖住吸顶表头。
+
+[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/v0.6.6...v0.6.7)
+
 ## 0.6.6 — 2026-10-28
 
 ### Changed / 变更
