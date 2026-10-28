@@ -26,7 +26,7 @@
 
 `GET /api/jav-browser/updates` 使用同一 Bearer 专用令牌，无需番号或作品来源。返回 `{runtime:{version,build_id},release,userscript:{version,minimum_version,install_url,release_url}}`；`release` 沿用 Peach 的发行检查快照。服务端只读取本机状态，不联网检查发行版、不创建任务、不写 ledger。脚本只采纳合法脚本版本，安装入口固定为当前已配对 origin 的 `/integrations/peach-jav.user.js`，应用入口为该 origin 的 `/settings/maintenance#releaseUpdates`。
 
-独立检查固定请求 `https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js`，不带 Bearer、Cookie、来源站地址或影片身份。响应最大 128,000 字符，必须包含唯一 `@name Peach · JAV 入库`、`@namespace https://github.com/peach-mitao/peach-userscript` 与三段数字版本。只解析元数据区，不执行返回内容，也不采纳返回的安装地址；安装动作固定打开 [Sleazy 发布页](https://sleazyfork.org/zh-CN/scripts/600821)。跨域响应与重定向均拒绝。
+独立检查固定请求 `https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js`，不带 Bearer、Cookie、来源站地址或影片身份。响应最大 128,000 字符，必须包含唯一默认 `@name`，值为 `Peach Userscript` 或 0.6.3 之前的 `Peach · JAV 入库`，以及`@namespace https://github.com/peach-mitao/peach-userscript` 与三段数字版本。只解析元数据区，不执行返回内容，也不采纳返回的安装地址；安装动作固定打开 [Sleazy 发布页](https://sleazyfork.org/zh-CN/scripts/600821)。跨域响应与重定向均拒绝。
 
 更新请求通过 `GM_xmlhttpRequest` 的 `anonymous` 模式发送；15 秒看门狗到期后调用 `abort()`。自动检查尝试时间与成功结果分别保存在 `peach.jav.update-attempted-at` 和 `peach.jav.updates`，自动尝试间隔至少 24 小时。页面隐藏或退出中止未完成请求；恢复可见时读取已保存结果，并在间隔到期时检查。手动检查独立于此间隔，失败保留明确错误与重试入口。
 

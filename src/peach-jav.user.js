@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Peach · JAV 入库
+// @name         Peach Userscript
 // @name:zh-CN   Peach 用户脚本
-// @name:zh-TW   Peach 用户脚本
+// @name:zh-TW   Peach 使用者腳本
 // @name:en      Peach Userscript
 // @namespace    https://github.com/peach-mitao/peach-userscript
 // @source       https://github.com/peach-mitao/peach-userscript
@@ -10,8 +10,8 @@
 // @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
 // @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.6.2
-// @description  识别网页中的番号，选择影片并交给 Peach 下载入库。
+// @version      0.6.3
+// @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
 // @description:en Detect video codes on web pages, select titles, and send them to Peach for download and library import.
@@ -79,6 +79,8 @@
   const STORAGE_APPEARANCE = 'peach.jav.appearance';
   const ROOT_ID = 'peach-jav-action';
   const SCRIPT_VERSION = __PEACH_JAV_VERSION__;
+  // 0.6.3 起默认名改为英文；发布页切换前仍返回原名。
+  const PUBLISHED_NAMES = ['Peach Userscript', 'Peach · JAV 入库'];
   const PEACH_LOGO = __PEACH_JAV_LOGO__;
   const STORAGE_INSTALLED = 'peach.jav.installed-version';
   const STORAGE_UPDATES = 'peach.jav.updates';
@@ -891,7 +893,7 @@
                 const version = entries('version');
                 if (!metadata || version.length !== 1 || !validVersion(version[0])
                   || entries('namespace').length !== 1 || entries('namespace')[0] !== 'https://github.com/peach-mitao/peach-userscript'
-                  || entries('name').length !== 1 || entries('name')[0] !== 'Peach · JAV 入库') throw new Error();
+                  || entries('name').length !== 1 || !PUBLISHED_NAMES.includes(entries('name')[0])) throw new Error();
                 finish(null, { version: version[0] });
               } else {
                 const body = JSON.parse(response.responseText);
