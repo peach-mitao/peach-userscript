@@ -44,7 +44,8 @@ test('本地安装制品声明固定的 Sleazy 自动更新渠道', async () => 
   assert.equal(script.match(/^\/\/ @downloadURL\s+(.+)$/m)?.[1], `${base}.user.js`);
   assert.equal(script.match(/^\/\/ @name:zh-CN\s+(.+)$/m)?.[1], 'Peach 用户脚本');
   assert.equal(script.match(/^\/\/ @name:en\s+(.+)$/m)?.[1], 'Peach Userscript');
-  assert.equal(script.match(/^\/\/ @name\s+(.+)$/m)?.[1], 'Peach · JAV 入库');
+  assert.equal(script.match(/^\/\/ @name:zh-TW\s+(.+)$/m)?.[1], 'Peach 使用者腳本');
+  assert.equal(script.match(/^\/\/ @name\s+(.+)$/m)?.[1], 'Peach Userscript');
 });
 
 test('发布元数据为每个本地化名称提供对应语言的简介', async () => {

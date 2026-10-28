@@ -86,7 +86,7 @@ async function open(browser: Browser, options: {
           mock.updates.push(request);
           if (mock.updateAutomatic) setTimeout(() => request.onload({ status: 200, finalUrl: request.url,
             responseText: request.url.includes('update.sleazyfork.org/')
-              ? `// ==UserScript==\n// @name Peach · JAV 入库\n// @namespace https://github.com/peach-mitao/peach-userscript\n// @version ${version}\n// ==/UserScript==`
+              ? `// ==UserScript==\n// @name Peach Userscript\n// @namespace https://github.com/peach-mitao/peach-userscript\n// @version ${version}\n// ==/UserScript==`
               : JSON.stringify({ runtime: { version: '1.0.0', build_id: 'fixture' }, release: { state: 'current' },
                 userscript: { version, minimum_version: '0.5.1', install_url: '/integrations/peach-jav.user.js' } }) }), 0);
           return { abort: () => request.onabort?.() };
@@ -188,14 +188,14 @@ describe('JAV 用户脚本', () => {
   after(async () => { await browser?.close(); });
 
   describe('独立更新检查', () => {
-    const metadata = (version: string, namespace = 'https://github.com/peach-mitao/peach-userscript') =>
-      `// ==UserScript==\n// @name Peach · JAV 入库\n// @namespace ${namespace}\n// @version ${version}\n// ==/UserScript==`;
+    const metadata = (version: string, namespace = 'https://github.com/peach-mitao/peach-userscript', name = 'Peach Userscript') =>
+      `// ==UserScript==\n// @name ${name}\n// @namespace ${namespace}\n// @version ${version}\n// ==/UserScript==`;
     const updatePanel = (page: Page) => page.locator('#peach-jav-updates');
     const waitUpdates = (page: Page, count: number) => page.waitForFunction(count => window.javMock.updates.length === count, count);
-    const answerMetadata = (page: Page, version: string, namespace?: string) => page.evaluate(({ text }) => {
+    const answerMetadata = (page: Page, version: string, namespace?: string, name?: string) => page.evaluate(({ text }) => {
       const request = window.javMock.updates.at(-1)!;
       request.onload({ status: 200, finalUrl: request.url, responseText: text });
-    }, { text: metadata(version, namespace) });
+    }, { text: metadata(version, namespace, name) });
 
     for (const example of [
       { script: false, peach: false }, { script: true, peach: false },
@@ -249,6 +249,8 @@ describe('JAV 用户脚本', () => {
         await page.evaluate(() => window.javMock.menus['检测更新']!());
         await waitUpdates(page, 2);
         assert.equal(await settingsDialog(page).getByRole('button', { name: '检查更新', exact: true }).count(), 1);
+        await answerMetadata(page, '9.2.0', undefined, 'Peach · JAV 入库');
+        await page.waitForFunction(() => document.querySelector('#peach-jav-updates')?.shadowRoot?.textContent?.includes('v9.2.0 可更新'));
         assert.deepEqual(problems, []);
       } finally { await close(); }
     });
@@ -266,6 +268,11 @@ describe('JAV 用户脚本', () => {
         await waitUpdates(page, 2);
         await page.evaluate(() => window.javMock.updates.at(-1)!.onerror());
         assert.equal((await settingsDialog(page).textContent())!.includes('已是最新'), false);
+        await settingsDialog(page).getByRole('button', { name: '检查更新', exact: true }).click();
+        await waitUpdates(page, 3);
+        await answerMetadata(page, '9.1.0', undefined, 'Other Script');
+        await settingsDialog(page).getByRole('alert').filter({ hasText: '脚本发行状态未取得' }).waitFor();
+        assert.equal(await settingsDialog(page).getByRole('link', { name: '更新用户脚本' }).count(), 0);
         assert.equal(await page.evaluate(() => window.javMock.calls.length), 0);
       } finally { await close(); }
     });

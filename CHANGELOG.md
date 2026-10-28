@@ -2,6 +2,19 @@
 
 Notable changes are grouped by version. English and Chinese describe the same behavior; source-only versions are marked explicitly. / 按版本记录面向使用者的变化；中英文保持事实一致，未单独发布的源码版本明确标注。
 
+## 0.6.3 — 2026-10-28
+
+### Changed / 变更
+
+- Use English as the default script name and description, so Sleazy shows Peach Userscript, Peach 用户脚本 and Peach 使用者腳本 on the matching language pages. / 默认脚本名与简介改为英文，Sleazy 的英文、简体中文、繁体中文页面分别显示 Peach Userscript、Peach 用户脚本、Peach 使用者腳本。
+- Sleazy now syncs the script from the latest GitHub Release and the descriptions from this repository. / Sleazy 改为从最新 GitHub Release 同步脚本，从本仓库同步说明。
+
+### Compatibility / 兼容性
+
+- The update check accepts both the new and the previous name. Installs of 0.6.2 or earlier show the Sleazy source as unavailable in **Check for updates** until the userscript manager updates them. / 更新检查同时接受新旧名称。0.6.2 及更早的安装在脚本管理器自动升级前，「检查更新」中的 Sleazy 来源显示未取得。
+
+[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/v0.6.2...v0.6.3)
+
 ## 0.6.2 — 2026-10-28
 
 ### Fixed / 修复
