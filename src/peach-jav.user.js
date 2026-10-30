@@ -12,7 +12,7 @@
 // @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
 // @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.6.8
+// @version      0.6.9
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -94,10 +94,7 @@
   const infoVersion = typeof GM_info === 'object' && validVersion(GM_info?.script?.version) ? GM_info.script.version : SCRIPT_VERSION;
   const RUNNING_VERSION = compareVersion(SCRIPT_VERSION, infoVersion) <= 0 ? SCRIPT_VERSION : infoVersion;
   // 新实例在同页去重及桥接返回之前登记安装版本，正在运行的实例可收到变化。
-  try {
-    const installed = compareVersion(SCRIPT_VERSION, infoVersion) >= 0 ? SCRIPT_VERSION : infoVersion;
-    if (compareVersion(installed, GM_getValue(STORAGE_INSTALLED, '0.0.0')) > 0) GM_setValue(STORAGE_INSTALLED, installed);
-  } catch { /* 安装检测不阻断原有入口。 */ }
+  recordInstalledVersion();
   if (location.pathname === '/integrations/peach-userscript-bridge') {
     let origin;
     try { origin = settings(location.origin, 'bridge-only').base; } catch { return; }
@@ -190,6 +187,7 @@
   let updateCache = readUpdateCache();
   let updateError = '';
   let updateChecking = false;
+  let updateInstallVersion = '';
   let updateDismissed = '';
   // 没有单部作品浮卡的页面，图标展开的是入口面板；本页番号返回时回到这里。
   let entryOpen = false;
@@ -421,7 +419,7 @@
     .update-section{display:grid;gap:8px;min-width:0;border-top:1px solid var(--line);padding-top:12px}
     .update-actions{display:flex;flex-wrap:wrap;gap:8px}.update-actions a{text-decoration:none}
     .update-actions .geist-button{height:32px;padding-inline:10px}
-    [data-update-kind=script],[data-update-kind=refresh]{--update-foreground:var(--update-script-foreground)}
+    [data-update-kind=script],[data-update-kind=install],[data-update-kind=refresh]{--update-foreground:var(--update-script-foreground)}
     [data-update-kind=peach]{--update-foreground:var(--update-peach-foreground)}
     .geist-note[data-update-kind]:not([data-update-kind=current]){color:var(--update-foreground)}
     .geist-button[data-update-kind]{color:var(--update-foreground);border-color:color-mix(in srgb,var(--update-foreground) 35%,var(--line));background:color-mix(in srgb,var(--update-foreground) 10%,var(--ground));box-shadow:none}
@@ -928,6 +926,14 @@
     } catch { return {}; }
   }
 
+  function recordInstalledVersion() {
+    try {
+      const metadata = typeof GM_info === 'object' && validVersion(GM_info?.script?.version) ? GM_info.script.version : SCRIPT_VERSION;
+      const installed = compareVersion(SCRIPT_VERSION, metadata) >= 0 ? SCRIPT_VERSION : metadata;
+      if (compareVersion(installed, GM_getValue(STORAGE_INSTALLED, '0.0.0')) > 0) GM_setValue(STORAGE_INSTALLED, installed);
+    } catch { /* 安装检测不阻断原有入口。 */ }
+  }
+
   function installedVersion() {
     try { return GM_getValue(STORAGE_INSTALLED, RUNNING_VERSION); } catch { return RUNNING_VERSION; }
   }
@@ -944,7 +950,9 @@
     const fromPeach = compareVersion(bundled, remote || '0.0.0') > 0;
     const version = fromPeach ? bundled : remote;
     if (compareVersion(version, RUNNING_VERSION) > 0) return {
-      key: `script:${version}`, kind: 'script', message: `用户脚本 v${version} 可更新。`,
+      key: `${updateInstallVersion === version ? 'install' : 'script'}:${version}`,
+      kind: updateInstallVersion === version ? 'install' : 'script', version,
+      message: updateInstallVersion === version ? '在脚本管理器完成更新后，刷新本页即可使用。' : `用户脚本 v${version} 可更新。`,
       href: fromPeach && config ? `${config.base}/integrations/peach-jav.user.js` : RELEASE_INSTALL,
     };
     if (local?.release?.state === 'available' && typeof local.release.latest_version === 'string') return {
@@ -968,6 +976,7 @@
 
   function paintUpdates(node) {
     const model = updateModel();
+    node.dataset.updateKey = model.key;
     const availableOnly = node.dataset.availableOnly === 'true';
     node.hidden = availableOnly && model.kind === 'current';
     if (node.hidden) { node.replaceChildren(); return; }
@@ -977,17 +986,22 @@
     note.dataset.copyKey = `userscript.updates.${checking ? 'checking' : model.kind}.message`;
     note.setAttribute('aria-label', '用户脚本更新状态');
     const actions = element('div', 'update-actions');
-    if (model.kind === 'refresh') {
+    if (model.kind === 'refresh' || model.kind === 'install') {
       const reload = control('刷新本页');
       reload.dataset.updateKind = 'refresh';
       reload.dataset.copyKey = 'userscript.updates.refresh.action';
       reload.addEventListener('click', () => location.reload());
       actions.append(reload);
-    } else if (model.href) {
-      const install = element('a', 'geist-button', model.kind === 'script' ? '更新用户脚本' : '查看 Peach 更新');
+    }
+    if (model.href) {
+      const install = element('a', 'geist-button', model.kind === 'script' || model.kind === 'install' ? '更新用户脚本' : '查看 Peach 更新');
       install.dataset.updateKind = model.kind;
       Object.assign(install, { href: model.href, target: '_blank', rel: 'noopener noreferrer' });
       install.dataset.copyKey = `userscript.updates.${model.kind}.action`;
+      if (model.kind === 'script' || model.kind === 'install') install.addEventListener('click', () => {
+        updateInstallVersion = model.version;
+        setTimeout(paintAllUpdates, 0);
+      });
       actions.append(install);
     }
     const check = control('检查更新');
@@ -1152,7 +1166,15 @@
       updateGeneration++; updateChecking = false;
       for (const request of updateRequests) request.abort?.();
       updateRequests.clear();
-    } else { updateCache = readUpdateCache(); paintAllUpdates(); scheduleUpdateCheck(); }
+    } else { refreshInstalledVersion(); scheduleUpdateCheck(); }
+  }
+
+  function refreshInstalledVersion() {
+    if (updateDisposed) return;
+    recordInstalledVersion();
+    const saved = readUpdateCache(), changed = JSON.stringify(saved) !== JSON.stringify(updateCache);
+    updateCache = saved;
+    if (changed || [...updateContainers].some(node => node.isConnected && node.dataset.updateKey !== updateModel().key)) paintAllUpdates();
   }
 
   function disposeUpdates() {
@@ -1161,6 +1183,7 @@
     for (const request of updateRequests) request.abort?.();
     updateRequests.clear(); updateContainers.clear();
     document.removeEventListener('visibilitychange', updateVisibility);
+    removeEventListener('focus', refreshInstalledVersion);
     if (typeof GM_removeValueChangeListener === 'function') for (const listener of updateListeners) GM_removeValueChangeListener(listener);
   }
 
@@ -2073,6 +2096,7 @@
   }
   addEventListener('resize', () => { for (const root of surfaces) if (root.isConnected) placeSurface(root); });
   document.addEventListener('visibilitychange', updateVisibility);
+  addEventListener('focus', refreshInstalledVersion);
   addEventListener('pagehide', event => { if (!event.persisted) disposeUpdates(); });
   scheduleUpdateCheck();
 })();
