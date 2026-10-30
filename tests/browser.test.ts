@@ -42,7 +42,7 @@ function body(state: State, code = 'SSIS-057'): Body {
 }
 
 async function open(browser: Browser, options: {
-  url?: string; title?: string; html?: string; quirks?: boolean; configured?: boolean; viewport?: typeof VIEWPORTS[number]; initial?: State; script?: string; resolved?: string; automatic?: boolean; updateAutomatic?: boolean; updateValues?: Record<string, string | boolean>;
+  url?: string; title?: string; html?: string; quirks?: boolean; configured?: boolean; viewport?: typeof VIEWPORTS[number]; initial?: State; postState?: State; script?: string; resolved?: string; automatic?: boolean; updateAutomatic?: boolean; updateValues?: Record<string, string | boolean>;
 } = {}) {
   const viewport = options.viewport || VIEWPORTS[0]!;
   const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
@@ -54,7 +54,7 @@ async function open(browser: Browser, options: {
     // FANZA 等来源页没有 doctype，按怪异模式渲染。
     contentType: 'text/html; charset=utf-8', body: `${options.quirks ? '' : '<!doctype html>'}<html><head><meta charset="utf-8"><title>${options.title || 'SSIS-057 作品详情'}</title></head><body>${options.html ?? '<h1>SSIS-057 作品详情</h1>'}</body></html>`,
   }));
-  await page.addInitScript(({ configured, token, base, initial, resolved, automatic, version, updateAutomatic, updateValues }) => {
+  await page.addInitScript(({ configured, token, base, initial, postState, resolved, automatic, version, updateAutomatic, updateValues }) => {
     const listeners = new Map<number, { key: string; callback: (key: string, oldValue: string | boolean, newValue: string | boolean, remote: boolean) => void }>();
     let nextListener = 0;
     const mock: Mock = {
@@ -100,11 +100,12 @@ async function open(browser: Browser, options: {
         mock.pending.push(request);
         if (mock.automatic) setTimeout(() => {
           const code = (request.data ? JSON.parse(request.data).code : new URL(request.url).searchParams.get('code')) || resolved || 'SSIS-057';
-          request.onload({ status: 200, responseText: JSON.stringify({ ok: true, code, state: initial, message: initial }) });
+          const state = request.method === 'POST' ? postState || initial : initial;
+          request.onload({ status: 200, responseText: JSON.stringify({ ok: true, code, state, message: state }) });
         }, 0);
       },
     });
-  }, { configured: options.configured !== false, token: TOKEN, base: BASE, initial: options.initial || 'idle', resolved: options.resolved,
+  }, { configured: options.configured !== false, token: TOKEN, base: BASE, initial: options.initial || 'idle', postState: options.postState, resolved: options.resolved,
     automatic: options.automatic !== false, version: VERSION, updateAutomatic: options.updateAutomatic !== false, updateValues: options.updateValues || {} });
   await page.goto(options.url || 'https://missav.ws/en/ssis-057?private=value#player');
   await page.clock.install();
@@ -155,6 +156,14 @@ async function pending(page: Page, count: number) {
 }
 async function reply(page: Page, index: number, value: Body) {
   await page.evaluate(({ index, value }) => window.javMock.reply(index, value), { index, value });
+}
+
+async function initialRows(page: Page, codes: string[]) {
+  for (const [index, code] of codes.entries()) {
+    await pending(page, index + 1);
+    assert.equal(await page.evaluate(index => window.javMock.calls[index]!.method, index), 'GET');
+    await reply(page, index, body('idle', code));
+  }
 }
 
 async function selectCode(page: Page) {
@@ -1322,8 +1331,100 @@ describe('JAV 用户脚本', () => {
     } finally { await opened.close(); }
   });
 
+  for (const viewport of VIEWPORTS) it(`${viewport.name}：浮窗与列表都显示已有影片，已有行不参与加入`, async () => {
+    const opened = await open(browser, {initial:'owned', viewport});
+    const {page} = opened;
+    try {
+      await ready(page, '已有该影片');
+      await page.locator(ROOT).getByRole('button', {name:'识别本页全部番号',exact:true}).click();
+      const list = page.locator('#peach-jav-batch');
+      await list.locator('.batch-row-status', {hasText:'已有'}).waitFor();
+      assert.equal(await list.getByRole('checkbox', {name:'选择 SSIS-057',exact:true}).isDisabled(), true);
+      assert.equal(await list.getByRole('checkbox', {name:'全选本页番号',exact:true}).isDisabled(), true);
+      assert.equal(await list.getByRole('button', {name:'全部加入',exact:true}).isDisabled(), true);
+      assert.equal(await list.getByRole('button', {name:'加入所选',exact:true}).isDisabled(), true);
+      assert.deepEqual(await page.evaluate(() => window.javMock.calls.map(call=>call.method)), ['GET','GET']);
+      assert.deepEqual(opened.problems, []);
+    } finally {await opened.close();}
+  });
+
+  it('列表先查询所有状态，已有与进行中的行被排除，仅提交未加入和可重试项', async () => {
+    const states: State[] = ['owned','ingested','queued','searching','submitted','failed','no_match','idle'];
+    const codes = states.map((_,index)=>`ABP-${100+index}`);
+    const opened = await open(browser, {url:'https://javdb.com/',html:`<p>${codes.join(' ')}</p>`,automatic:false});
+    const {page} = opened;
+    try {
+      await page.evaluate(() => window.javMock.menus['开启']!());
+      await pending(page, 1);
+      const list = page.locator('#peach-jav-batch');
+      assert.deepEqual(await list.locator('.batch-row-status').allTextContents(), states.map(()=>'查询中'));
+      assert.equal(await list.getByRole('button',{name:'全部加入（8）',exact:true}).isDisabled(), true);
+      assert.equal(await list.getByRole('checkbox',{name:`选择 ${codes[0]}`,exact:true}).isDisabled(), true);
+      for (const [index,state] of states.entries()) {
+        await pending(page,index+1);
+        assert.equal(await page.evaluate(index=>window.javMock.calls[index]!.method,index),'GET');
+        await reply(page,index,body(state,codes[index]));
+      }
+      await list.getByRole('button',{name:'全部加入（3）',exact:true}).waitFor();
+      assert.deepEqual(await list.locator('.batch-row-status').allTextContents(), ['已有','已入库','排队中','搜索中','下载中','失败','无资源','待加入']);
+      for (const [index,code] of codes.entries()) {
+        assert.equal(await list.getByRole('checkbox',{name:`选择 ${code}`,exact:true}).isDisabled(), index<5);
+      }
+      await list.getByRole('checkbox',{name:'全选本页番号',exact:true}).check();
+      assert.equal(await list.locator('.batch-row input:checked').count(),3);
+      await list.getByRole('button',{name:'全部加入（3）',exact:true}).click();
+      for (let index=0;index<3;index++) {
+        await pending(page,states.length+index+1);
+        await reply(page,states.length+index,body('owned',codes[index+5]));
+      }
+      await list.locator('.geist-note',{hasText:'已处理 3/3 项'}).waitFor();
+      assert.deepEqual(await page.evaluate(()=>window.javMock.calls.filter(call=>call.method==='POST').map(call=>JSON.parse(call.data!).code)),codes.slice(5));
+      assert.deepEqual(opened.problems,[]);
+    } finally {await opened.close();}
+  });
+
+  it('打开列表即跟踪已有任务，状态未取得时明确提示，重新识别可恢复真实状态', async () => {
+    const opened = await open(browser,{url:'https://javdb.com/',html:'<p>ABP-100 ABP-101</p>',automatic:false});
+    const {page} = opened;
+    try {
+      await page.evaluate(()=>window.javMock.menus['开启']!());
+      await pending(page,1);await reply(page,0,body('queued','ABP-100'));
+      await pending(page,2);await page.evaluate(()=>window.javMock.reply(1,{},503));
+      const list=page.locator('#peach-jav-batch');
+      await list.locator('.batch-row-status',{hasText:'未取得'}).waitFor();
+      assert.equal(await list.locator('.batch-row-status',{hasText:'未取得'}).getAttribute('title'),'Peach 服务暂时不可用，请稍后查询状态。');
+      await page.clock.fastForward(2100);
+      await pending(page,3);await reply(page,2,body('ingested','ABP-100'));
+      await list.locator('.batch-row-status',{hasText:'已入库'}).waitFor();
+      await list.getByRole('button',{name:'重新识别',exact:true}).click();
+      await pending(page,4);await reply(page,3,body('owned','ABP-100'));
+      await pending(page,5);await reply(page,4,body('owned','ABP-101'));
+      await list.getByRole('button',{name:'全部加入',exact:true}).waitFor();
+      assert.deepEqual(await list.locator('.batch-row-status').allTextContents(),['已有','已有']);
+      assert.equal(await list.getByRole('button',{name:'全部加入',exact:true}).isDisabled(),true);
+      assert.equal(await page.evaluate(()=>window.javMock.calls.filter(call=>call.method==='POST').length),0);
+      assert.deepEqual(opened.problems,[]);
+    } finally {await opened.close();}
+  });
+
+  it('列表返回后不继续查询后续番号，也不提交任务', async () => {
+    const opened=await open(browser,{url:'https://javdb.com/',html:'<p>ABP-100 ABP-101</p>',automatic:false});
+    const {page}=opened;
+    try {
+      await page.evaluate(()=>window.javMock.menus['开启']!());
+      await pending(page,1);
+      const list=page.locator('#peach-jav-batch');
+      await list.getByRole('button',{name:'返回 Peach 主界面',exact:true}).click();
+      await list.waitFor({state:'detached'});
+      await reply(page,0,body('idle','ABP-100'));
+      await page.clock.fastForward(3000);
+      assert.equal(await page.evaluate(()=>window.javMock.calls.length),1);
+      assert.deepEqual(opened.problems,[]);
+    } finally {await opened.close();}
+  });
+
   it('页面候选去重，逐项提交所选番号，再添加剩余项', async () => {
-    const opened = await open(browser, {url:'https://javdb.com/', html:'<p>SSIS-057 ABP-616 SSIS-057</p><script>"ABP-999"</script><p hidden>ABP-998</p>'});
+    const opened = await open(browser, {url:'https://javdb.com/', postState:'owned', html:'<p>SSIS-057 ABP-616 SSIS-057</p><script>"ABP-999"</script><p hidden>ABP-998</p>'});
     const {page} = opened;
     try {
       await page.evaluate(() => window.javMock.menus['开启']!());
@@ -1360,16 +1461,17 @@ describe('JAV 用户脚本', () => {
       const list = page.locator('#peach-jav-batch');
       const status = (code: string) => list.locator('.batch-row', {hasText: code}).locator('.batch-row-status');
       const chip = async (code: string) => status(code).evaluate(node => ({text: node.textContent, color: (node as HTMLElement).dataset.chip, title: (node as HTMLElement).title}));
+      await initialRows(page, ['SSIS-057', 'ABP-616', 'IPX-001']);
       await list.getByRole('checkbox',{name:'选择 SSIS-057',exact:true}).check();
       assert.deepEqual(await chip('ABP-616'), {text:'待加入', color:'plain', title:'待加入'});
       await list.getByRole('button',{name:'全部加入（3）',exact:true}).click();
-      await pending(page, 1);
+      await pending(page, 4);
       assert.deepEqual(await chip('SSIS-057'), {text:'提交中', color:'blue', title:'正在交给 Peach…'});
-      await reply(page, 0, body('owned', 'SSIS-057'));
-      await pending(page, 2);
-      await page.evaluate(() => window.javMock.reply(1, {}, 503));
-      await pending(page, 3);
-      await reply(page, 2, {...body('no_match', 'IPX-001'), message:'未找到可自动下载的磁力，可重试'});
+      await reply(page, 3, body('owned', 'SSIS-057'));
+      await pending(page, 5);
+      await page.evaluate(() => window.javMock.reply(4, {}, 503));
+      await pending(page, 6);
+      await reply(page, 5, {...body('no_match', 'IPX-001'), message:'未找到可自动下载的磁力，可重试'});
       await list.locator('.geist-note', {hasText: '已处理 3/3 项'}).waitFor();
       assert.deepEqual(await chip('SSIS-057'), {text:'已有', color:'lime', title:'馆藏已有该番号影片'});
       assert.deepEqual(await chip('ABP-616'), {text:'服务不可用', color:'rose', title:'Peach 服务暂时不可用，请稍后查询状态。'});
@@ -1389,18 +1491,19 @@ describe('JAV 用户脚本', () => {
       await page.evaluate(() => window.javMock.menus['开启']!());
       const list = page.locator('#peach-jav-batch');
       const chip = (code: string) => list.locator('.batch-row', {hasText: code}).locator('.batch-row-status');
+      await initialRows(page, ['SSIS-057', 'ABP-616']);
       await list.getByRole('button',{name:'全部加入（2）',exact:true}).click();
-      await pending(page, 1);
-      await reply(page, 0, body('queued', 'SSIS-057'));
-      await pending(page, 2);
-      await page.evaluate(() => window.javMock.reply(1, {ok:true, code:'ABP-616', state:'failed', cause:'magnet', failure:'no_source', message:'没有可用下载源'}));
+      await pending(page, 3);
+      await reply(page, 2, body('queued', 'SSIS-057'));
+      await pending(page, 4);
+      await page.evaluate(() => window.javMock.reply(3, {ok:true, code:'ABP-616', state:'failed', cause:'magnet', failure:'no_source', message:'没有可用下载源'}));
       await list.locator('.geist-note', {hasText: '1 项磁力失效，再次加入会换一个磁力'}).waitFor();
       assert.equal(await chip('ABP-616').textContent(), '磁力失效');
       assert.equal(await chip('ABP-616').getAttribute('title'), '磁力问题：没有可用下载源。可以换一个磁力。');
       await page.clock.fastForward(2100);
-      await pending(page, 3);
-      assert.equal(await page.evaluate(() => window.javMock.calls[2]!.method), 'GET');
-      await page.evaluate(() => window.javMock.reply(2, {ok:true, code:'SSIS-057', state:'submitted',
+      await pending(page, 5);
+      assert.equal(await page.evaluate(() => window.javMock.calls[4]!.method), 'GET');
+      await page.evaluate(() => window.javMock.reply(4, {ok:true, code:'SSIS-057', state:'submitted',
         download:{state:'remote_running', label:'网盘下载中', progress:.42}}));
       await list.locator('.batch-row-status', {hasText: '下载中 42%'}).waitFor();
       await list.getByRole('button',{name:'全部加入（1）',exact:true}).click();
@@ -1427,13 +1530,14 @@ describe('JAV 用户脚本', () => {
         window.javMock.menus['开启']!();
       });
       const list = page.locator('#peach-jav-batch');
+      await initialRows(page, ['SSIS-057']);
       await list.getByRole('button',{name:'全部加入（1）',exact:true}).click();
-      await pending(page, 1);
-      assert.deepEqual(await page.evaluate(() => (window as unknown as {tones: number[]}).tones), enabled ? [550] : []);
-      await reply(page, 0, body('submitted', 'SSIS-057'));
-      await page.clock.fastForward(2100);
       await pending(page, 2);
-      await reply(page, 1, body('ingested', 'SSIS-057'));
+      assert.deepEqual(await page.evaluate(() => (window as unknown as {tones: number[]}).tones), enabled ? [550] : []);
+      await reply(page, 1, body('submitted', 'SSIS-057'));
+      await page.clock.fastForward(2100);
+      await pending(page, 3);
+      await reply(page, 2, body('ingested', 'SSIS-057'));
       await list.locator('.batch-row-status', {hasText: '已入库'}).waitFor();
       assert.deepEqual(await page.evaluate(() => (window as unknown as {tones: number[]}).tones), enabled ? [550, 523, 523 * 1.25] : []);
       assert.deepEqual(opened.problems,[]);
