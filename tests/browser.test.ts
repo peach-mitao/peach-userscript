@@ -357,6 +357,47 @@ describe('JAV 用户脚本', () => {
       } finally { await close(); }
     });
 
+    it('打开安装入口后引导刷新，取消安装不伪造成功，实际安装标记到达后切换为已更新', async () => {
+      const {page,close}=await open(browser,{url:'https://missav.ws/',title:'首页',html:'',configured:false,updateAutomatic:false});
+      try {
+        await waitUpdates(page,1);await answerMetadata(page,'9.3.0');
+        const panel=updatePanel(page);
+        const waiting=page.waitForEvent('popup');
+        await panel.getByRole('link',{name:'更新用户脚本',exact:true}).click();
+        const installer=await waiting;
+        assert.equal(await installer.url(),'https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js');
+        await installer.close();await page.clock.runFor(20);
+        await panel.getByRole('button',{name:'刷新本页',exact:true}).waitFor();
+        assert.equal(await panel.getByLabel('用户脚本更新状态').innerText(),'在脚本管理器完成更新后，刷新本页即可使用。');
+        assert.equal(await page.evaluate(()=>window.javMock.values['peach.jav.installed-version']),VERSION);
+        assert.equal(await panel.getByRole('link',{name:'更新用户脚本',exact:true}).count(),1);
+        await page.evaluate(()=>window.javMock.changed('peach.jav.installed-version','9.3.0',true));
+        assert.equal(await panel.getByLabel('用户脚本更新状态').innerText(),'用户脚本已更新至 v9.3.0，刷新本页即可使用。');
+        assert.equal(await panel.getByRole('link',{name:'更新用户脚本',exact:true}).count(),0);
+      } finally {await close();}
+    });
+
+    it('返回焦点时重读真实元数据，无变化时保留原更新按钮', async () => {
+      const {page,close}=await open(browser,{url:'https://missav.ws/',title:'首页',html:'',configured:false,updateAutomatic:false});
+      try {
+        await waitUpdates(page,1);await answerMetadata(page,'9.2.0');
+        await updatePanel(page).getByLabel('用户脚本更新状态').waitFor();
+        const connected=await page.evaluate(()=>{
+          const node=document.querySelector('#peach-jav-updates')!.shadowRoot!.querySelector('.update-section');
+          const button=node!.querySelector('a[data-update-kind=script]');
+          window.dispatchEvent(new Event('focus'));
+          return button!.isConnected;
+        });
+        assert.equal(connected,true);
+        await page.evaluate(()=>{
+          (window as unknown as {GM_info:{script:{version:string}}}).GM_info.script.version='9.3.0';
+          window.dispatchEvent(new Event('focus'));
+        });
+        await updatePanel(page).getByRole('button',{name:'刷新本页',exact:true}).waitFor();
+        assert.equal(await page.evaluate(()=>window.javMock.values['peach.jav.installed-version']),'9.3.0');
+      } finally {await close();}
+    });
+
     it('自动检查保持每日间隔，隐藏中止在途请求并拒绝迟到结果', async () => {
       const { page, close } = await open(browser, { url: 'https://missav.ws/', title: '首页', html: '', configured: false,
         updateAutomatic: false });

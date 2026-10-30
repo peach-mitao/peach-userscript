@@ -2,6 +2,16 @@
 
 Notable changes are grouped by version. English and Chinese describe the same behavior; source-only versions are marked explicitly. / 按版本记录面向使用者的变化；中英文保持事实一致，未单独发布的源码版本明确标注。
 
+## 0.6.9 — 2026-10-30
+
+Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
+
+### Changed / 变更
+
+- **Updates** offer a page refresh after opening the installer. Returning to the page rechecks the installed version; only a confirmed newer installation is shown as updated. / 打开更新安装入口后提供「刷新本页」。返回页面时重新核对已安装版本，只有确认安装了新版本才显示「已更新」。
+
+[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/280c4e67d5e87af7ba1901cda7a5195978023c40...main)
+
 ## 0.6.8 — 2026-10-30
 
 Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
