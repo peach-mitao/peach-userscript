@@ -2,6 +2,16 @@
 
 Notable changes are grouped by version. English and Chinese describe the same behavior; source-only versions are marked explicitly. / 按版本记录面向使用者的变化；中英文保持事实一致，未单独发布的源码版本明确标注。
 
+## 0.6.8 — 2026-10-30
+
+Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
+
+### Fixed / 修复
+
+- **Page list** reads each title's Peach status before enabling add actions. Owned titles and active tasks no longer appear as pending or count toward **Add all**; active tasks keep updating, and unavailable status is shown explicitly. / 「本页番号」先查询每部作品的 Peach 状态，再开放加入操作。已有影片与进行中任务不再显示「待加入」或计入「全部加入」；进行中任务继续更新，查询失败明确显示「未取得」。
+
+[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/v0.6.7...main)
+
 ## 0.6.7 — 2026-10-28
 
 ### Changed / 变更

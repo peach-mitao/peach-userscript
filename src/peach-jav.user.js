@@ -12,7 +12,7 @@
 // @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
 // @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.6.7
+// @version      0.6.8
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -124,7 +124,7 @@
   // （完成绿、失败红、进行中蓝、需留意黄）。表格行底色与 neutral Chip 同为三级背景，排队改用 soft；
   // 未提交的「待加入」不是任务状态，只用次级文字。完整说明放在悬停提示。
   const ROW_STATES = {
-    pending: ['待加入', 'plain'], sending: ['提交中', 'blue'],
+    pending: ['待加入', 'plain'], checking: ['查询中', 'plain'], sending: ['提交中', 'blue'],
     queued: ['排队中', 'soft'], searching: ['搜索中', 'blue'], submitted: ['下载中', 'blue'],
     importing: ['入库中', 'blue'], organizing: ['整理中', 'blue'],
     ingested: ['已入库', 'lime'], owned: ['已有', 'lime'], no_match: ['无资源', 'yellow'], failed: ['失败', 'rose'],
@@ -228,6 +228,7 @@
     settingsView?.dialog.close();
     panelMode='expanded';
     GM_setValue(STORAGE_ENABLED,true);
+    if (!pageInterfaceAllowed()) return;
     if (String(getSelection() || '').trim() && siteFor(new URL(location.href))) {
       selectCode();return;
     }
@@ -1206,7 +1207,7 @@
       const people = element('span', 'batch-people');
       people.append(defaultPersonAvatar());
       const status = element('span', 'batch-row-status chip');
-      status.dataset.chip='plain';status.textContent='待加入';status.title='待加入';
+      status.dataset.chip='plain';status.textContent='查询中';status.title='正在查询 Peach 状态';
       const result=element('td');result.append(status);
       const codeLabel=element('span','batch-row-code',code);codeLabel.title=code;
       main.append(people,codeLabel);identity.append(main);row.append(selection,identity,result);
@@ -1218,8 +1219,22 @@
     view.tableFrame.hidden = !view.rows.length;
     view.note.textContent = view.rows.length ? `识别到 ${view.rows.length} 个候选番号，重复番号已合并。`
       : '本页未识别到完整番号。可以选中一个番号后使用脚本菜单，或切换到作品列表页。';
-    view.busy = false; view.paint();
+    view.paint();
     void loadPagePeople(view);
+    const config = configuration(), rows = view.rows;
+    for (const item of rows) {
+      if (!view.root.isConnected || view.rows !== rows) return;
+      try {
+        const body = await request(config, item.code, '', 'GET');
+        if (!view.root.isConnected || view.rows !== rows) return;
+        applyRowStatus(item, body);
+      } catch (error) {
+        if (!view.root.isConnected || view.rows !== rows) return;
+        setRowState(item, 'failed', error.message, '未取得');
+      }
+    }
+    view.busy = false; view.paint();
+    void trackRows(view);
   }
 
   // 只读 Peach 本地人物资料；setAbort 收到可中止当前请求的函数，结束时收到 null。
@@ -1259,8 +1274,9 @@
     if (body.state === 'ingested' && ['queued', 'searching', 'submitted', 'importing'].includes(item.row.dataset.state)) playSound('success');
     item.cause = body.state === 'failed' ? body.cause || '' : '';
     item.tracking = tracking(body);
-    item.done = !['failed', 'no_match'].includes(body.state);
-    if (body.state === 'failed') setRowState(item, 'failed', failureText(body), {magnet:'磁力失效', cloud:'网盘问题'}[item.cause] || '失败');
+    item.done = !['idle', 'failed', 'no_match'].includes(body.state);
+    if (body.state === 'idle') setRowState(item, 'pending');
+    else if (body.state === 'failed') setRowState(item, 'failed', failureText(body), {magnet:'磁力失效', cloud:'网盘问题'}[item.cause] || '失败');
     else if (body.state === 'no_match') setRowState(item, 'no_match', failureText(body));
     else if (body.state === 'submitted' && ['remote_done', 'landed'].includes(download?.state)) setRowState(item, 'importing', download.label || '入库中');
     else if (body.state === 'submitted' && download?.state === 'remote_running' && typeof download.progress === 'number' && Number.isFinite(download.progress)) {
