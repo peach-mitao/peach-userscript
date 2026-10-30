@@ -42,7 +42,7 @@ function body(state: State, code = 'SSIS-057'): Body {
 }
 
 async function open(browser: Browser, options: {
-  url?: string; title?: string; html?: string; quirks?: boolean; configured?: boolean; viewport?: typeof VIEWPORTS[number]; initial?: State; postState?: State; script?: string; resolved?: string; automatic?: boolean; updateAutomatic?: boolean; updateValues?: Record<string, string | boolean>;
+  url?: string; title?: string; html?: string; quirks?: boolean; configured?: boolean; viewport?: typeof VIEWPORTS[number]; initial?: State; postState?: State; peopleItems?: Mock['peopleItems']; script?: string; resolved?: string; automatic?: boolean; updateAutomatic?: boolean; updateValues?: Record<string, string | boolean>;
 } = {}) {
   const viewport = options.viewport || VIEWPORTS[0]!;
   const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
@@ -54,11 +54,11 @@ async function open(browser: Browser, options: {
     // FANZA 等来源页没有 doctype，按怪异模式渲染。
     contentType: 'text/html; charset=utf-8', body: `${options.quirks ? '' : '<!doctype html>'}<html><head><meta charset="utf-8"><title>${options.title || 'SSIS-057 作品详情'}</title></head><body>${options.html ?? '<h1>SSIS-057 作品详情</h1>'}</body></html>`,
   }));
-  await page.addInitScript(({ configured, token, base, initial, postState, resolved, automatic, version, updateAutomatic, updateValues }) => {
+  await page.addInitScript(({ configured, token, base, initial, postState, peopleItems, resolved, automatic, version, updateAutomatic, updateValues }) => {
     const listeners = new Map<number, { key: string; callback: (key: string, oldValue: string | boolean, newValue: string | boolean, remote: boolean) => void }>();
     let nextListener = 0;
     const mock: Mock = {
-      calls: [], reports: [], pending: [], updates: [], automatic, updateAutomatic, menus: {}, peopleItems:{}, peopleRequests:[],
+      calls: [], reports: [], pending: [], updates: [], automatic, updateAutomatic, menus: {}, peopleItems, peopleRequests:[],
       values: { ...(configured ? { 'peach.jav.base': base, 'peach.jav.token': token } : {}), ...updateValues },
       changed(key, value, remote = false) {
         const previous = mock.values[key] ?? '';
@@ -105,7 +105,7 @@ async function open(browser: Browser, options: {
         }, 0);
       },
     });
-  }, { configured: options.configured !== false, token: TOKEN, base: BASE, initial: options.initial || 'idle', postState: options.postState, resolved: options.resolved,
+  }, { configured: options.configured !== false, token: TOKEN, base: BASE, initial: options.initial || 'idle', postState: options.postState, peopleItems: options.peopleItems || {}, resolved: options.resolved,
     automatic: options.automatic !== false, version: VERSION, updateAutomatic: options.updateAutomatic !== false, updateValues: options.updateValues || {} });
   await page.goto(options.url || 'https://missav.ws/en/ssis-057?private=value#player');
   await page.clock.install();
@@ -1583,11 +1583,10 @@ describe('JAV 用户脚本', () => {
   });
 
   it('DMM 详情页把出演者随番号查询人物，浮卡标题与本页列表都显示', async () => {
-    const opened = await open(browser,{url:'https://video.dmm.co.jp/av/content/?id=dasd00911',title:'作品详情',resolved:'DASD-911',
+    const opened = await open(browser,{url:'https://video.dmm.co.jp/av/content/?id=dasd00911',title:'作品详情',resolved:'DASD-911',peopleItems:{'DASD-911': [{name:'河北彩花'}]},
       html:'<table><tr><th>出演者：</th><td><a href="/av/list/?actress=1">河北彩花（河北彩伽）</a></td></tr><tr><th>メーカー品番：</th><td>DASD-911</td></tr></table>'});
     const {page} = opened;
     try {
-      await page.evaluate(() => { window.javMock.peopleItems = {'DASD-911': [{name:'河北彩花'}]}; });
       await ready(page);
       await page.locator(ROOT).locator('.bar-title').getByRole('img',{name:'河北彩花',exact:true}).waitFor();
       await page.locator(ROOT).getByRole('button',{name:'识别本页全部番号',exact:true}).click();
