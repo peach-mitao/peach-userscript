@@ -12,7 +12,7 @@
 // @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
 // @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.6.9
+// @version      0.6.10
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -748,6 +748,12 @@
     return code.toUpperCase().replace(/^((?:\d+)?[A-Z]+)-0*(\d+)([A-Z]{0,2})$/, '$1-$2$3');
   }
 
+  // Peach 可把发行平台的店铺前缀归一成账本番号（MGS `107STZY-019` → `STZY-019`），对照表只在 Peach 维护。
+  function samePeachCode(answer, asked) {
+    const key = comparisonKey(answer), wanted = comparisonKey(asked);
+    return key === wanted || wanted.replace(/^\d+(?=[A-Z])/, '') === key;
+  }
+
   function siteFor(url) {
     if (url.protocol !== 'https:') return null;
     return SITE_RULES.sites.find(site => site.domains.some(domain =>
@@ -1191,6 +1197,7 @@
     const codes = new Map();
     // 详情已取得的规范身份优先，避免 DMM 商品号的补零写法覆盖它。
     let detail = current?.url === location.href ? current.identity : identity();
+    const asked = detail?.pageCode || (detail?.resolve && !detail.conflict ? detail.code : '');
     if (detail?.resolve && !detail.conflict && configuration()) {
       try {
         const result = await request(configuration(), detail.code, detail.source, 'GET', true);
@@ -1202,8 +1209,10 @@
     if (!view.root.isConnected) return;
     view.detailCode = detail?.code && !detail.resolve && !detail.conflict ? detail.code : '';
     if (view.detailCode) codes.set(comparisonKey(view.detailCode), view.detailCode);
+    // 页面商品号已由 Peach 归一成详情番号时，原写法不再单列一行。
+    const folded = asked && view.detailCode ? comparisonKey(asked) : '';
     // 整页文本只收原文带分隔符的番号；PS4、TOP250、jay925 这类设备名、导航与用户名不作为候选。
-    const add = text => { for (const code of candidates(text, text.length, true)) if (!codes.has(comparisonKey(code))) codes.set(comparisonKey(code), code); };
+    const add = text => { for (const code of candidates(text, text.length, true)) if (!codes.has(comparisonKey(code)) && comparisonKey(code) !== folded) codes.set(comparisonKey(code), code); };
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {acceptNode(node) {
       const parent = node.parentElement;
       return !parent || parent.closest('script,style,noscript,textarea,input,select,[contenteditable],aside[id^="peach-jav-"]')
@@ -1755,7 +1764,7 @@
               const body = JSON.parse(response.responseText);
               if (body.ok !== true || !STATES.has(body.state) || typeof body.code !== 'string'
                 || candidates(body.code).size !== 1
-                || ((!resolveIdentity || code) && ![...candidates(body.code)].some(candidate => comparisonKey(candidate) === comparisonKey(code)))) throw new Error();
+                || ((!resolveIdentity || code) && ![...candidates(body.code)].some(candidate => samePeachCode(candidate, code)))) throw new Error();
               resolve(body);
               flushErrors(config);
             } catch { fail('invalid_response', 'Peach 返回的状态无效，请查询状态。', response.status); }
@@ -1866,6 +1875,7 @@
 
   function applyState(view, body) {
     if (view.identity.resolve) {
+      view.identity.pageCode = view.identity.code;
       view.identity.code = body.code;
       view.identity.resolve = false;
       view.heading.textContent = body.code;

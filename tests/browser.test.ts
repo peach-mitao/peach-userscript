@@ -99,7 +99,9 @@ async function open(browser: Browser, options: {
           anonymous: request.anonymous, ...(request.data ? { data: request.data } : {}) });
         mock.pending.push(request);
         if (mock.automatic) setTimeout(() => {
-          const code = (request.data ? JSON.parse(request.data).code : new URL(request.url).searchParams.get('code')) || resolved || 'SSIS-057';
+          // 商品号识别以 Peach 归一后的番号作答。
+          const identify = new URL(request.url).pathname.endsWith('/identify');
+          const code = (identify && resolved) || (request.data ? JSON.parse(request.data).code : new URL(request.url).searchParams.get('code')) || resolved || 'SSIS-057';
           const state = request.method === 'POST' ? postState || initial : initial;
           request.onload({ status: 200, responseText: JSON.stringify({ ok: true, code, state, message: state }) });
         }, 0);
@@ -465,6 +467,30 @@ describe('JAV 用户脚本', () => {
       });
     }
   }
+
+  it('MGS 店铺前缀由 Peach 归一成账本番号，本页列表不重复', async () => {
+    const html = '<table><tr><th>品番：</th><td>107STZY-019</td></tr></table>';
+    const opened = await open(browser, { url: 'https://www.mgstage.com/product/product_detail/107STZY-019/', title: '作品详情',
+      html, resolved: 'STZY-019' });
+    try {
+      await ready(opened.page);
+      const url = new URL(await opened.page.evaluate(() => window.javMock.calls[0]!.url));
+      assert.equal(url.searchParams.get('code'), '107STZY-019');
+      assert.equal(await opened.page.locator(ROOT).locator('.bar strong').innerText(), 'STZY-019');
+      await opened.page.locator(ROOT).getByRole('button', {name:'识别本页全部番号', exact:true}).click();
+      const list = opened.page.locator('#peach-jav-batch');
+      await list.getByRole('checkbox', {name:'选择 STZY-019', exact:true}).waitFor();
+      assert.equal(await list.locator('.batch-row').count(), 1);
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+    // 去掉前缀后仍对不上的答复照旧拒收。
+    const other = await open(browser, { url: 'https://www.mgstage.com/product/product_detail/107STZY-019/', title: '作品详情',
+      html, resolved: 'STZY-018' });
+    try {
+      await ready(other.page, '查询 Peach 状态');
+      assert.equal(await other.page.locator(ROOT).getByRole('status', { name: 'Peach 任务状态' }).innerText(), 'Peach 返回的状态无效，请查询状态。');
+    } finally { await other.close(); }
+  });
 
   for (const code of ['MKBD-S123', 'MKD-S123', '092415_01', '092415_0001', 'DANDY-851C']) {
     it(`自动识别和主动选中支持完整番号 ${code}`, async () => {
