@@ -2,6 +2,16 @@
 
 Notable changes are grouped by version. English and Chinese describe the same behavior; source-only versions are marked explicitly. / 按版本记录面向使用者的变化；中英文保持事实一致，未单独发布的源码版本明确标注。
 
+## 0.6.10 — 2026-11-01
+
+Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
+
+### Fixed / 修复
+
+- **MGS** SOD pages such as `107STZY-019` accept the release code Peach returns without the store prefix (`STZY-019`), so owned titles show as owned and magnet searches use the code the library and indexes know. The page list no longer shows the prefixed form as a second row. / MGS 的 SOD 商品页（如 `107STZY-019`）接受 Peach 去掉店铺前缀后返回的番号 `STZY-019`，已入库作品显示「已有」，磁力搜索使用账本与索引站的写法；本页番号不再把带前缀写法单列一行。
+
+[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/57f2ecc...main)
+
 ## 0.6.9 — 2026-10-30
 
 Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
