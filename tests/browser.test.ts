@@ -1900,6 +1900,36 @@ describe('JAV 用户脚本', () => {
     } finally {await opened.close();}
   });
 
+  it('展开的面板按住空白处可拖动，按在按钮上照常点击', async () => {
+    const opened=await open(browser);
+    const {page}=opened;
+    try {
+      await ready(page);
+      assert.equal(await page.locator(ROOT).getAttribute('data-panel-mode'),'expanded');
+      const panel=page.locator(ROOT).locator('.panel');
+      const box=await panel.boundingBox();
+      assert.ok(box);
+      await page.mouse.move(box.x+6,box.y+box.height-6);await page.mouse.down();
+      await page.mouse.move(box.x-100,box.y+box.height-106,{steps:6});await page.mouse.up();
+      const moved=await panel.boundingBox();
+      assert.ok(moved && moved.x<box.x-50 && moved.y<box.y-50);
+      const position=await page.evaluate(()=>JSON.parse(String(window.javMock.values['peach.jav.position'])));
+      assert.ok(position.right>0 && position.bottom>0);
+      assert.equal(await page.locator(ROOT).getAttribute('data-panel-mode'),'expanded');
+      assert.equal(await page.evaluate(()=>String(document.getSelection())),'');
+      assert.equal(await page.evaluate(()=>window.javMock.calls.filter(call=>call.method==='POST').length),0);
+      const add=page.locator(ROOT).locator('[data-action="add"]');
+      const button=await add.boundingBox();
+      assert.ok(button);
+      await page.mouse.move(button.x+button.width/2,button.y+button.height/2);await page.mouse.down();
+      await page.mouse.move(button.x+button.width/2-60,button.y+button.height/2-60,{steps:4});await page.mouse.up();
+      assert.deepEqual(await panel.boundingBox(),moved);
+      await page.clock.fastForward(300);
+      await add.click();
+      await page.waitForFunction(()=>window.javMock.calls.some(call=>call.method==='POST'));
+    } finally {await opened.close();}
+  });
+
   it('同源桥接只回报版本和配对状态，不回传配置或令牌', async () => {
     const context = await browser.newContext();
     const page = await context.newPage();
