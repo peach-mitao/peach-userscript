@@ -2,6 +2,16 @@
 
 Notable changes are grouped by version. English and Chinese describe the same behavior; source-only versions are marked explicitly. / 按版本记录面向使用者的变化；中英文保持事实一致，未单独发布的源码版本明确标注。
 
+## 0.6.12 — 2026-11-04
+
+Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
+
+### Changed / 变更
+
+- **Panel** can be dragged by any empty area while expanded or collapsed, not only as the minimized icon. Buttons, links and form fields still click normally, and the position is shared with the icon. / 浮卡展开或折叠时按住任意空白处都能拖动，不再只有收成图标时能拖；按钮、链接和表单控件照常点击，位置与图标共用。
+
+[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/1363343...main)
+
 ## 0.6.11 — 2026-11-03
 
 Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。

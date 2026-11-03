@@ -12,7 +12,7 @@
 // @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
 // @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.6.11
+// @version      0.6.12
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -328,6 +328,7 @@
     .geist-button.launcher{width:48px;height:48px;padding:6px;border-radius:50%;background:var(--ground);transform-origin:bottom right}
     .launcher img{display:block;width:34px;height:34px;object-fit:contain;user-select:none;-webkit-user-drag:none;pointer-events:none}
     .geist-button.launcher{touch-action:none;cursor:grab}.geist-button.launcher:active{cursor:grabbing}
+    .panel.draggable{cursor:grab}:host([data-dragging]) .panel{cursor:grabbing;user-select:none}
     .body{padding:0 20px 20px;display:grid;gap:16px;min-width:0}.footer{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-height:var(--fieldset-bar-h);padding:8px 16px;border-top:1px solid var(--line);background:var(--surface)}
     .geist-button{height:var(--control-h);padding:8px 12px;border:1px solid var(--color-border-button-default);border-radius:var(--control-radius);background:var(--color-background-primary-default);color:var(--ink);display:inline-flex;
       align-items:center;justify-content:center;gap:4px;font:var(--board-body-medium);white-space:nowrap;cursor:pointer;box-shadow:var(--elevation-xs);touch-action:manipulation;transition:background-color .15s ease,border-color .15s ease,color .15s ease}
@@ -575,23 +576,36 @@
     root.style.setProperty('--panel-right', `${right}px`); root.style.setProperty('--panel-bottom', `${bottom}px`);
   }
 
-  function wireLauncher(root, launcher) {
+  // 收成图标时拖图标；展开或折叠时按住面板空白处拖，按钮、链接与表单控件照常点击。
+  const DRAG_EXEMPT = 'button,a,input,select,textarea,label,summary,[role=button],[contenteditable],.ov-y';
+
+  function wireDrag(root, launcher, panel) {
     let drag = null, suppressClickUntil = 0;
+    const begin = (handle, event) => {
+      const box = root.getBoundingClientRect();
+      drag = {handle, id:event.pointerId, x:event.clientX, y:event.clientY, width:box.width, height:box.height,
+        right:document.documentElement.clientWidth-box.right, bottom:innerHeight-box.bottom, moved:false};
+      handle.setPointerCapture(event.pointerId);
+    };
     launcher.addEventListener('pointerdown', event => {
       if (event.button !== 0 || root.dataset.panelMode !== 'minimized') return;
       event.preventDefault(); launcher.focus({preventScroll:true});
-      const box = root.getBoundingClientRect();
-      drag = {id:event.pointerId, x:event.clientX, y:event.clientY, right:document.documentElement.clientWidth-box.right, bottom:innerHeight-box.bottom, moved:false};
-      launcher.setPointerCapture(event.pointerId);
+      begin(launcher, event);
     });
-    launcher.addEventListener('pointermove', event => {
+    panel.classList.add('draggable');
+    panel.addEventListener('pointerdown', event => {
+      if (event.button !== 0 || root.dataset.panelMode === 'minimized' || event.target.closest?.(DRAG_EXEMPT)) return;
+      begin(panel, event);
+    });
+    const move = event => {
       if (!drag || event.pointerId !== drag.id) return;
       const x = event.clientX-drag.x, y = event.clientY-drag.y;
       if (!drag.moved && Math.hypot(x, y) < 4) return;
+      if (!drag.moved) { root.setAttribute('data-dragging', ''); document.getSelection()?.removeAllRanges(); }
       drag.moved = true;
-      root.style.right = `${Math.max(16, Math.min(document.documentElement.clientWidth-64, drag.right-x))}px`;
-      root.style.bottom = `${Math.max(16, Math.min(innerHeight-64, drag.bottom-y))}px`;
-    });
+      root.style.right = `${Math.max(16, Math.min(document.documentElement.clientWidth-drag.width-16, drag.right-x))}px`;
+      root.style.bottom = `${Math.max(16, Math.min(innerHeight-drag.height-16, drag.bottom-y))}px`;
+    };
     const finish = event => {
       if (!drag || event.pointerId !== drag.id) return;
       if (drag.moved && event.type === 'pointerup') {
@@ -601,14 +615,18 @@
           bottom:Math.max(0, Math.min(1, (innerHeight-box.bottom-16)/Math.max(1, innerHeight-80)))}));
         suppressClickUntil = performance.now()+250;
       }
-      if (launcher.hasPointerCapture(event.pointerId)) launcher.releasePointerCapture(event.pointerId);
+      if (drag.handle.hasPointerCapture(event.pointerId)) drag.handle.releasePointerCapture(event.pointerId);
+      root.removeAttribute('data-dragging');
       drag = null; placeSurface(root);
     };
-    launcher.addEventListener('pointerup', finish);
-    launcher.addEventListener('pointercancel', finish);
-    launcher.addEventListener('click', event => {
-      if (performance.now() < suppressClickUntil) { event.preventDefault(); event.stopImmediatePropagation(); }
-    }, true);
+    for (const handle of [launcher, panel]) {
+      handle.addEventListener('pointermove', move);
+      handle.addEventListener('pointerup', finish);
+      handle.addEventListener('pointercancel', finish);
+      handle.addEventListener('click', event => {
+        if (performance.now() < suppressClickUntil) { event.preventDefault(); event.stopImmediatePropagation(); }
+      }, true);
+    }
   }
 
   function tableCheckbox(label) {
@@ -1077,8 +1095,8 @@
       launcher.classList.add('launcher');
       const logo = element('img'); logo.src = PEACH_LOGO; logo.alt = ''; logo.draggable=false;
       launcher.replaceChildren(logo);
-      wireLauncher(entry.root, launcher);
       const panel = element('section', 'panel');
+      wireDrag(entry.root, launcher, panel);
       const bar = element('header', 'bar');
       const later = control('收起', { icon: 'close' });
       later.addEventListener('click', () => {
@@ -2107,7 +2125,7 @@
     logo.alt = '';
     logo.setAttribute('aria-hidden', 'true');
     launcher.replaceChildren(logo);
-    wireLauncher(root, launcher);
+    wireDrag(root, launcher, panel);
     launcher.hidden = true;
     shadow.append(panel, launcher);
     const view = { root, panel, body, launcher, collapse, summary, button, note, flow, steps, progress, progressFill, heading: label, loadPeople: loadTitlePeople, settings: settingsButton, identity: item, url: location.href, generation, state: 'idle', busy: false, tracking: false, queryOnly: attempts.has(comparisonKey(item.code)) };
