@@ -5,7 +5,7 @@
   "bridge_min_version": "0.5.1",
   "repository": "https://github.com/peach-mitao/peach-userscript",
   "files": {
-    "peach-jav.user.js": "6163a1da2a739b8ad222c77fb2ae89291d8cb754aa44a6b7a7e01f92732b5e4f",
+    "peach-jav.user.js": "eb2b616bcd56cd1c30cd7015a48b542b8df4c2a187fe58dd4ddb5bddfcac069f",
     "jav-sites.json": "74983ac48fb8dda583bd066f7dce7fbc01834137a8be07f5cbe779dcfb7b83db"
   }
 }
