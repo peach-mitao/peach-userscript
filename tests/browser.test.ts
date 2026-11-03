@@ -34,6 +34,8 @@ type Mock = {
   menus: Record<string, () => void>;
   automatic: boolean;
   reply(index: number, body: unknown, status?: number): void;
+  activeItems: Body[] | null;
+  activeRequests: number;
 };
 declare global { interface Window { javMock: Mock } }
 
@@ -43,6 +45,7 @@ function body(state: State, code = 'SSIS-057'): Body {
 
 async function open(browser: Browser, options: {
   url?: string; title?: string; html?: string; quirks?: boolean; configured?: boolean; viewport?: typeof VIEWPORTS[number]; initial?: State; postState?: State; peopleItems?: Mock['peopleItems']; script?: string; resolved?: string; automatic?: boolean; updateAutomatic?: boolean; updateValues?: Record<string, string | boolean>;
+  activeItems?: Body[];
 } = {}) {
   const viewport = options.viewport || VIEWPORTS[0]!;
   const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
@@ -54,11 +57,11 @@ async function open(browser: Browser, options: {
     // FANZA 等来源页没有 doctype，按怪异模式渲染。
     contentType: 'text/html; charset=utf-8', body: `${options.quirks ? '' : '<!doctype html>'}<html><head><meta charset="utf-8"><title>${options.title || 'SSIS-057 作品详情'}</title></head><body>${options.html ?? '<h1>SSIS-057 作品详情</h1>'}</body></html>`,
   }));
-  await page.addInitScript(({ configured, token, base, initial, postState, peopleItems, resolved, automatic, version, updateAutomatic, updateValues }) => {
+  await page.addInitScript(({ configured, token, base, initial, postState, peopleItems, resolved, automatic, version, updateAutomatic, updateValues, activeItems }) => {
     const listeners = new Map<number, { key: string; callback: (key: string, oldValue: string | boolean, newValue: string | boolean, remote: boolean) => void }>();
     let nextListener = 0;
     const mock: Mock = {
-      calls: [], reports: [], pending: [], updates: [], automatic, updateAutomatic, menus: {}, peopleItems, peopleRequests:[],
+      calls: [], reports: [], pending: [], updates: [], automatic, updateAutomatic, menus: {}, peopleItems, peopleRequests:[], activeItems, activeRequests: 0,
       values: { ...(configured ? { 'peach.jav.base': base, 'peach.jav.token': token } : {}), ...updateValues },
       changed(key, value, remote = false) {
         const previous = mock.values[key] ?? '';
@@ -95,6 +98,13 @@ async function open(browser: Browser, options: {
           return { abort: () => request.onabort?.() };
         }
         if (request.url.endsWith('/api/jav-browser/errors')) { mock.reports.push(request); return; }
+        // 默认按旧版 Peach 没有任务列表接口作答；共享进度用例给出 activeItems。
+        if (request.url.endsWith('/api/jav-browser/active')) {
+          mock.activeRequests++;
+          setTimeout(() => request.onload(mock.activeItems ? { status: 200, responseText: JSON.stringify({ ok: true, items: mock.activeItems }) }
+            : { status: 404, responseText: '{"detail":"Not Found"}' }), 0);
+          return { abort: () => request.onabort?.() };
+        }
         mock.calls.push({ method: request.method, url: request.url, headers: request.headers,
           anonymous: request.anonymous, ...(request.data ? { data: request.data } : {}) });
         mock.pending.push(request);
@@ -108,7 +118,8 @@ async function open(browser: Browser, options: {
       },
     });
   }, { configured: options.configured !== false, token: TOKEN, base: BASE, initial: options.initial || 'idle', postState: options.postState, peopleItems: options.peopleItems || {}, resolved: options.resolved,
-    automatic: options.automatic !== false, version: VERSION, updateAutomatic: options.updateAutomatic !== false, updateValues: options.updateValues || {} });
+    automatic: options.automatic !== false, version: VERSION, updateAutomatic: options.updateAutomatic !== false, updateValues: options.updateValues || {},
+    activeItems: options.activeItems || null });
   await page.goto(options.url || 'https://missav.ws/en/ssis-057?private=value#player');
   await page.clock.install();
   await page.addScriptTag({ content: options.script ?? SCRIPT });
@@ -1928,6 +1939,91 @@ describe('JAV 用户脚本', () => {
       await add.click();
       await page.waitForFunction(()=>window.javMock.calls.some(call=>call.method==='POST'));
     } finally {await opened.close();}
+  });
+
+  it('共享进度：持锁窗口查任务列表，本页番号按快照推进，其他番号列在浮卡里，完成只响一次', async () => {
+    const running = (code: string, state: State, download?: Body['download']): Body => ({ ...body(state, code), ...(download ? { download } : {}) });
+    const opened = await open(browser, { initial: 'submitted', activeItems: [
+      running('SSIS-057', 'submitted', { state: 'remote_running', label: '网盘下载中', progress: .4 }),
+      running('ABP-616', 'queued')], peopleItems: { 'ABP-616': [{ name: 'Alice' }] } });
+    const { page } = opened;
+    try {
+      await ready(page, '查询 Peach 状态');
+      await page.waitForFunction(() => String(window.javMock.values['peach.jav.tasks'] || '').includes('ABP-616'));
+      assert.equal(JSON.parse(String(await page.evaluate(() => window.javMock.values['peach.jav.poller']))).visible, true);
+      const shared = page.locator(ROOT).locator('.shared-tasks');
+      const heading = shared.locator('.shared-heading');
+      assert.equal(await heading.textContent(), '其他任务 · 进行中 1 项');
+      // 本页番号还在抓取，其他任务默认折叠；点标题展开。
+      assert.equal(await heading.getAttribute('aria-expanded'), 'false');
+      assert.equal(await shared.locator('.shared-list').isHidden(), true);
+      await heading.click();
+      assert.equal(await heading.getAttribute('aria-expanded'), 'true');
+      await shared.locator('.shared-row .batch-person[title="Alice"]').waitFor();
+      assert.deepEqual(await shared.locator('.shared-code').allTextContents(), ['ABP-616']);
+      assert.equal(await shared.locator('.chip').textContent(), '排队中');
+      // 每项默认折叠成一行，点开进入该番号的进度页，返回回到浮卡主页。
+      await shared.getByRole('button', { name: 'ABP-616，排队中，查看进度' }).click();
+      const task = page.locator(ROOT).locator('.task-page');
+      assert.equal(await task.locator('strong').textContent(), 'ABP-616');
+      assert.equal(await task.locator('.batch-person').getAttribute('title'), 'Alice');
+      assert.equal(await task.locator('[aria-label="ABP-616 的任务状态"]').textContent(), '已排队');
+      assert.equal(await task.locator('.flow-step[aria-current="step"] .flow-label').textContent(), '排队');
+      assert.equal(await page.locator(ROOT).locator('.panel > .body').isHidden(), true);
+      await task.getByRole('button', { name: '返回 Peach 主页' }).click();
+      assert.equal(await task.count(), 0);
+      assert.equal(await page.locator(ROOT).locator('.panel > .body').isVisible(), true);
+      assert.equal(await shared.locator('.shared-row').evaluate(node => node.getRootNode().activeElement === node), true);
+      await page.clock.fastForward(20_000);
+      assert.equal(await page.evaluate(() => window.javMock.calls.filter(call => call.method === 'GET').length), 1);
+      await page.waitForFunction(root => /40%/.test(document.querySelector(root)!.shadowRoot!.querySelector('[aria-label="Peach 任务状态"]')!.textContent!), ROOT);
+      await page.evaluate(() => { window.javMock.activeItems = [
+        { ok: true, code: 'SSIS-057', state: 'ingested', message: 'ingested', download: { state: 'ingested', label: '已入库', progress: 1, postprocess_state: 'complete', postprocess_label: '已整理' } },
+        { ok: true, code: 'ABP-616', state: 'queued', message: 'queued' }]; });
+      await page.clock.fastForward(5_000);
+      await page.waitForFunction(() => String(window.javMock.values['peach.jav.chimed'] || '').includes('SSIS'));
+      await page.waitForFunction(root => /已入库/.test(document.querySelector(root)!.shadowRoot!.querySelector('[aria-label="Peach 任务状态"]')!.textContent!), ROOT);
+      assert.equal(Object.keys(JSON.parse(String(await page.evaluate(() => window.javMock.values['peach.jav.chimed'])))).length, 1);
+      assert.equal(await page.evaluate(() => window.javMock.calls.filter(call => call.method === 'GET').length), 1);
+      await page.locator(ROOT).getByRole('button', { name: '隐藏 Peach 面板' }).click();
+      assert.equal(await page.locator(ROOT).locator('.launcher').getAttribute('data-count'), '1');
+    } finally { await opened.close(); }
+  });
+
+  it('共享进度：锁在别的可见窗口时只读快照，不请求列表；锁在后台窗口时接管', async () => {
+    const lease = (visible: boolean) => JSON.stringify({ owner: 'other-window', until: Date.now() + 600_000, visible });
+    const opened = await open(browser, { activeItems: [{ ok: true, code: 'ABP-616', state: 'submitted', message: 'submitted' }],
+      updateValues: { 'peach.jav.poller': lease(true) } });
+    const { page } = opened;
+    try {
+      await ready(page);
+      await page.clock.fastForward(10_000);
+      assert.equal(await page.evaluate(() => window.javMock.activeRequests), 0);
+      await page.evaluate(base => window.javMock.changed('peach.jav.tasks', JSON.stringify({ version: 1, base, at: Date.now(), available: true,
+        items: [{ ok: true, code: 'MIDV-339', state: 'searching', message: 'searching' }] }), true), BASE);
+      assert.deepEqual(await page.locator(ROOT).locator('.shared-code').allTextContents(), ['MIDV-339']);
+      await page.evaluate(value => { window.javMock.values['peach.jav.poller'] = value; }, lease(false));
+      await page.clock.fastForward(5_000);
+      await page.waitForFunction(() => window.javMock.activeRequests > 0);
+      await page.waitForFunction(() => String(window.javMock.values['peach.jav.tasks']).includes('ABP-616'));
+      assert.deepEqual(await page.locator(ROOT).locator('.shared-code').allTextContents(), ['ABP-616']);
+      assert.equal(await page.locator(ROOT).locator('.shared-heading').getAttribute('aria-expanded'), 'true');
+      // 超过 3 项自动折叠。
+      await page.evaluate(base => window.javMock.changed('peach.jav.tasks', JSON.stringify({ version: 1, base, at: Date.now(), available: true,
+        items: ['ABP-616', 'MIDV-339', 'IPX-001', 'JUR-112'].map(code => ({ ok: true, code, state: 'queued', message: 'queued' })) }), true), BASE);
+      assert.equal(await page.locator(ROOT).locator('.shared-heading').getAttribute('aria-expanded'), 'false');
+      assert.equal(await page.locator(ROOT).locator('.shared-heading').textContent(), '其他任务 · 进行中 4 项');
+    } finally { await opened.close(); }
+  });
+
+  it('旧版 Peach 没有任务列表时记为不可用，浮卡不显示其他任务，仍逐个查询', async () => {
+    const opened = await open(browser);
+    const { page } = opened;
+    try {
+      await ready(page);
+      await page.waitForFunction(() => String(window.javMock.values['peach.jav.tasks'] || '').includes('"available":false'));
+      assert.equal(await page.locator(ROOT).locator('.shared-tasks').isHidden(), true);
+    } finally { await opened.close(); }
   });
 
   it('同源桥接只回报版本和配对状态，不回传配置或令牌', async () => {

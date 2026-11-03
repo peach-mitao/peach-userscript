@@ -2,6 +2,16 @@
 
 Notable changes are grouped by version. English and Chinese describe the same behavior; source-only versions are marked explicitly. / 按版本记录面向使用者的变化；中英文保持事实一致，未单独发布的源码版本明确标注。
 
+## 0.7.0 — 2026-11-04
+
+Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
+
+### Added / 新增
+
+- **Shared progress** across windows. With a Peach that lists running tasks (`GET /api/jav-browser/active`), one open page queries Peach for every task and the other pages show the same progress without their own requests; closing that page hands polling to another, and closed windows lose nothing because tasks keep running in Peach. The panel lists other running and recently finished titles under 其他任务, one row per title with its performers' avatars; clicking one opens its own five-stage progress page with a back button to the panel. The list folds itself when there are more than three titles or this page's own title is still in progress, and its heading folds or unfolds it by hand. The minimized icon shows how many are running, tracking no longer stops after an hour, and the success chime plays once instead of once per window. Older Peach versions keep per-page polling. / 各窗口共享任务进度。Peach 提供进行中任务列表（`GET /api/jav-browser/active`）时，只由一个打开的页面向 Peach 查询所有任务，其他页面直接显示同一份进度、不再各自请求；这个页面关闭后由别的页面接手，窗口全关了任务也照样在 Peach 继续。浮卡在「其他任务」下列出别的番号的进行中与最近结束的任务，每个番号一行并带人物头像，点开进入该番号的五段进度页，返回键回到浮卡主页；超过 3 项或本页番号还在抓取时列表自动折叠，点标题可手动展开或折叠；收成图标时角标显示进行中的数量；跟踪不再一小时后停止，成功提示音也只响一次，不再每个窗口各响一遍。旧版 Peach 照旧由各页面逐个查询。
+
+[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/e7b9813...main)
+
 ## 0.6.12 — 2026-11-04
 
 Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。

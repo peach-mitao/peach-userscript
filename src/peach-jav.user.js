@@ -12,7 +12,7 @@
 // @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
 // @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.6.12
+// @version      0.7.0
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -88,6 +88,11 @@
   const STORAGE_INSTALLED = 'peach.jav.installed-version';
   const STORAGE_UPDATES = 'peach.jav.updates';
   const STORAGE_CHECKED = 'peach.jav.update-attempted-at';
+  // 各窗口共享的任务进度：持锁窗口向 Peach 查询进行中任务，结果写入快照，其余窗口只读快照。
+  const STORAGE_TASKS = 'peach.jav.tasks';
+  const STORAGE_POLLER = 'peach.jav.poller';
+  const STORAGE_CHIMED = 'peach.jav.chimed';
+  const WINDOW_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   // 更新入口直接打开 Sleazy 的安装文件，与 @downloadURL 相同，脚本管理器随即弹出更新确认。
   const RELEASE_INSTALL = 'https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js';
   const RELEASE_META = 'https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js';
@@ -328,6 +333,21 @@
     .geist-button.launcher{width:48px;height:48px;padding:6px;border-radius:50%;background:var(--ground);transform-origin:bottom right}
     .launcher img{display:block;width:34px;height:34px;object-fit:contain;user-select:none;-webkit-user-drag:none;pointer-events:none}
     .geist-button.launcher{touch-action:none;cursor:grab}.geist-button.launcher:active{cursor:grabbing}
+    .geist-button.launcher[data-count]{position:relative;overflow:visible}
+    .geist-button.launcher[data-count]::after{content:attr(data-count);position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:9px;
+      display:grid;place-items:center;background:var(--color-status-blue-background);color:var(--color-status-blue-text);font:var(--board-caption-semibold);box-shadow:0 0 0 2px var(--ground);pointer-events:none}
+    .shared-tasks{display:grid;gap:8px;min-width:0}.shared-heading{display:flex;align-items:center;gap:4px;width:fit-content;margin:0;padding:0;border:0;background:transparent;
+      font:var(--board-caption-semibold);color:var(--muted);cursor:pointer}.shared-heading:hover{color:var(--ink)}
+    .shared-heading:focus-visible{outline:2px solid var(--tungsten);outline-offset:2px;border-radius:4px}
+    .shared-fold{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s ease}
+    .shared-heading[aria-expanded=false] .shared-fold{transform:rotate(-90deg)}
+    .shared-list{list-style:none;margin:0;padding:0;display:grid;gap:4px;max-height:172px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
+    .shared-list li{min-width:0}.shared-row{display:flex;align-items:center;gap:8px;width:calc(100% + 16px);min-width:0;min-height:32px;margin:0 -8px;padding:4px 8px;border:0;border-radius:6px;
+      background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;transition:background-color .15s ease}.shared-row:hover{background:var(--surface)}
+    .shared-row:focus-visible{outline:2px solid var(--tungsten);outline-offset:-2px}
+    .shared-code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:var(--board-body-medium)}
+    .shared-chevron{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;color:var(--muted)}
+    .task-page .bar strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .panel.draggable{cursor:grab}:host([data-dragging]) .panel{cursor:grabbing;user-select:none}
     .body{padding:0 20px 20px;display:grid;gap:16px;min-width:0}.footer{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-height:var(--fieldset-bar-h);padding:8px 16px;border-top:1px solid var(--line);background:var(--surface)}
     .geist-button{height:var(--control-h);padding:8px 12px;border:1px solid var(--color-border-button-default);border-radius:var(--control-radius);background:var(--color-background-primary-default);color:var(--ink);display:inline-flex;
@@ -1107,7 +1127,7 @@
       bar.append(element('strong', '', 'Peach'), later);
       const scan = control('识别本页全部番号', { primary: true }); scan.addEventListener('click', openPageActions);
       const settings = control('Peach 设置'); settings.addEventListener('click', configure);
-      const body = element('div', 'body'); body.append(updateSection({ availableOnly: true }), scan, settings);
+      const body = element('div', 'body'); body.append(updateSection({ availableOnly: true }), sharedSection(), scan, settings);
       launcher.addEventListener('click', () => { entryOpen = true; refreshUpdateEntry(); later.focus(); });
       panel.append(bar, body); entry.shadow.append(panel, launcher);
       updateEntry = { ...entry, launcher, panel };
@@ -1333,22 +1353,28 @@
     }
   }
 
-  function applyRowStatus(item, body) {
+  // 行状态、悬停说明与短标签；本页番号列表与浮卡里的其他任务共用。
+  function rowState(body) {
     const download = body.download;
-    // 只在本次跟踪中由进行中走到整理完成时响；提交即返回已入库（早已加过）不响。
-    if (finished(body) && ['queued', 'searching', 'submitted', 'importing', 'organizing'].includes(item.row.dataset.state)) playSound('success');
+    if (body.state === 'idle') return ['pending'];
+    if (body.state === 'failed') return ['failed', failureText(body), {magnet:'磁力失效', cloud:'网盘问题'}[body.cause] || '失败'];
+    if (body.state === 'no_match') return ['no_match', failureText(body)];
+    if (body.state === 'submitted' && ['remote_done', 'landed'].includes(download?.state)) return ['importing', download.label || '入库中'];
+    if (body.state === 'submitted' && download?.state === 'remote_running' && typeof download.progress === 'number' && Number.isFinite(download.progress)) {
+      const percent = Math.round(Math.min(1, Math.max(0, download.progress)) * 100);
+      return ['submitted', `网盘下载中 ${percent}%`, `下载中 ${percent}%`];
+    }
+    if (tracking(body) && body.state === 'ingested') return ['organizing', download?.postprocess_label || '整理中'];
+    return [body.state, LABELS[body.state]];
+  }
+
+  function applyRowStatus(item, body) {
+    // 只在本次跟踪中由进行中走到整理完成时响；提交即返回已入库（早已加过）不响。共享进度由写快照的窗口统一响。
+    if (!sharedMode() && finished(body) && ['queued', 'searching', 'submitted', 'importing', 'organizing'].includes(item.row.dataset.state)) playSound('success');
     item.cause = body.state === 'failed' ? body.cause || '' : '';
     item.tracking = tracking(body);
     item.done = !['idle', 'failed', 'no_match'].includes(body.state);
-    if (body.state === 'idle') setRowState(item, 'pending');
-    else if (body.state === 'failed') setRowState(item, 'failed', failureText(body), {magnet:'磁力失效', cloud:'网盘问题'}[item.cause] || '失败');
-    else if (body.state === 'no_match') setRowState(item, 'no_match', failureText(body));
-    else if (body.state === 'submitted' && ['remote_done', 'landed'].includes(download?.state)) setRowState(item, 'importing', download.label || '入库中');
-    else if (body.state === 'submitted' && download?.state === 'remote_running' && typeof download.progress === 'number' && Number.isFinite(download.progress)) {
-      const percent = Math.round(Math.min(1, Math.max(0, download.progress)) * 100);
-      setRowState(item, 'submitted', `网盘下载中 ${percent}%`, `下载中 ${percent}%`);
-    } else if (item.tracking && body.state === 'ingested') setRowState(item, 'organizing', download?.postprocess_label || '整理中');
-    else setRowState(item, body.state, LABELS[body.state]);
+    setRowState(item, ...rowState(body));
   }
 
   // 提交后自动查询仍在进行的行；再次提交会让上一轮跟踪退出。
@@ -1360,6 +1386,8 @@
     for (let count = 0; Date.now() - started < POLL_LIMIT; count++) {
       if (!view.rows.some(item => item.tracking)) return;
       await pollWait(count);
+      // 共享进度可用时由快照更新各行，不再逐个查询，也没有一小时上限。
+      if (sharedMode()) return;
       for (const item of view.rows.filter(row => row.tracking)) {
         if (!view.root.isConnected || view.trackGeneration !== generation) return;
         try { applyRowStatus(item, await request(config, item.code, source, 'GET')); }
@@ -1510,7 +1538,7 @@
       const magnets = view.rows.filter(item => item.cause === 'magnet').length;
       if (magnets && root.isConnected) note.textContent += `${magnets} 项磁力失效，再次加入会换一个磁力。`;
       view.busy=false; view.paint();
-      void trackRows(view);
+      void sharedTick(true); void trackRows(view);
     };
     addSelected.addEventListener('click', () => { void submit(false); });
     addAll.addEventListener('click', () => { void submit(true); });
@@ -1849,6 +1877,7 @@
 
   function present(view, mode, focus = false) {
     if (!alive(view)) return;
+    closeTaskPage(view.panel);
     panelMode = mode;
     view.presentation?.cancel();
     const minimized = mode === 'minimized';
@@ -1911,6 +1940,257 @@
     return body.state === 'ingested' && !tracking(body) && body.download?.postprocess_state !== 'failed';
   }
 
+  // 跨窗口共享进度：持锁窗口查 Peach 的进行中任务列表，有任务时每 4 秒、没有时每 30 秒一次，结果写入快照；
+  // 其余窗口只读快照。锁 45 秒过期；后台页的定时器会被浏览器放慢，可见窗口发现锁在后台页手里就接管。
+  // Peach 没有列表接口时快照记为不可用，各窗口退回自己逐个查询。
+  const SHARED_BUSY_MS = 4000, SHARED_IDLE_MS = 30_000, LEASE_MS = 45_000;
+  const sharedLists = new Set();
+  let sharedSnapshot = readShared(), sharedTimer, sharedFetching = false, sharedFetchedAt = 0;
+
+  function readShared() {
+    try {
+      const value = JSON.parse(GM_getValue(STORAGE_TASKS, '{}'));
+      return value.version === 1 && typeof value.base === 'string' && Array.isArray(value.items) ? value : null;
+    } catch { return null; }
+  }
+
+  function sharedMode() {
+    return sharedSnapshot?.available === true && sharedSnapshot.base === configuration()?.base;
+  }
+
+  function requestActive(config) {
+    return new Promise((resolve, reject) => {
+      try {
+        GM_xmlhttpRequest({ method: 'GET', url: `${config.base}/api/jav-browser/active`, anonymous: true, timeout: 30_000,
+          headers: { Authorization: `Bearer ${config.token}`, Accept: 'application/json' },
+          onload(response) {
+            if ([404, 405].includes(response.status)) { resolve(null); return; }
+            try {
+              if (response.status !== 200 || response.responseText.length > 2 * 1024 * 1024) throw new Error();
+              const data = JSON.parse(response.responseText);
+              if (data.ok !== true || !Array.isArray(data.items)) throw new Error();
+              resolve(data.items.filter(body => body?.ok === true && STATES.has(body.state) && typeof body.code === 'string'
+                && candidates(body.code).size === 1).slice(0, 200));
+            } catch { reject(new Error('Peach 返回的任务列表无效')); }
+          },
+          onerror: () => reject(new Error('无法连接 Peach')), ontimeout: () => reject(new Error('Peach 请求超时')),
+          onabort: () => reject(new Error('Peach 请求已中止')),
+        });
+      } catch { reject(new Error('无法连接 Peach')); }
+    });
+  }
+
+  // 写快照的窗口在任务由进行中走到整理完成时响一次；响过的任务记入共享存储，别的窗口不再响。
+  function chimeTransitions(previous, items) {
+    const before = new Map(previous.map(body => [comparisonKey(body.code), body]));
+    let chimed = {};
+    try { chimed = JSON.parse(GM_getValue(STORAGE_CHIMED, '{}')) || {}; } catch { /* 记录损坏时从空开始。 */ }
+    const now = Date.now();
+    let play = false;
+    for (const body of items) {
+      const key = `${comparisonKey(body.code)}:${body.task_id ?? ''}`, old = before.get(comparisonKey(body.code));
+      if (finished(body) && old && tracking(old) && !chimed[key]) { chimed[key] = now; play = true; }
+    }
+    if (!play) return;
+    GM_setValue(STORAGE_CHIMED, JSON.stringify(Object.fromEntries(Object.entries(chimed).filter(([, at]) => now - at < 86_400_000))));
+    playSound('success');
+  }
+
+  // force：本窗口刚提交任务，立刻刷新一次快照并接过轮询。
+  async function sharedTick(force = false) {
+    clearTimeout(sharedTimer);
+    sharedTimer = setTimeout(() => void sharedTick(), SHARED_BUSY_MS);
+    const config = configuration();
+    if (!config || sharedFetching || updateDisposed || !pageInterfaceAllowed()) return;
+    let lease = null;
+    try { lease = JSON.parse(GM_getValue(STORAGE_POLLER, 'null')); } catch { /* 损坏的锁视为空闲。 */ }
+    const now = Date.now(), visible = document.visibilityState === 'visible', mine = lease?.owner === WINDOW_ID;
+    if (!force && !mine && lease && lease.until > now && (lease.visible || !visible)) return;
+    GM_setValue(STORAGE_POLLER, JSON.stringify({ owner: WINDOW_ID, until: now + LEASE_MS, visible }));
+    const interval = sharedSnapshot?.items.some(tracking) ? SHARED_BUSY_MS : SHARED_IDLE_MS;
+    if (!force && mine && now - sharedFetchedAt < interval - 500) return;
+    sharedFetching = true; sharedFetchedAt = now;
+    try {
+      const items = await requestActive(config);
+      if (configuration()?.base !== config.base) return;
+      const previous = readShared();
+      if (items) chimeTransitions(previous?.base === config.base ? previous.items : [], items);
+      const snapshot = { version: 1, base: config.base, at: Date.now(), available: items !== null, items: items || [] };
+      GM_setValue(STORAGE_TASKS, JSON.stringify(snapshot));
+      applyShared(snapshot);
+    } catch { /* 连接异常保留上一份快照，下一轮再查。 */ }
+    finally { sharedFetching = false; }
+  }
+
+  // 快照里有本页番号或本页番号列表里的番号时，按快照更新；提交或查询中的不打断。
+  function applyShared(snapshot) {
+    sharedSnapshot = snapshot;
+    if (sharedMode()) {
+      const items = new Map(snapshot.items.map(body => [comparisonKey(body.code), body]));
+      const view = current;
+      if (view && alive(view) && !view.busy && !view.identity.resolve && !view.identity.conflict) {
+        const body = items.get(comparisonKey(view.identity.code)), signature = body && JSON.stringify(body);
+        if (body && signature !== view.sharedSignature) { view.sharedSignature = signature; applyState(view, body); }
+      }
+      if (batchView?.root.isConnected) {
+        let changed = false;
+        for (const item of batchView.rows) {
+          const body = items.get(comparisonKey(item.code));
+          if (!body || !item.row.dataset.state || item.row.dataset.state === 'sending') continue;
+          const signature = JSON.stringify(body);
+          if (signature !== item.sharedSignature) { item.sharedSignature = signature; applyRowStatus(item, body); changed = true; }
+        }
+        if (changed && !batchView.busy) batchView.paint();
+      }
+    }
+    paintShared();
+  }
+
+  function sharedSection() {
+    const node = element('section', 'shared-tasks');
+    node.setAttribute('aria-label', '其他 Peach 任务');
+    sharedLists.add(node);
+    paintSharedList(node);
+    return node;
+  }
+
+  function paintShared() {
+    for (const node of sharedLists) {
+      if (!node.isConnected) { sharedLists.delete(node); continue; }
+      paintSharedList(node); paintTaskPage(node.closest('.panel'));
+    }
+    const running = sharedMode() ? sharedSnapshot.items.filter(tracking).length : 0;
+    for (const launcher of [current?.launcher, updateEntry?.launcher]) {
+      if (!launcher) continue;
+      if (running) launcher.dataset.count = running > 99 ? '99+' : String(running); else delete launcher.dataset.count;
+      launcher.title = running ? `Peach 有 ${running} 项任务进行中` : '';
+    }
+    for (const root of surfaces) if (root.isConnected) placeSurface(root);
+  }
+
+  function chevronIcon(className, d) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true'); svg.setAttribute('class', className);
+    const path = document.createElementNS(svg.namespaceURI, 'path'); path.setAttribute('d', d); svg.append(path);
+    return svg;
+  }
+
+  // 其他任务的人物头像按番号与状态缓存：入库后账本可能认出人物，状态变化时重新取一次。
+  const sharedPeople = new Map();
+  let sharedPeopleLoading = false;
+  const peopleKey = body => `${comparisonKey(body.code)}:${body.state}`;
+
+  function loadSharedPeople(items) {
+    const config = configuration();
+    if (!config || sharedPeopleLoading) return;
+    const missing = items.filter(body => !sharedPeople.has(peopleKey(body))).slice(0, 50);
+    if (!missing.length) return;
+    sharedPeopleLoading = true;
+    requestPeople(config, [...new Set(missing.map(body => body.code))]).then(result => {
+      const keyed = new Map(Object.entries(result.items).map(([code, people]) => [comparisonKey(code), people]));
+      for (const body of missing) sharedPeople.set(peopleKey(body), result.items[body.code] ?? keyed.get(comparisonKey(body.code)) ?? []);
+    }).catch(() => {
+      for (const body of missing) sharedPeople.set(peopleKey(body), []);
+    }).finally(() => { sharedPeopleLoading = false; paintShared(); });
+  }
+
+  function sharedAvatars(body) {
+    const node = element('span', 'batch-people');
+    try { renderPeople(node, sharedPeople.get(peopleKey(body)) || []); } catch { node.replaceChildren(defaultPersonAvatar()); }
+    return node;
+  }
+
+  // 其他任务超过 3 项，或本页番号正在抓取时，列表自动折叠；手动展开或折叠一直有效，直到自动条件变化。
+  const SHARED_FOLD_LIMIT = 3;
+
+  // 本页番号已有整体进度，这里只列其他番号：进行中的在前，最近 10 分钟结束的在后。
+  // 每项一行，点开进入该番号的进度页。
+  function paintSharedList(node) {
+    const own = current && alive(current) && !current.identity.conflict ? comparisonKey(current.identity.code) : '';
+    const items = sharedMode() ? sharedSnapshot.items.filter(body => comparisonKey(body.code) !== own) : [];
+    node.hidden = !items.length;
+    const focused = node.getRootNode().activeElement?.closest?.('.shared-row,.shared-heading');
+    const focusKey = focused?.dataset.code || (focused ? 'heading' : '');
+    if (!items.length) { node.replaceChildren(); return; }
+    loadSharedPeople(items);
+    const auto = items.length > SHARED_FOLD_LIMIT || Boolean(own && current && (current.tracking || current.busy));
+    if (node.foldChoice && node.foldChoice.auto !== auto) node.foldChoice = null;
+    const open = node.foldChoice ? node.foldChoice.open : !auto;
+    const running = items.filter(tracking), ended = items.filter(body => !tracking(body));
+    const heading = element('button', 'shared-heading');
+    heading.type = 'button';
+    heading.setAttribute('aria-expanded', String(open));
+    heading.append(element('span', '', running.length ? `其他任务 · 进行中 ${running.length} 项` : '其他任务 · 最近结束'),
+      chevronIcon('shared-fold', 'm6 9 6 6 6-6'));
+    heading.addEventListener('click', () => { node.foldChoice = { auto, open: !open }; paintSharedList(node); placeSurface(node.getRootNode().host); });
+    const list = element('ul', 'shared-list');
+    list.hidden = !open;
+    for (const body of [...running, ...ended].slice(0, 20)) {
+      const row = element('button', 'shared-row'), status = element('span', 'chip');
+      row.type = 'button'; row.dataset.code = body.code;
+      row.append(sharedAvatars(body), element('span', 'shared-code', body.code), status, chevronIcon('shared-chevron', 'm9 6 6 6-6 6'));
+      setRowState({ row, status }, ...rowState(body));
+      row.setAttribute('aria-label', `${body.code}，${status.textContent}，查看进度`);
+      row.addEventListener('click', () => openTaskPage(node.closest('.panel'), body.code));
+      const item = element('li'); item.append(row); list.append(item);
+    }
+    node.replaceChildren(heading, list);
+    if (focusKey === 'heading') heading.focus();
+    else if (focusKey) [...list.querySelectorAll('.shared-row')].find(row => row.dataset.code === focusKey)?.focus();
+  }
+
+  // 其他任务的进度页：在同一张浮卡里替换主页，显示该番号的五段整体进度与状态说明；返回回到主页。
+  function openTaskPage(panel, code) {
+    if (!panel) return;
+    closeTaskPage(panel);
+    const page = element('section', 'task-page');
+    page.setAttribute('aria-label', `${code} 的任务进度`);
+    const bar = element('header', 'bar subpage-bar');
+    const back = control('返回 Peach 主页', { icon: 'back' });
+    const title = element('div', 'bar-title'), people = element('span', 'batch-people');
+    people.append(defaultPersonAvatar());
+    title.append(people, element('strong', '', code));
+    bar.append(back, title);
+    const body = element('div', 'body');
+    const note = element('p', 'geist-note');
+    note.setAttribute('role', 'status'); note.setAttribute('aria-live', 'polite'); note.setAttribute('aria-label', `${code} 的任务状态`);
+    const parts = buildFlow();
+    body.append(note, parts.flow);
+    page.append(bar, body);
+    for (const child of panel.children) if (!child.hidden) { child.hidden = true; child.dataset.taskHidden = ''; }
+    panel.append(page);
+    panel.taskPage = { page, code, note, people, body: null, ...parts };
+    back.addEventListener('click', () => closeTaskPage(panel, true));
+    paintTaskPage(panel);
+    back.focus();
+  }
+
+  function closeTaskPage(panel, focus = false) {
+    const open = panel?.taskPage;
+    if (!open) return;
+    open.page.remove(); panel.taskPage = null;
+    for (const child of panel.querySelectorAll(':scope > [data-task-hidden]')) { child.hidden = false; delete child.dataset.taskHidden; }
+    if (focus) [...panel.querySelectorAll('.shared-row')].find(row => row.dataset.code === open.code)?.focus();
+    for (const root of surfaces) if (root.isConnected) placeSurface(root);
+  }
+
+  // 番号结束超过 10 分钟后会离开快照，进度页保留最后一次看到的状态。
+  function paintTaskPage(panel) {
+    const open = panel?.taskPage;
+    if (!open) return;
+    const key = comparisonKey(open.code);
+    open.body = (sharedMode() && sharedSnapshot.items.find(body => comparisonKey(body.code) === key)) || open.body;
+    if (!open.body) return;
+    renderFlow(open, open.body);
+    if (sharedPeople.has(peopleKey(open.body))) {
+      const people = sharedAvatars(open.body);
+      open.people.replaceWith(people); open.people = people;
+    }
+    open.note.textContent = statusLabel(open.body);
+    open.note.dataset.variant = statusVariant(open.body);
+    for (const root of surfaces) if (root.isConnected) placeSurface(root);
+  }
+
   function renderFlow(view, body) {
     const download = body?.download;
     let current = -1;
@@ -1954,17 +2234,30 @@
       view.heading.textContent = body.code;
       view.loadPeople(body.code);
     }
-    // 整理期间 view.state 已是 ingested，前态按上一轮是否仍在跟踪判断。
-    if (finished(body) && view.tracking) playSound('success');
+    // 整理期间 view.state 已是 ingested，前态按上一轮是否仍在跟踪判断。共享进度由写快照的窗口统一响。
+    if (!sharedMode() && finished(body) && view.tracking) playSound('success');
     view.state = body.state;
     view.cause = body.state === 'failed' ? body.cause || '' : '';
     view.tracking = tracking(body);
     view.queryOnly = view.tracking;
     if (!view.queryOnly) attempts.delete(comparisonKey(view.identity.code));
+    renderFlow(view, body);
+    const label = statusLabel(body);
+    view.statusText = label;
+    view.note.textContent = label;
+    // 可以加入时按钮自己说明；不能加入时按钮会变成不可用并给出原因，这行只在其他状态显示。
+    view.note.hidden = body.state === 'idle' && body.stage !== 'submitting';
+    view.note.dataset.variant = statusVariant(body);
+    render(view);
+    // 本页番号开始或结束抓取时，其他任务列表随之自动折叠或展开。
+    paintShared();
+  }
+
+  // 状态说明：下载任务的具体阶段、整理状态与百分比，失败时给出原因；浮卡与其他任务的进度页共用。
+  function statusLabel(body) {
     const download = body.download;
     const known = download && ['submitted', 'remote_running', 'remote_done', 'landed', 'ingested', 'failed', 'cancelled', 'stalled'].includes(download.state);
     let label = body.stage === 'submitting' ? '正在提交网盘' : LABELS[body.state];
-    renderFlow(view, body);
     if (known && typeof download.label === 'string') {
       label = download.label.slice(0, 80);
       if (download.state === 'ingested' && download.postprocess_state !== 'not_requested'
@@ -1975,12 +2268,40 @@
       }
     }
     if (['failed', 'no_match'].includes(body.state) && body.stage !== 'submitting') label = failureText(body);
-    view.statusText = label;
-    view.note.textContent = label;
-    // 可以加入时按钮自己说明；不能加入时按钮会变成不可用并给出原因，这行只在其他状态显示。
-    view.note.hidden = body.state === 'idle' && body.stage !== 'submitting';
-    view.note.dataset.variant = body.state === 'failed' || download?.postprocess_state === 'failed' ? 'error' : 'secondary';
-    render(view);
+    return label;
+  }
+
+  // 五段整体进度；结构与尺寸复用 Peach 生产 Progress 的 SVG 快照。
+  function buildFlow() {
+    const progress = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    for (const [name, value] of Object.entries({ role: 'progressbar', 'aria-label': '整体任务进度',
+      'aria-valuemin': '0', 'aria-valuemax': '5', viewBox: '0 0 100 1', preserveAspectRatio: 'none', class: 'task-progress' })) progress.setAttribute(name, value);
+    const progressFill = document.createElementNS(progress.namespaceURI, 'rect');
+    const progressTrack = document.createElementNS(progress.namespaceURI, 'rect');
+    for (const [rect, width, style] of [[progressTrack, '100', 'track'], [progressFill, '0', 'fill']]) {
+      rect.setAttribute('width', width); rect.setAttribute('height', '1'); rect.setAttribute('class', style);
+    }
+    progress.append(progressTrack, progressFill);
+    for (const point of [20, 40, 60, 80]) {
+      const stop = document.createElementNS(progress.namespaceURI, 'rect');
+      stop.setAttribute('x', String(point - .4)); stop.setAttribute('width', '.4'); stop.setAttribute('height', '1'); stop.setAttribute('class', 'stop');
+      progress.append(stop);
+    }
+    const flow = element('div', 'flow');
+    flow.hidden = true;
+    const stepList = element('ol', 'flow-steps');
+    stepList.setAttribute('aria-label', '整体任务阶段');
+    const steps = ['排队', '搜索', '下载', '入库', '整理'].map((label, index) => {
+      const step = element('li', 'flow-step');
+      const mark = element('span', 'flow-mark'); mark.setAttribute('aria-hidden', 'true'); mark.append(stepMark(index), stageAnimation(index));
+      step.append(mark, element('span', 'flow-label', label)); stepList.append(step); return step;
+    });
+    flow.append(progress, stepList);
+    return { flow, progress, progressFill, steps };
+  }
+
+  function statusVariant(body) {
+    return body.state === 'failed' || body.download?.postprocess_state === 'failed' ? 'error' : 'secondary';
   }
 
   async function query(view, method = 'GET') {
@@ -2005,14 +2326,18 @@
         method === 'POST' && view.cause === 'magnet' ? {switch:true} : {});
       if (!alive(view)) return;
       applyState(view, body);
+      if (method === 'POST') void sharedTick(true);
+      let shared = false;
       for (let count = 0; tracking(body) && Date.now() < deadline; count++) {
         await pollWait(count);
         if (!alive(view)) return;
+        // 共享进度可用时由快照更新，不再逐个查询，也没有一小时上限。
+        if ((shared = sharedMode())) break;
         body = await request(config, view.identity.code, view.identity.source, 'GET');
         if (!alive(view)) return;
         applyState(view, body);
       }
-      if (tracking(body)) view.note.textContent = `${view.statusText}，可查询状态。`;
+      if (tracking(body) && !shared) view.note.textContent = `${view.statusText}，可查询状态。`;
     } catch (error) {
       if (alive(view)) {
         view.queryOnly = true;
@@ -2026,7 +2351,11 @@
         view.note.dataset.variant = 'error';
       }
     } finally {
-      if (alive(view)) { view.busy = false; render(view); }
+      if (alive(view)) {
+        view.busy = false; render(view);
+        // 查询期间到达的快照被跳过了，结束后立刻按当前快照补上，不等下一次变化。
+        if (sharedMode()) applyShared(sharedSnapshot);
+      }
     }
   }
 
@@ -2086,33 +2415,9 @@
     note.setAttribute('role', 'status');
     note.setAttribute('aria-label', 'Peach 任务状态');
     note.setAttribute('aria-live', 'polite');
-    // 结构与尺寸复用 Peach 生产 Progress 的 SVG 快照。
-    const progress = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    for (const [name, value] of Object.entries({ role: 'progressbar', 'aria-label': '整体任务进度',
-      'aria-valuemin': '0', 'aria-valuemax': '5', viewBox: '0 0 100 1', preserveAspectRatio: 'none', class: 'task-progress' })) progress.setAttribute(name, value);
-    const progressFill = document.createElementNS(progress.namespaceURI, 'rect');
-    const progressTrack = document.createElementNS(progress.namespaceURI, 'rect');
-    for (const [rect, width, style] of [[progressTrack, '100', 'track'], [progressFill, '0', 'fill']]) {
-      rect.setAttribute('width', width); rect.setAttribute('height', '1'); rect.setAttribute('class', style);
-    }
-    progress.append(progressTrack, progressFill);
-    for (const point of [20, 40, 60, 80]) {
-      const stop = document.createElementNS(progress.namespaceURI, 'rect');
-      stop.setAttribute('x', String(point - .4)); stop.setAttribute('width', '.4'); stop.setAttribute('height', '1'); stop.setAttribute('class', 'stop');
-      progress.append(stop);
-    }
-    const flow = element('div', 'flow');
-    flow.hidden = true;
-    const stepList = element('ol', 'flow-steps');
-    stepList.setAttribute('aria-label', '整体任务阶段');
-    const steps = ['排队', '搜索', '下载', '入库', '整理'].map((label, index) => {
-      const step = element('li', 'flow-step');
-      const mark = element('span', 'flow-mark'); mark.setAttribute('aria-hidden', 'true'); mark.append(stepMark(index), stageAnimation(index));
-      step.append(mark, element('span', 'flow-label', label)); stepList.append(step); return step;
-    });
-    flow.append(progress, stepList);
+    const { flow, progress, progressFill, steps } = buildFlow();
     const scan = control('识别本页全部番号'); scan.addEventListener('click', openPageActions);
-    body.append(note, flow, button, scan, updateSection({ availableOnly: true }));
+    body.append(note, flow, button, scan, sharedSection(), updateSection({ availableOnly: true }));
     panel.append(bar, body);
     const launcher = control('展开 Peach 面板');
     launcher.classList.add('launcher');
@@ -2131,6 +2436,7 @@
     const view = { root, panel, body, launcher, collapse, summary, button, note, flow, steps, progress, progressFill, heading: label, loadPeople: loadTitlePeople, settings: settingsButton, identity: item, url: location.href, generation, state: 'idle', busy: false, tracking: false, queryOnly: attempts.has(comparisonKey(item.code)) };
     current = view;
     refreshUpdateEntry();
+    paintShared();
     if (subpageOpen()) {
       root.setAttribute('data-settings-open', '');
       root.inert = true;
@@ -2177,10 +2483,18 @@
       for (const root of surfaces) if (root.isConnected) applyAppearance(root);
     }));
     for(const key of [STORAGE_ENABLED,STORAGE_DISPLAY])updateListeners.push(GM_addValueChangeListener(key,(_key,before,after)=>{if(before!==after)applyDisplayPreference();}));
+    updateListeners.push(GM_addValueChangeListener(STORAGE_TASKS, (_key, _before, _after, remote) => { if (remote) applyShared(readShared()); }));
   }
+  void sharedTick();
   addEventListener('resize', () => { for (const root of surfaces) if (root.isConnected) placeSurface(root); });
   document.addEventListener('visibilitychange', updateVisibility);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void sharedTick(); });
   addEventListener('focus', refreshInstalledVersion);
-  addEventListener('pagehide', event => { if (!event.persisted) disposeUpdates(); });
+  // 关闭时交出轮询锁，别的窗口下一轮就接手。
+  addEventListener('pagehide', event => {
+    if (event.persisted) return;
+    disposeUpdates(); clearTimeout(sharedTimer);
+    try { if (JSON.parse(GM_getValue(STORAGE_POLLER, 'null'))?.owner === WINDOW_ID) GM_setValue(STORAGE_POLLER, 'null'); } catch { /* 锁会自行过期。 */ }
+  });
   scheduleUpdateCheck();
 })();
