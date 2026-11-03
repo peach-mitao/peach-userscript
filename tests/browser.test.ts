@@ -1083,33 +1083,23 @@ describe('JAV 用户脚本', () => {
     } finally { await opened.close(); }
   });
 
-  it('设置弹窗进入与退出均有过渡，减少动效时立即关闭', async () => {
+  it('设置子页与浮卡同时播 Peach 设置面板的进出场，减少动效时立即关闭', async () => {
     const opened = await open(browser);
     const { page } = opened;
     try {
       await page.emulateMedia({reducedMotion:'no-preference'});
       await ready(page);
-      await page.evaluate(()=>{
-        const trace: Array<{property:string;elapsed:number}> = [];
-        (window as Window & {settingsMotion:typeof trace}).settingsMotion=trace;
-        const observer=new MutationObserver(()=>{
-          const dialog=document.querySelector('#peach-jav-settings')?.shadowRoot?.querySelector('dialog');
-          if(!dialog)return;
-          observer.disconnect();
-          dialog.addEventListener('transitionend',event=>{
-            const e=event as TransitionEvent;
-            if(e.target===dialog)trace.push({property:e.propertyName,elapsed:e.elapsedTime});
-          });
-        });
-        observer.observe(document.body,{childList:true});
-      });
+      const names = (node: Element) => node.getAnimations().flatMap(animation => 'animationName' in animation ? [(animation as CSSAnimation).animationName] : []);
       const trigger=page.locator(ROOT).getByRole('button',{name:'Peach 设置',exact:true});
       await trigger.click();
-      await page.waitForFunction(()=>(window as Window & {settingsMotion:Array<{property:string;elapsed:number}>}).settingsMotion.some(e=>e.property==='transform'&&e.elapsed>=.19));
+      // 子页进场时浮卡退场，两者同时进行，不先瞬间隐藏浮卡。
+      assert.deepEqual(await settingsDialog(page).evaluate(names), ['board-dialog-in']);
+      assert.deepEqual(await page.locator(ROOT).evaluate(names), ['board-dialog-out']);
       await settingsDialog(page).getByRole('button',{name:'取消',exact:true}).click();
+      assert.deepEqual(await settingsDialog(page).evaluate(names), ['board-dialog-out']);
+      assert.deepEqual(await page.locator(ROOT).evaluate(names), ['board-dialog-in']);
       await settingsDialog(page).waitFor({state:'detached'});
-      const exits=await page.evaluate(()=>(window as Window & {settingsMotion:Array<{property:string;elapsed:number}>}).settingsMotion);
-      assert.ok(exits.some(e=>e.property==='opacity'&&e.elapsed>=.11&&e.elapsed<=.13));
+      await page.waitForFunction(root=>!document.querySelector(root)!.hasAttribute('data-subpage-return'), ROOT);
       await page.emulateMedia({reducedMotion:'reduce'});
       await trigger.click();
       assert.equal(await settingsDialog(page).evaluate(node=>node.getAnimations().length),0);
@@ -1156,7 +1146,7 @@ describe('JAV 用户脚本', () => {
         for(let count=0;count<3;count++) {
           await page.locator(ROOT).getByRole('button',{name:'Peach 设置',exact:true}).click();
           const dialog = settingsDialog(page);
-          assert.equal(await page.locator(ROOT).isVisible(),false);
+          await page.locator(ROOT).waitFor({state:'hidden'});
           assert.equal(await dialog.locator('.footer').count(),1);
           const geometry = await dialog.evaluate(node=>({bottom:node.getBoundingClientRect().bottom,
             footer:node.querySelector('.footer')!.getBoundingClientRect().bottom,height:innerHeight}));
@@ -1507,9 +1497,10 @@ describe('JAV 用户脚本', () => {
     } finally {await opened.close();}
   });
 
-  it('整页扫描只收带分隔符的番号，不把用户名、导航和域名补成番号', async () => {
+  it('整页扫描只收带分隔符的番号，不把用户名、评论署名、导航和域名补成番号', async () => {
     const opened = await open(browser, {url:'https://javdb.com/', html:'<nav>TOP250</nav><p>hhd800.com@FC2-PPV-4302474.mp4</p>'
-      + '<p>Exclusive50%OFF!</p><p>jay925 hush666 lexburner69 guangdao19450806</p><p>FC2-4091275 SSIS-057 ssis058</p>'});
+      + '<p>Exclusive50%OFF!</p><p>jay925 hush666 lexburner69 guangdao19450806</p><p>FC2-4091275 SSIS-057 ssis058</p>'
+      + '<p>qwert-02さんのレビュー</p><p>abc-123 様</p>'});
     const {page} = opened;
     try {
       await page.evaluate(() => window.javMock.menus['开启']!());
@@ -1580,7 +1571,7 @@ describe('JAV 用户脚本', () => {
     } finally {await opened.close();}
   });
 
-  for (const enabled of [true, false]) it(`点加入${enabled ? '播放开始音，影片完成入库再播放成功音' : '与完成入库都按设置不出声'}`, async () => {
+  for (const enabled of [true, false]) it(`点加入${enabled ? '播放开始音，入库后整理完成才播放成功音' : '与整理完成都按设置不出声'}`, async () => {
     const opened = await open(browser, {url:'https://javdb.com/', html:'<p>SSIS-057</p>', automatic:false,
       updateValues: enabled ? {} : {'peach.jav.success-sound': false}});
     const {page} = opened;
@@ -1604,9 +1595,39 @@ describe('JAV 用户脚本', () => {
       await reply(page, 1, body('submitted', 'SSIS-057'));
       await page.clock.fastForward(2100);
       await pending(page, 3);
-      await reply(page, 2, body('ingested', 'SSIS-057'));
+      await page.evaluate(() => window.javMock.reply(2, {ok:true, code:'SSIS-057', state:'ingested', message:'ingested',
+        download:{state:'ingested', label:'已入库', progress:1, postprocess_state:'running', postprocess_label:'采集作品资料'}}));
+      await list.locator('.batch-row-status', {hasText: '整理中'}).waitFor();
+      assert.deepEqual(await page.evaluate(() => (window as unknown as {tones: number[]}).tones), enabled ? [550] : []);
+      await page.clock.fastForward(2100);
+      await pending(page, 4);
+      await page.evaluate(() => window.javMock.reply(3, {ok:true, code:'SSIS-057', state:'ingested', message:'ingested',
+        download:{state:'ingested', label:'已入库', progress:1, postprocess_state:'complete'}}));
       await list.locator('.batch-row-status', {hasText: '已入库'}).waitFor();
       assert.deepEqual(await page.evaluate(() => (window as unknown as {tones: number[]}).tones), enabled ? [550, 523, 523 * 1.25] : []);
+      assert.deepEqual(opened.problems,[]);
+    } finally {await opened.close();}
+  });
+
+  it('人物资料按 Peach 补零后的番号作键时仍能对上，没有条目的行保留默认人像', async () => {
+    const opened = await open(browser, {url:'https://javdb.com/', html:'<p>ABP-16 IPX-001</p>'});
+    const {page} = opened;
+    try {
+      await page.evaluate(() => {
+        type Request = {url: string; onload(value: unknown): void};
+        const scope = window as unknown as {GM_xmlhttpRequest: (request: Request) => unknown};
+        const original = scope.GM_xmlhttpRequest;
+        scope.GM_xmlhttpRequest = request => {
+          if (new URL(request.url).pathname !== '/api/jav-browser/people') return original(request);
+          setTimeout(() => request.onload({status:200, responseText:JSON.stringify({ok:true, source:'local-cache', items:{'ABP-016':[{name:'Alice'}]}})}), 0);
+          return {abort(){}};
+        };
+        window.javMock.menus['开启']!();
+      });
+      const list = page.locator('#peach-jav-batch');
+      await list.locator('.batch-row', {hasText:'ABP-16'}).getByRole('img', {name:'Alice', exact:true}).waitFor();
+      assert.equal(await list.locator('.batch-row', {hasText:'IPX-001'}).locator('.batch-person').count(), 1);
+      assert.equal(await list.getByText('本地女优资料格式无效').count(), 0);
       assert.deepEqual(opened.problems,[]);
     } finally {await opened.close();}
   });

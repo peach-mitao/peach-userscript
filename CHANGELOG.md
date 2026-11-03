@@ -2,6 +2,18 @@
 
 Notable changes are grouped by version. English and Chinese describe the same behavior; source-only versions are marked explicitly. / 按版本记录面向使用者的变化；中英文保持事实一致，未单独发布的源码版本明确标注。
 
+## 0.6.11 — 2026-11-03
+
+Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
+
+### Fixed / 修复
+
+- **Panels** switch to Settings and the page list with Peach's settings-panel enter and exit motion (BoardUI dialog motion), playing on both layers at once instead of hiding the panel first and fading the new view in from nothing, so switching no longer flashes. Returning brings the panel back as the subpage leaves, and the page list now leaves like Settings. / 浮卡与设置、本页番号切换时改用 Peach 设置面板的进出场动效（BoardUI 弹层动效），两层同时进出，不再先瞬间隐藏浮卡、再让新界面从全透明出现，切换不再闪一下；返回时子页一开始退场浮卡就进场，本页番号的返回也和设置一样退场。
+- **Page list** no longer treats reviewer names followed by an honorific (`qwert-02さん` on MGS reviews) as release codes. Local performer lookups also match codes Peach pads (`ABC-12` → `ABC-012`) instead of reporting the local data as invalid. / 本页番号不再把后面跟着敬称的评论署名（MGS 评论里的 `qwert-02さん`）当成番号；Peach 补零后的番号（`ABC-12` → `ABC-012`）也能对上本地人物资料，不再提示「本地女优资料格式无效」。
+- **Sound** plays the success chime only after the download has been ingested and organizing has finished, not while organizing is still running. / 成功提示音等入库并整理完成后才响，不再在刚入库、还在整理时就响。
+
+[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/b47e32f...main)
+
 ## 0.6.10 — 2026-11-01
 
 Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
