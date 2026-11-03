@@ -2026,6 +2026,38 @@ describe('JAV 用户脚本', () => {
     } finally { await opened.close(); }
   });
 
+  it('整理失败时按钮变成重试整理，交给 Peach 重试后接着跟踪；旧版 Peach 提示到任务中心重试', async () => {
+    const failed = { ...body('ingested'), download: { state: 'ingested', label: '已入库', progress: 1, postprocess_state: 'failed', postprocess_label: '整理失败' } };
+    const note = (page: Page) => page.locator(ROOT).locator('[aria-label="Peach 任务状态"]');
+    for (const supported of [true, false]) {
+      const opened = await open(browser, { automatic: false });
+      const { page } = opened;
+      try {
+        await pending(page, 1);
+        await reply(page, 0, failed);
+        await ready(page, '重试整理');
+        await button(page).click();
+        await pending(page, 2);
+        const call = await page.evaluate(() => window.javMock.calls[1]!);
+        assert.equal(call.method, 'POST');
+        assert.match(call.url, /\/api\/jav-browser\/postprocess$/);
+        assert.deepEqual(JSON.parse(call.data!), { code: 'SSIS-057' });
+        if (!supported) {
+          await page.evaluate(() => window.javMock.reply(1, { detail: 'Not Found' }, 404));
+          await page.waitForFunction(root => /任务中心重试/.test(document.querySelector(root)!.shadowRoot!.querySelector('[aria-label="Peach 任务状态"]')!.textContent!), ROOT);
+          assert.equal(await button(page).textContent(), '重试整理');
+          continue;
+        }
+        await reply(page, 1, { ...failed, download: { ...failed.download, postprocess_state: 'pending', postprocess_label: '等待整理' } });
+        await page.waitForFunction(root => /等待整理/.test(document.querySelector(root)!.shadowRoot!.querySelector('[aria-label="Peach 任务状态"]')!.textContent!), ROOT);
+        assert.equal(await note(page).getAttribute('data-variant'), 'secondary');
+        // 旧版 Peach 没有共享进度时，本页接着查询整理进度。
+        await pending(page, 3);
+        assert.equal(await page.evaluate(() => window.javMock.calls[2]!.method), 'GET');
+      } finally { await opened.close(); }
+    }
+  });
+
   it('同源桥接只回报版本和配对状态，不回传配置或令牌', async () => {
     const context = await browser.newContext();
     const page = await context.newPage();
