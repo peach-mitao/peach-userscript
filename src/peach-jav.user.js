@@ -12,7 +12,7 @@
 // @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
 // @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.6.10
+// @version      0.6.11
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -127,7 +127,7 @@
     ingested: ['已入库', 'lime'], owned: ['已有', 'lime'], no_match: ['无资源', 'yellow'], failed: ['失败', 'rose'],
   };
   // 提示音沿用 Peach `ui-kit/sounds.ts` 的配方，Web Audio 当场合成、不带音频文件：点加入用 toggle-on
-  // 的一声上扬表示开始，一部影片完成入库用 success 的大三度两音。默认开启，与 Peach 界面音效一致，可在设置中关闭。
+  // 的一声上扬表示开始，一部影片入库并整理完成后用 success 的大三度两音。默认开启，与 Peach 界面音效一致，可在设置中关闭。
   const SOUNDS = {
     start: [{from:550, to:650, duration:0.08, volume:0.15, start:0}],
     success: [{from:523, duration:0.12, volume:0.18, start:0}, {from:523 * 1.25, duration:0.12, volume:0.18, start:0.2}],
@@ -279,7 +279,10 @@
     :host([data-theme=dark]){${DARK_STYLE}}
     *,*::before,*::after{box-sizing:border-box} [hidden]{display:none!important}
     :host([data-panel-mode="minimized"]){width:48px}
-    :host([data-settings-open]){visibility:hidden}
+    /* 浮卡与子页同在右下角，切换时两层交叉淡化：浮卡随子页淡入同步淡出，子页开始退场时浮卡就淡回；
+       先隐藏再从 0 淡入会露出两层都看不见的空档，读起来就是一闪。 */
+    :host{transition:opacity 120ms var(--modal-ease)}
+    :host([data-settings-open]){visibility:hidden;opacity:0;transition:opacity 200ms var(--modal-ease),visibility 0s 200ms}
     h2,p{margin:0} h2{font:var(--board-heading)}
     .panel{background:var(--ground);border:1px solid var(--line);border-radius:var(--floating-radius);overflow:hidden}
     .task-progress{display:block;width:100%;height:6px;overflow:hidden;border-radius:9999px}
@@ -431,11 +434,12 @@
     dialog::backdrop{background:#000b;opacity:1;transition:opacity 200ms var(--modal-ease)}
     dialog[data-closing],dialog[data-closing]::backdrop{opacity:0;transition-duration:120ms}
     dialog[data-closing]{transform:scale(.98)}
-    @starting-style{dialog[open],dialog[open]::backdrop{opacity:0}dialog[open]{transform:scale(.98)}}
+    /* data-switch：从另一个子页直接换过来，遮罩一直在，不再从 0 淡入。 */
+    @starting-style{dialog[open]{opacity:0;transform:scale(.98)}dialog[open]:not([data-switch])::backdrop{opacity:0}}
     form{display:flex;flex-direction:column;max-height:calc(100dvh - 34px);margin:0}dialog>form,dialog>div{position:relative}
     dialog .bar{border-bottom:1px solid var(--line);flex:none}dialog .body{padding-top:20px;overflow:auto;overscroll-behavior:contain;scrollbar-width:none}dialog .body::-webkit-scrollbar{display:none}dialog .footer{flex:none}
     @media(max-width:760px){.geist-input{font-size:var(--fs-lg)}}
-    @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+    @media(prefers-reduced-motion:reduce){:host,*,*::before,*::after{animation:none!important;transition:none!important}}
   `;
 
   function element(tag, className = '', text = '') {
@@ -669,6 +673,7 @@
 
   // 只做粗提取；合法番号由 Peach 校验。separated 用于整页文本：与 Peach 的 is_jav_code 一致，
   // 只收原文带连字符的厂牌与素人番号，用户名、导航、域名里的「字母+数字」不补分隔符。
+  // 评论署名也会写成带连字符的形状（mgstage 的「qwert-02さんのレビュー」），后面紧跟敬称的不算番号。
   function candidates(value, maxLength = 800, separated = false) {
     const found = new Set();
     const bounded = String(value || '').slice(0, maxLength).toUpperCase();
@@ -684,7 +689,7 @@
       found.add(`${prefix}-S${digits}`);
       return ' ';
     });
-    const shape = separated ? /\b((?:\d{3})?[A-Z]{2,8})-(\d{2,5})([A-Z]{0,2})(?=$|[^A-Z0-9])/g
+    const shape = separated ? /\b((?:\d{3})?[A-Z]{2,8})-(\d{2,5})([A-Z]{0,2})(?=$|[^A-Z0-9])(?!\s*(?:さん|さま|様|氏|くん|君|ちゃん))/g
       : /\b((?:\d{1,5})?[A-Z]{2,12})[-_]?(\d{1,8})([A-Z]{0,2})(?=$|[^A-Z0-9])/g;
     for (const match of rest.matchAll(shape)) found.add(`${match[1]}-${match[2]}${match[3]}`);
     for (const match of rest.matchAll(/\b\d{6}[-_]\d{2,4}\b/g)) found.add(match[0]);
@@ -1082,7 +1087,7 @@
     updateEntry.root.dataset.panelMode = expanded ? 'expanded' : 'minimized';
     placeSurface(updateEntry.root);
     updateEntry.launcher.hidden = expanded; updateEntry.panel.hidden = !expanded;
-    updateEntry.root.toggleAttribute('data-settings-open', Boolean(settingsView?.dialog.open || batchView?.dialog.open));
+    updateEntry.root.toggleAttribute('data-settings-open', subpageOpen());
   }
 
   function updateRequest(url, config = null) {
@@ -1302,8 +1307,8 @@
 
   function applyRowStatus(item, body) {
     const download = body.download;
-    // 只在本次跟踪中由进行中变为已入库时响；提交即返回已入库（早已加过）不响。
-    if (body.state === 'ingested' && ['queued', 'searching', 'submitted', 'importing'].includes(item.row.dataset.state)) playSound('success');
+    // 只在本次跟踪中由进行中走到整理完成时响；提交即返回已入库（早已加过）不响。
+    if (finished(body) && ['queued', 'searching', 'submitted', 'importing', 'organizing'].includes(item.row.dataset.state)) playSound('success');
     item.cause = body.state === 'failed' ? body.cause || '' : '';
     item.tracking = tracking(body);
     item.done = !['idle', 'failed', 'no_match'].includes(body.state);
@@ -1345,7 +1350,9 @@
       try {
         const body=await requestPeople(config, codes, abort => { view.peopleAbort = abort; });
         if (!view.root.isConnected || view.rows !== rows) return;
-        for (const item of chunk) renderPeople(item.people, body.items[item.code]);
+        // Peach 按账本写法作键，会补零（`ABC-12` → `ABC-012`）；按比较键回查，没有条目就是没有人物资料。
+        const keyed = new Map(Object.entries(body.items).map(([code, people]) => [comparisonKey(code), people]));
+        for (const item of chunk) renderPeople(item.people, body.items[item.code] ?? keyed.get(comparisonKey(item.code)) ?? []);
       } catch(error) { if(view.root.isConnected && view.rows===rows){view.peopleNote.hidden=false;view.peopleNote.textContent=`${error.message}，仍可选择番号加入。`;} return; }
     }
     // 不在馆藏的作品只能靠详情页的出演者名字找到本地人物。
@@ -1357,10 +1364,42 @@
     } catch { /* 保留按番号取得的结果。 */ }
   }
 
+  // 子页正在退场时浮卡已经开始淡回，不再算作打开。
+  function subpageOpen() {
+    return [settingsView, batchView].some(view => view?.dialog.open && !view.dialog.hasAttribute('data-closing'));
+  }
+
+  // 子页打开期间浮卡隐藏并停用；子页一开始退场浮卡就淡回，可交互要等子页真正关闭。
+  function coverPanels() {
+    if (current) { current.root.setAttribute('data-settings-open', ''); current.root.inert = true; }
+    updateEntry?.root.setAttribute('data-settings-open', '');
+  }
+
+  function uncoverPanels() {
+    if (subpageOpen()) return;
+    current?.root.removeAttribute('data-settings-open');
+    updateEntry?.root.removeAttribute('data-settings-open');
+  }
+
+  // dialog 与遮罩淡出，同时让浮卡淡回；动画结束或超时后由调用方关闭。
+  async function fadeOut(dialog) {
+    dialog.setAttribute('data-closing', '');
+    uncoverPanels();
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    dialog.getBoundingClientRect();
+    const animations = dialog.getAnimations();
+    if (!animations.length) return;
+    let timer;
+    await Promise.race([Promise.allSettled(animations.map(animation => animation.finished)),
+      new Promise(resolve => { timer = setTimeout(resolve, 220); })]);
+    clearTimeout(timer);
+  }
+
   function openPageActions() {
     if (!configuration()) { configure(); return; }
     if (batchView?.dialog.open) { batchView.dialog.focus(); return; }
-    if (settingsView?.dialog.open) settingsView.dialog.close();
+    const switching = Boolean(settingsView?.dialog.open);
+    if (switching) settingsView.dialog.close();
     if (!current) entryOpen = true;
     const previousFocus=current?.root.shadowRoot?.activeElement || updateEntry?.root.shadowRoot?.activeElement || document.activeElement;
     const {root, shadow} = surface('peach-jav-batch', 'Peach 页面番号');
@@ -1445,21 +1484,29 @@
     // 识别通常很快，图标至少转满一圈，识别结束后转完当前这一圈再停。
     rescan.addEventListener('animationiteration', () => { if (!view.busy) delete rescan.dataset.spinning; });
     rescan.addEventListener('click', () => { rescan.dataset.spinning = ''; view.peopleAbort?.();peopleNote.hidden=true;view.busy=true; view.paint(); note.textContent='正在识别本页番号…'; void scanPage(view); });
-    close.addEventListener('click', () => dialog.close());
+    // 返回与 Escape 都走淡出，和设置子页的退场一致。
+    const dismiss = async () => {
+      if (!dialog.open || dialog.hasAttribute('data-closing')) return;
+      await fadeOut(dialog);
+      if (dialog.open) dialog.close();
+    };
+    close.addEventListener('click', () => { void dismiss(); });
+    dialog.addEventListener('cancel', event => { event.preventDefault(); void dismiss(); });
     dialog.addEventListener('close', () => {
       view.peopleAbort?.();
       root.remove(); if (batchView===view) batchView=null;
-      if (current && !settingsView?.dialog.open) { current.root.removeAttribute('data-settings-open'); current.root.inert=false; }
+      if (current && !subpageOpen()) { current.root.removeAttribute('data-settings-open'); current.root.inert=false; }
       refreshUpdateEntry();
       if(previousFocus?.isConnected)previousFocus.focus();
     }, {once:true});
-    if (current) { current.root.setAttribute('data-settings-open',''); current.root.inert=true; }
-    updateEntry?.root.setAttribute('data-settings-open','');
+    coverPanels();
+    if (switching) dialog.setAttribute('data-switch', '');
     view.paint(); dialog.showModal(); placeSurface(root); void scanPage(view);
   }
 
   function configure() {
-    if (batchView?.dialog.open) batchView.dialog.close();
+    const switching = Boolean(batchView?.dialog.open);
+    if (switching) batchView.dialog.close();
     if (settingsView?.dialog.open) { settingsView.reopen(); return; }
     const previousFocus = current?.root.shadowRoot?.activeElement || updateEntry?.root.shadowRoot?.activeElement || document.activeElement;
     const saved = configuration();
@@ -1569,13 +1616,10 @@
       closeGeneration++;
       closing = false;
       dialog.removeAttribute('data-closing');
+      coverPanels();
       address.input.focus();
     } };
-    if (current) {
-      current.root.setAttribute('data-settings-open', '');
-      current.root.inert = true;
-    }
-    updateEntry?.root.setAttribute('data-settings-open', '');
+    coverPanels();
     const cleanup = () => {
       if (!root.isConnected) return;
       closeGeneration++;
@@ -1583,7 +1627,7 @@
       secret.input.value = '';
       if (settingsView?.root === root) settingsView = null;
       root.remove();
-      if (current && !batchView?.dialog.open) {
+      if (current && !subpageOpen()) {
         current.root.removeAttribute('data-settings-open');
         current.root.inert = false;
       }
@@ -1595,17 +1639,7 @@
       if (closing || !dialog.open) return;
       closing = true;
       const run = ++closeGeneration;
-      dialog.setAttribute('data-closing', '');
-      if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        dialog.getBoundingClientRect();
-        const animations = dialog.getAnimations();
-        if (animations.length) {
-          let timer;
-          await Promise.race([Promise.allSettled(animations.map(animation => animation.finished)),
-            new Promise(resolve => { timer = setTimeout(resolve, 220); })]);
-          clearTimeout(timer);
-        }
-      }
+      await fadeOut(dialog);
       if (run !== closeGeneration || !closing) return;
       dialog.close();
       cleanup();
@@ -1676,6 +1710,7 @@
       if (current) present(current, 'minimized', true);
       else updateEntry?.launcher.focus();
     });
+    if (switching) dialog.setAttribute('data-switch', '');
     dialog.showModal();
     placeSurface(root);
   }
@@ -1838,6 +1873,11 @@
       && ['pending', 'queued', 'running'].includes(body.download?.postprocess_state));
   }
 
+  // 整个流程走完：已入库且整理不再进行，整理失败不算完成。
+  function finished(body) {
+    return body.state === 'ingested' && !tracking(body) && body.download?.postprocess_state !== 'failed';
+  }
+
   function renderFlow(view, body) {
     const download = body?.download;
     let current = -1;
@@ -1881,7 +1921,8 @@
       view.heading.textContent = body.code;
       view.loadPeople(body.code);
     }
-    if (body.state === 'ingested' && ACTIVE.has(view.state)) playSound('success');
+    // 整理期间 view.state 已是 ingested，前态按上一轮是否仍在跟踪判断。
+    if (finished(body) && view.tracking) playSound('success');
     view.state = body.state;
     view.cause = body.state === 'failed' ? body.cause || '' : '';
     view.tracking = tracking(body);
@@ -2057,7 +2098,7 @@
     const view = { root, panel, body, launcher, collapse, summary, button, note, flow, steps, progress, progressFill, heading: label, loadPeople: loadTitlePeople, settings: settingsButton, identity: item, url: location.href, generation, state: 'idle', busy: false, tracking: false, queryOnly: attempts.has(comparisonKey(item.code)) };
     current = view;
     refreshUpdateEntry();
-    if (settingsView?.dialog.open || batchView?.dialog.open) {
+    if (subpageOpen()) {
       root.setAttribute('data-settings-open', '');
       root.inert = true;
     }

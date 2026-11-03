@@ -2,6 +2,18 @@
 
 Notable changes are grouped by version. English and Chinese describe the same behavior; source-only versions are marked explicitly. / 按版本记录面向使用者的变化；中英文保持事实一致，未单独发布的源码版本明确标注。
 
+## 0.6.11 — 2026-11-03
+
+Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
+
+### Fixed / 修复
+
+- **Panels** cross-fade with Settings and the page list instead of vanishing first and fading the new view in from nothing, so switching no longer flashes. Returning starts bringing the panel back as the subpage fades out, and the page list now fades out like Settings. / 浮卡与设置、本页番号切换时交叉淡化，不再先瞬间消失、再让新界面从全透明淡入，切换不再闪一下；返回时子页一开始淡出浮卡就淡回，本页番号的返回也和设置一样淡出。
+- **Page list** no longer treats reviewer names followed by an honorific (`qwert-02さん` on MGS reviews) as release codes. Local performer lookups also match codes Peach pads (`ABC-12` → `ABC-012`) instead of reporting the local data as invalid. / 本页番号不再把后面跟着敬称的评论署名（MGS 评论里的 `qwert-02さん`）当成番号；Peach 补零后的番号（`ABC-12` → `ABC-012`）也能对上本地人物资料，不再提示「本地女优资料格式无效」。
+- **Sound** plays the success chime only after the download has been ingested and organizing has finished, not while organizing is still running. / 成功提示音等入库并整理完成后才响，不再在刚入库、还在整理时就响。
+
+[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/b47e32f...main)
+
 ## 0.6.10 — 2026-11-01
 
 Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
