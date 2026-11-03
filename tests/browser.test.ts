@@ -1083,35 +1083,23 @@ describe('JAV 用户脚本', () => {
     } finally { await opened.close(); }
   });
 
-  it('设置弹窗进入与退出均有过渡，减少动效时立即关闭', async () => {
+  it('设置子页与浮卡同时播 Peach 设置面板的进出场，减少动效时立即关闭', async () => {
     const opened = await open(browser);
     const { page } = opened;
     try {
       await page.emulateMedia({reducedMotion:'no-preference'});
       await ready(page);
-      await page.evaluate(()=>{
-        const trace: Array<{property:string;elapsed:number}> = [];
-        (window as Window & {settingsMotion:typeof trace}).settingsMotion=trace;
-        const observer=new MutationObserver(()=>{
-          const dialog=document.querySelector('#peach-jav-settings')?.shadowRoot?.querySelector('dialog');
-          if(!dialog)return;
-          observer.disconnect();
-          dialog.addEventListener('transitionend',event=>{
-            const e=event as TransitionEvent;
-            if(e.target===dialog)trace.push({property:e.propertyName,elapsed:e.elapsedTime});
-          });
-        });
-        observer.observe(document.body,{childList:true});
-      });
+      const names = (node: Element) => node.getAnimations().flatMap(animation => 'animationName' in animation ? [(animation as CSSAnimation).animationName] : []);
       const trigger=page.locator(ROOT).getByRole('button',{name:'Peach 设置',exact:true});
       await trigger.click();
-      // 浮卡随设置淡入同步淡出，不先瞬间隐藏。
-      assert.ok(await page.locator(ROOT).evaluate(node=>node.getAnimations().some(animation=>(animation as CSSTransition).transitionProperty==='opacity')));
-      await page.waitForFunction(()=>(window as Window & {settingsMotion:Array<{property:string;elapsed:number}>}).settingsMotion.some(e=>e.property==='transform'&&e.elapsed>=.19));
+      // 子页进场时浮卡退场，两者同时进行，不先瞬间隐藏浮卡。
+      assert.deepEqual(await settingsDialog(page).evaluate(names), ['board-dialog-in']);
+      assert.deepEqual(await page.locator(ROOT).evaluate(names), ['board-dialog-out']);
       await settingsDialog(page).getByRole('button',{name:'取消',exact:true}).click();
+      assert.deepEqual(await settingsDialog(page).evaluate(names), ['board-dialog-out']);
+      assert.deepEqual(await page.locator(ROOT).evaluate(names), ['board-dialog-in']);
       await settingsDialog(page).waitFor({state:'detached'});
-      const exits=await page.evaluate(()=>(window as Window & {settingsMotion:Array<{property:string;elapsed:number}>}).settingsMotion);
-      assert.ok(exits.some(e=>e.property==='opacity'&&e.elapsed>=.11&&e.elapsed<=.13));
+      await page.waitForFunction(root=>!document.querySelector(root)!.hasAttribute('data-subpage-return'), ROOT);
       await page.emulateMedia({reducedMotion:'reduce'});
       await trigger.click();
       assert.equal(await settingsDialog(page).evaluate(node=>node.getAnimations().length),0);

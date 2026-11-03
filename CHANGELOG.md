@@ -8,7 +8,7 @@ Source only; release assets are not published yet. / 仅源码更新，尚未发
 
 ### Fixed / 修复
 
-- **Panels** cross-fade with Settings and the page list instead of vanishing first and fading the new view in from nothing, so switching no longer flashes. Returning starts bringing the panel back as the subpage fades out, and the page list now fades out like Settings. / 浮卡与设置、本页番号切换时交叉淡化，不再先瞬间消失、再让新界面从全透明淡入，切换不再闪一下；返回时子页一开始淡出浮卡就淡回，本页番号的返回也和设置一样淡出。
+- **Panels** switch to Settings and the page list with Peach's settings-panel enter and exit motion (BoardUI dialog motion), playing on both layers at once instead of hiding the panel first and fading the new view in from nothing, so switching no longer flashes. Returning brings the panel back as the subpage leaves, and the page list now leaves like Settings. / 浮卡与设置、本页番号切换时改用 Peach 设置面板的进出场动效（BoardUI 弹层动效），两层同时进出，不再先瞬间隐藏浮卡、再让新界面从全透明出现，切换不再闪一下；返回时子页一开始退场浮卡就进场，本页番号的返回也和设置一样退场。
 - **Page list** no longer treats reviewer names followed by an honorific (`qwert-02さん` on MGS reviews) as release codes. Local performer lookups also match codes Peach pads (`ABC-12` → `ABC-012`) instead of reporting the local data as invalid. / 本页番号不再把后面跟着敬称的评论署名（MGS 评论里的 `qwert-02さん`）当成番号；Peach 补零后的番号（`ABC-12` → `ABC-012`）也能对上本地人物资料，不再提示「本地女优资料格式无效」。
 - **Sound** plays the success chime only after the download has been ingested and organizing has finished, not while organizing is still running. / 成功提示音等入库并整理完成后才响，不再在刚入库、还在整理时就响。
 

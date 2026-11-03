@@ -265,7 +265,7 @@
       --board-font:'Inter Variable','Inter','Segoe UI','Microsoft YaHei UI','Microsoft YaHei','PingFang SC','Hiragino Sans GB','Noto Sans CJK SC','Noto Sans SC','Source Han Sans SC',sans-serif;
       --board-body:400 14px/20px var(--board-font);--board-body-medium:500 14px/20px var(--board-font);--board-caption:400 12px/16px var(--board-font);--board-caption-semibold:600 12px/16px var(--board-font);--board-heading:500 20px/26px var(--board-font);
       --board-blue:linear-gradient(180deg,var(--color-accent-500),var(--color-accent-600));--board-blue-hover:linear-gradient(180deg,var(--color-accent-400),var(--color-accent-500));--board-blue-active:linear-gradient(180deg,var(--color-accent-600),var(--color-accent-700));
-      --modal-ease:cubic-bezier(0,0,.2,1);--board-motion:.3s cubic-bezier(.4,0,.2,1);--spring-press-ms:208;
+      --board-motion:.3s cubic-bezier(.4,0,.2,1);--board-dialog-motion:.3s cubic-bezier(.32,.72,0,1);--spring-press-ms:208;
       --spring-press:linear(0,0.1659,0.4268,0.6816,0.8795,1.0066,1.084,1.0861,1.069,1.0457,1.0241,1.0079,0.998,0.9933,0.9923,0.9934,0.9954,0.9973,0.9995,1.0003,1.0006,1.0007,1.0005,1.0004,1);
       --field-ring-hover:rgba(0,0,0,.21);
       --color-status-lime-background:oklch(93.8% .127 124.321);--color-status-lime-text:oklch(45.3% .124 130.933);
@@ -279,10 +279,17 @@
     :host([data-theme=dark]){${DARK_STYLE}}
     *,*::before,*::after{box-sizing:border-box} [hidden]{display:none!important}
     :host([data-panel-mode="minimized"]){width:48px}
-    /* 浮卡与子页同在右下角，切换时两层交叉淡化：浮卡随子页淡入同步淡出，子页开始退场时浮卡就淡回；
-       先隐藏再从 0 淡入会露出两层都看不见的空档，读起来就是一闪。 */
-    :host{transition:opacity 120ms var(--modal-ease)}
-    :host([data-settings-open]){visibility:hidden;opacity:0;transition:opacity 200ms var(--modal-ease),visibility 0s 200ms}
+    /* 浮卡与子页同在右下角，切换时同时播 Peach 设置面板的进出场（web/board.css 的
+       board-dialog-in／out，BoardUI 设置弹层动效）：子页进场时浮卡退场，子页退场时浮卡进场。
+       先隐藏再让子页从 0 进场会露出两层都看不见的空档，读起来就是一闪。缩放原点按
+       BoardUI 下拉菜单随停靠位置取的规则，右下停靠取右下角。 */
+    :host{transform-origin:bottom right}
+    :host([data-settings-open]){visibility:hidden;pointer-events:none;transition:visibility 0s .3s;animation:board-dialog-out var(--board-dialog-motion) both}
+    :host([data-subpage-return]){animation:board-dialog-in var(--board-dialog-motion) backwards}
+    @keyframes board-dialog-in{from{opacity:0;transform:scale(.85);filter:blur(4px)}to{opacity:1;transform:scale(1);filter:blur(0)}}
+    @keyframes board-dialog-out{from{opacity:1;transform:scale(1);filter:blur(0)}to{opacity:0;transform:scale(.85);filter:blur(4px)}}
+    @keyframes settings-backdrop-in{from{opacity:0}to{opacity:1}}
+    @keyframes settings-backdrop-out{from{opacity:1}to{opacity:0}}
     h2,p{margin:0} h2{font:var(--board-heading)}
     .panel{background:var(--ground);border:1px solid var(--line);border-radius:var(--floating-radius);overflow:hidden}
     .task-progress{display:block;width:100%;height:6px;overflow:hidden;border-radius:9999px}
@@ -430,12 +437,15 @@
     dialog{position:fixed;inset:auto var(--panel-right,max(16px,env(safe-area-inset-right))) var(--panel-bottom,max(16px,env(safe-area-inset-bottom))) auto;margin:0;
       width:min(400px,calc(100% - 32px));max-width:calc(100% - 32px);max-height:calc(100dvh - 32px);padding:0;
       background:var(--ground);color:var(--ink);border:1px solid var(--line);border-radius:var(--floating-radius);overflow:hidden;box-shadow:var(--elevation-dropdown);
-      opacity:1;transform:scale(1);transition:opacity 200ms var(--modal-ease),transform 200ms var(--modal-ease)}
-    dialog::backdrop{background:#000b;opacity:1;transition:opacity 200ms var(--modal-ease)}
-    dialog[data-closing],dialog[data-closing]::backdrop{opacity:0;transition-duration:120ms}
-    dialog[data-closing]{transform:scale(.98)}
-    /* data-switch：从另一个子页直接换过来，遮罩一直在，不再从 0 淡入。 */
-    @starting-style{dialog[open]{opacity:0;transform:scale(.98)}dialog[open]:not([data-switch])::backdrop{opacity:0}}
+      transform-origin:bottom right}
+    /* 子页进出场与 Peach 设置面板同一对关键帧，遮罩取设置面板的 settings-backdrop。
+       进场用 backwards：终点就是自然状态，不留一个 filter:blur(0)。
+       data-switch：从另一个子页直接换过来，遮罩一直在，不再从 0 淡入。 */
+    dialog::backdrop{background:#000b}
+    dialog[open]{animation:board-dialog-in var(--board-dialog-motion) backwards}
+    dialog[open]:not([data-switch])::backdrop{animation:settings-backdrop-in .35s cubic-bezier(.4,0,.2,1) both}
+    dialog[open][data-closing]{animation:board-dialog-out var(--board-dialog-motion) both}
+    dialog[open][data-closing]::backdrop{animation:settings-backdrop-out .35s cubic-bezier(.4,0,.2,1) both}
     form{display:flex;flex-direction:column;max-height:calc(100dvh - 34px);margin:0}dialog>form,dialog>div{position:relative}
     dialog .bar{border-bottom:1px solid var(--line);flex:none}dialog .body{padding-top:20px;overflow:auto;overscroll-behavior:contain;scrollbar-width:none}dialog .body::-webkit-scrollbar{display:none}dialog .footer{flex:none}
     @media(max-width:760px){.geist-input{font-size:var(--fs-lg)}}
@@ -1364,24 +1374,29 @@
     } catch { /* 保留按番号取得的结果。 */ }
   }
 
-  // 子页正在退场时浮卡已经开始淡回，不再算作打开。
+  // 子页正在退场时浮卡已经开始进场，不再算作打开。
   function subpageOpen() {
     return [settingsView, batchView].some(view => view?.dialog.open && !view.dialog.hasAttribute('data-closing'));
   }
 
-  // 子页打开期间浮卡隐藏并停用；子页一开始退场浮卡就淡回，可交互要等子页真正关闭。
+  // 子页打开期间浮卡退场并停用；子页一开始退场浮卡就进场，可交互要等子页真正关闭。
   function coverPanels() {
-    if (current) { current.root.setAttribute('data-settings-open', ''); current.root.inert = true; }
-    updateEntry?.root.setAttribute('data-settings-open', '');
+    for (const root of [current?.root, updateEntry?.root]) {
+      root?.removeAttribute('data-subpage-return'); root?.setAttribute('data-settings-open', '');
+    }
+    if (current) current.root.inert = true;
   }
 
   function uncoverPanels() {
     if (subpageOpen()) return;
-    current?.root.removeAttribute('data-settings-open');
-    updateEntry?.root.removeAttribute('data-settings-open');
+    for (const root of [current?.root, updateEntry?.root]) {
+      if (!root?.hasAttribute('data-settings-open')) continue;
+      root.removeAttribute('data-settings-open'); root.setAttribute('data-subpage-return', '');
+      root.addEventListener('animationend', () => root.removeAttribute('data-subpage-return'), {once:true});
+    }
   }
 
-  // dialog 与遮罩淡出，同时让浮卡淡回；动画结束或超时后由调用方关闭。
+  // dialog 与遮罩退场，同时让浮卡进场；动画结束或超时后由调用方关闭。
   async function fadeOut(dialog) {
     dialog.setAttribute('data-closing', '');
     uncoverPanels();
@@ -1391,7 +1406,7 @@
     if (!animations.length) return;
     let timer;
     await Promise.race([Promise.allSettled(animations.map(animation => animation.finished)),
-      new Promise(resolve => { timer = setTimeout(resolve, 220); })]);
+      new Promise(resolve => { timer = setTimeout(resolve, 340); })]);
     clearTimeout(timer);
   }
 
