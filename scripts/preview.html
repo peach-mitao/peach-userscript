@@ -23,7 +23,7 @@
       <button type="button" id="activate-script">开启</button>
       <button type="button" id="check-script-update">检测更新</button>
       <button type="button" id="copy-pairing">复制模拟配对信息</button>
-      <a href="?site=dmm&state=idle">DMM 商品号</a><a href="?site=mgs&state=idle">MGS 商品号</a><a href="?state=idle&scan=javdb">JavDB 整页扫描</a><a href="?state=idle&scan=states">本页番号行状态</a><a href="?site=list&state=idle&scan=javdb">JavDB 首页</a>
+      <a href="?site=dmm&state=idle">DMM 商品号</a><a href="?site=mgs&state=idle">MGS 商品号</a><a href="?state=idle&scan=javdb">JavDB 整页扫描</a><a href="?state=idle&scan=states">本页番号行状态</a><a href="?site=list&state=idle&scan=javdb">JavDB 首页</a><a href="?state=idle&tasks=1">共享进度</a><a href="?site=list&state=idle&tasks=1">共享进度（无本页番号）</a>
     </nav>
     <h1>REAL-864 作品详情</h1>
     <p class="meta">来源页面示意</p>
@@ -67,6 +67,7 @@
       document.querySelector('main').insertAdjacentHTML('beforeend', `<section aria-label="行状态样例"><h2>行状态样例</h2><dl><dt>出演者：</dt><dd><a href="#">河北彩花（河北彩伽）</a></dd></dl><p>${Object.keys(ROW_STATES).slice(1).join(' ')}</p></section>`);
     const previewValues = previewState === 'unconfigured' ? {} : { 'peach.jav.base': 'https://peach.example.com', 'peach.jav.token': 'preview-only-token' };
     const previewMenus = {};
+    let previewActive = 0;
     Object.assign(window, {
       GM_getValue: (key, fallback) => previewValues[key] ?? fallback,
       GM_setValue: (key, value) => { previewValues[key] = value; },
@@ -78,6 +79,22 @@
           return;
         }
         if (previewState === 'failed') { request.onerror(); return; }
+        // tasks=1 模拟 Peach 的进行中任务列表，下载百分比随每次查询往前走；其余预览按旧版 Peach 没有列表接口作答。
+        if (new URLSearchParams(location.search).get('tasks') === '1' && new URL(request.url).pathname.endsWith('/people')) {
+          const people = {'ABP-616':[{name:'Alice'}],'SSIS-057':[{name:'Bella'},{name:'Cora'}],'IPX-001':[{name:'Dana'}]};
+          const items = Object.fromEntries(new URL(request.url).searchParams.get('codes').split(',').map(code => [code, people[code] || []]));
+          request.onload({status:200,responseText:JSON.stringify({ok:true,source:'local-cache',items})}); return;
+        }
+        if (new URL(request.url).pathname.endsWith('/active')) {
+          if (new URLSearchParams(location.search).get('tasks') !== '1') { request.onload({status:404,responseText:'{"detail":"Not Found"}'}); return; }
+          previewActive = Math.min(previewActive + .07, 1);
+          request.onload({status:200,responseText:JSON.stringify({ok:true,items:[
+            {ok:true,code:'ABP-616',state:'submitted',download:{state:'remote_running',label:'网盘下载中',progress:previewActive}},
+            {ok:true,code:'MIDV-339',state:previewActive < .3 ? 'queued' : 'searching'},
+            {ok:true,code:'SSIS-057',state:'ingested',download:{state:'ingested',label:'已入库',progress:1,postprocess_state:'running',postprocess_label:'整理中'}},
+            {ok:true,code:'IPX-001',state:'ingested',download:{state:'ingested',label:'已入库',progress:1,postprocess_state:'complete',postprocess_label:'已整理'}},
+            {ok:true,code:'JUR-112',state:'failed',cause:'magnet',failure:'no_source',message:'没有可用下载源'}]})}); return;
+        }
         if (new URLSearchParams(location.search).get('scan') === 'states') {
           const url = new URL(request.url);
           if (url.pathname.endsWith('/people')) {
