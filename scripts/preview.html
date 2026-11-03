@@ -18,7 +18,7 @@
     <p class="meta">Peach 用户脚本 · 交互预览</p>
     <p>右下角可打开设置、保存模拟地址与令牌，或查看添加状态。此页使用内存数据，刷新会还原。</p>
     <nav aria-label="预览状态">
-      <a href="?state=unconfigured">未配置</a><a href="?state=idle">可添加</a><a href="?state=owned">馆藏已有</a><a href="?state=failed">连接失败</a><a href="?state=magnet">磁力失效</a>
+      <a href="?state=unconfigured">未配置</a><a href="?state=idle">可添加</a><a href="?state=owned">馆藏已有</a><a href="?state=failed">连接失败</a><a href="?state=magnet">磁力失效</a><a href="?state=organize">整理失败</a>
       <button type="button" id="open-settings">打开设置</button>
       <button type="button" id="activate-script">开启</button>
       <button type="button" id="check-script-update">检测更新</button>
@@ -67,7 +67,7 @@
       document.querySelector('main').insertAdjacentHTML('beforeend', `<section aria-label="行状态样例"><h2>行状态样例</h2><dl><dt>出演者：</dt><dd><a href="#">河北彩花（河北彩伽）</a></dd></dl><p>${Object.keys(ROW_STATES).slice(1).join(' ')}</p></section>`);
     const previewValues = previewState === 'unconfigured' ? {} : { 'peach.jav.base': 'https://peach.example.com', 'peach.jav.token': 'preview-only-token' };
     const previewMenus = {};
-    let previewActive = 0;
+    let previewActive = 0, previewRetried = false;
     Object.assign(window, {
       GM_getValue: (key, fallback) => previewValues[key] ?? fallback,
       GM_setValue: (key, value) => { previewValues[key] = value; },
@@ -123,6 +123,13 @@
         }
         const code = new URLSearchParams(location.search).get('site') === 'dmm' ? 'SSIS-519'
           : new URLSearchParams(location.search).get('site') === 'mgs' ? '300MIUM-1239' : 'REAL-864';
+        // organize：已入库但整理失败，点「重试整理」后回到等待整理。
+        if (previewState === 'organize') {
+          if (new URL(request.url).pathname.endsWith('/postprocess')) previewRetried = true;
+          const retried = previewRetried;
+          request.onload({status:200,responseText:JSON.stringify({ok:true,code,state:'ingested',download:{state:'ingested',label:'已入库',progress:1,
+            postprocess_state:retried ? 'pending' : 'failed',postprocess_label:retried ? '等待整理' : '整理失败'}})}); return;
+        }
         if (previewState === 'magnet' && request.method !== 'POST') {
           request.onload({status:200,responseText:JSON.stringify({ok:true,code,state:'failed',cause:'magnet',failure:'no_source',message:'没有可用下载源或进度长时间未更新'})}); return;
         }

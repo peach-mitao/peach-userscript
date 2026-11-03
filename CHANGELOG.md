@@ -2,6 +2,16 @@
 
 Notable changes are grouped by version. English and Chinese describe the same behavior; source-only versions are marked explicitly. / 按版本记录面向使用者的变化；中英文保持事实一致，未单独发布的源码版本明确标注。
 
+## 0.7.1 — 2026-11-04
+
+Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
+
+### Added / 新增
+
+- **Retry organizing** when Peach reports that a downloaded title was ingested but organizing failed: the panel button and the progress page of another title both offer 重试整理, which hands the task back to Peach the same way the task center does and keeps tracking it. Older Peach versions without this endpoint get a note to retry from the Peach task center. / 入库后整理失败时可以直接重试：浮卡按钮和其他任务的进度页都显示「重试整理」，与 Peach 任务中心同一入口，点后接着跟踪进度。没有这个接口的旧版 Peach 会提示到 Peach 任务中心重试。
+
+[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/26ae5b9...main)
+
 ## 0.7.0 — 2026-11-04
 
 Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。

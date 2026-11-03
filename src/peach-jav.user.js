@@ -12,7 +12,7 @@
 // @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
 // @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.7.0
+// @version      0.7.1
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -1905,12 +1905,13 @@
   function render(view) {
     if (!alive(view)) return;
     view.summary.textContent = panelMode === 'collapsed' ? view.note.textContent : '';
-    const terminalSuccess = ['ingested', 'owned'].includes(view.state) && !view.tracking;
+    const terminalSuccess = ['ingested', 'owned'].includes(view.state) && !view.tracking && !view.organizeFailed;
     view.button.disabled = view.busy || view.identity.conflict || terminalSuccess;
     view.button.setAttribute('aria-busy', String(view.busy));
     view.button.setAttribute('aria-disabled', String(view.busy || view.button.disabled));
     view.button.textContent = view.identity.conflict ? '番号存在冲突'
       : !configuration() ? '配置 Peach'
+      : view.organizeFailed && !view.busy ? '重试整理'
       : terminalSuccess ? '已有该影片'
       : view.busy ? '正在查询 Peach'
       : view.queryOnly || ACTIVE.has(view.state) ? '查询 Peach 状态'
@@ -1933,6 +1934,56 @@
   function tracking(body) {
     return ACTIVE.has(body.state) || (body.state === 'ingested'
       && ['pending', 'queued', 'running'].includes(body.download?.postprocess_state));
+  }
+
+  function organizeFailed(body) {
+    return body.state === 'ingested' && body.download?.postprocess_state === 'failed';
+  }
+
+  // 重试入库后失败的整理，与 Peach 任务中心的「重试整理」同一入口；旧版 Peach 没有这个接口。
+  function requestRetryOrganize(config, code) {
+    return new Promise((resolve, reject) => {
+      try {
+        GM_xmlhttpRequest({ method: 'POST', url: `${config.base}/api/jav-browser/postprocess`, anonymous: true, timeout: 60_000,
+          headers: { Authorization: `Bearer ${config.token}`, Accept: 'application/json', 'Content-Type': 'application/json' },
+          data: JSON.stringify({ code }),
+          onload(response) {
+            let detail = '';
+            try { const value = JSON.parse(response.responseText).detail; if (typeof value === 'string' && value.length <= 200) detail = value; } catch { /* 非 JSON 错误按状态提示。 */ }
+            if ([404, 405].includes(response.status)) { reject(new Error('Peach 尚不支持在脚本里重试整理，请在 Peach 任务中心重试或更新 Peach。')); return; }
+            if (response.status === 401 || response.status === 403) { reject(new Error('令牌无效或无权限，请重新配置。')); return; }
+            if (response.status !== 200) { reject(new Error(detail || '重试整理未成功，请在 Peach 任务中心查看。')); return; }
+            try {
+              const body = JSON.parse(response.responseText);
+              if (body.ok !== true || !STATES.has(body.state) || typeof body.code !== 'string' || !samePeachCode(body.code, code)) throw new Error();
+              resolve(body);
+            } catch { reject(new Error('Peach 返回的状态无效，请查询状态。')); }
+          },
+          onerror: () => reject(new Error('无法连接 Peach，请稍后重试。')), ontimeout: () => reject(new Error('Peach 请求超时，请查询状态。')),
+          onabort: () => reject(new Error('Peach 请求已中止。')),
+        });
+      } catch { reject(new Error('无法连接 Peach，请稍后重试。')); }
+    });
+  }
+
+  async function retryOrganize(view) {
+    const config = configuration();
+    if (!config) { configure(); return; }
+    view.busy = true; render(view);
+    try {
+      const body = await requestRetryOrganize(config, view.identity.code);
+      if (!alive(view)) return;
+      applyState(view, body);
+      void sharedTick(true);
+    } catch (error) {
+      if (alive(view)) { view.note.textContent = error.message; view.note.hidden = false; view.note.dataset.variant = 'error'; }
+    } finally {
+      if (alive(view)) {
+        view.busy = false; render(view);
+        // 没有共享进度时由本页接着查询整理进度。
+        if (!sharedMode() && view.tracking) void query(view);
+      }
+    }
   }
 
   // 整个流程走完：已入库且整理不再进行，整理失败不算完成。
@@ -2155,11 +2206,25 @@
     const note = element('p', 'geist-note');
     note.setAttribute('role', 'status'); note.setAttribute('aria-live', 'polite'); note.setAttribute('aria-label', `${code} 的任务状态`);
     const parts = buildFlow();
-    body.append(note, parts.flow);
+    const retry = control('重试整理');
+    retry.hidden = true;
+    retry.addEventListener('click', async () => {
+      const config = configuration();
+      if (!config || retry.disabled) return;
+      retry.disabled = true;
+      try {
+        const result = await requestRetryOrganize(config, code);
+        if (panel.taskPage?.page === page) { panel.taskPage.body = result; paintTaskPage(panel); }
+        void sharedTick(true);
+      } catch (error) {
+        if (panel.taskPage?.page === page) { note.textContent = error.message; note.dataset.variant = 'error'; }
+      } finally { retry.disabled = false; }
+    });
+    body.append(note, parts.flow, retry);
     page.append(bar, body);
     for (const child of panel.children) if (!child.hidden) { child.hidden = true; child.dataset.taskHidden = ''; }
     panel.append(page);
-    panel.taskPage = { page, code, note, people, body: null, ...parts };
+    panel.taskPage = { page, code, note, people, retry, body: null, ...parts };
     back.addEventListener('click', () => closeTaskPage(panel, true));
     paintTaskPage(panel);
     back.focus();
@@ -2188,6 +2253,7 @@
     }
     open.note.textContent = statusLabel(open.body);
     open.note.dataset.variant = statusVariant(open.body);
+    open.retry.hidden = !organizeFailed(open.body);
     for (const root of surfaces) if (root.isConnected) placeSurface(root);
   }
 
@@ -2239,6 +2305,7 @@
     view.state = body.state;
     view.cause = body.state === 'failed' ? body.cause || '' : '';
     view.tracking = tracking(body);
+    view.organizeFailed = organizeFailed(body);
     view.queryOnly = view.tracking;
     if (!view.queryOnly) attempts.delete(comparisonKey(view.identity.code));
     renderFlow(view, body);
@@ -2451,6 +2518,7 @@
     button.addEventListener('click', () => {
       if (!alive(view) || view.busy || view.button.disabled) return;
       if (!configuration()) { configure(); return; }
+      if (view.organizeFailed) { void retryOrganize(view); return; }
       void query(view, view.queryOnly || ACTIVE.has(view.state) ? 'GET' : 'POST');
     });
     render(view);
