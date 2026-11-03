@@ -2562,7 +2562,11 @@
         view.note.dataset.variant = 'error';
       }
     } finally {
-      if (alive(view)) { view.busy = false; render(view); }
+      if (alive(view)) {
+        view.busy = false; render(view);
+        // 查询期间到达的快照被跳过了，结束后立刻按当前快照补上，不等下一次变化。
+        if (sharedMode()) applyShared(sharedSnapshot);
+      }
     }
   }
 

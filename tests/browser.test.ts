@@ -1976,13 +1976,13 @@ describe('JAV 用户脚本', () => {
       assert.equal(await shared.locator('.shared-row').evaluate(node => node.getRootNode().activeElement === node), true);
       await page.clock.fastForward(20_000);
       assert.equal(await page.evaluate(() => window.javMock.calls.filter(call => call.method === 'GET').length), 1);
-      assert.match(String(await page.locator(ROOT).locator('[aria-label="Peach 任务状态"]').textContent()), /40%/);
+      await page.waitForFunction(root => /40%/.test(document.querySelector(root)!.shadowRoot!.querySelector('[aria-label="Peach 任务状态"]')!.textContent!), ROOT);
       await page.evaluate(() => { window.javMock.activeItems = [
         { ok: true, code: 'SSIS-057', state: 'ingested', message: 'ingested', download: { state: 'ingested', label: '已入库', progress: 1, postprocess_state: 'complete', postprocess_label: '已整理' } },
         { ok: true, code: 'ABP-616', state: 'queued', message: 'queued' }]; });
       await page.clock.fastForward(5_000);
       await page.waitForFunction(() => String(window.javMock.values['peach.jav.chimed'] || '').includes('SSIS'));
-      assert.match(String(await page.locator(ROOT).locator('[aria-label="Peach 任务状态"]').textContent()), /已入库/);
+      await page.waitForFunction(root => /已入库/.test(document.querySelector(root)!.shadowRoot!.querySelector('[aria-label="Peach 任务状态"]')!.textContent!), ROOT);
       assert.equal(Object.keys(JSON.parse(String(await page.evaluate(() => window.javMock.values['peach.jav.chimed'])))).length, 1);
       assert.equal(await page.evaluate(() => window.javMock.calls.filter(call => call.method === 'GET').length), 1);
       await page.locator(ROOT).getByRole('button', { name: '隐藏 Peach 面板' }).click();
