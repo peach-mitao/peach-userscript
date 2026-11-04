@@ -2033,16 +2033,24 @@
     }
   }
 
+  // Peach 里这部作品的详情页；只在馆藏已有或已入库、Peach 带回作品编号时有。
+  function libraryLink(view) {
+    const config = configuration();
+    return config && view.assetId && ['ingested', 'owned'].includes(view.state) ? `${config.base}/assets/${view.assetId}` : '';
+  }
+
   function render(view) {
     if (!alive(view)) return;
     view.summary.textContent = panelMode === 'collapsed' ? view.note.textContent : '';
     const terminalSuccess = ['ingested', 'owned'].includes(view.state) && !view.tracking && !view.organizeFailed;
-    view.button.disabled = view.busy || view.identity.conflict || terminalSuccess;
+    const opens = Boolean(terminalSuccess && libraryLink(view));
+    view.button.disabled = view.busy || view.identity.conflict || terminalSuccess && !opens;
     view.button.setAttribute('aria-busy', String(view.busy));
     view.button.setAttribute('aria-disabled', String(view.busy || view.button.disabled));
     view.button.textContent = view.identity.conflict ? '番号存在冲突'
       : !configuration() ? '配置 Peach'
       : view.organizeFailed && !view.busy ? '重试整理'
+      : opens ? '在 Peach 中打开'
       : terminalSuccess ? '已有该影片'
       : view.busy ? '正在查询 Peach'
       : view.queryOnly || ACTIVE.has(view.state) ? '查询 Peach 状态'
@@ -2628,6 +2636,8 @@
     view.cause = body.state === 'failed' ? body.cause || '' : '';
     view.tracking = tracking(body);
     view.organizeFailed = organizeFailed(body);
+    // 馆藏已有或已入库时 Peach 带回作品编号，主按钮改成直达 Peach 里的这部作品。
+    view.assetId = Number.isSafeInteger(body.asset_id) && body.asset_id > 0 ? body.asset_id : null;
     view.queryOnly = view.tracking;
     if (!view.queryOnly) attempts.delete(comparisonKey(view.identity.code));
     renderFlow(view, body);
@@ -2842,6 +2852,8 @@
       if (!alive(view) || view.busy || view.button.disabled) return;
       if (!configuration()) { configure(); return; }
       if (view.organizeFailed) { void retryOrganize(view); return; }
+      const link = libraryLink(view);
+      if (link && !view.tracking) { window.open(link, '_blank', 'noopener'); return; }
       void query(view, view.queryOnly || ACTIVE.has(view.state) ? 'GET' : 'POST');
     });
     render(view);

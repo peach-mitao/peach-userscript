@@ -508,6 +508,28 @@ describe('JAV 用户脚本', () => {
     }
   }
 
+  it('DMM 素人作品页按商品号认出番号；馆藏已有时主按钮直达 Peach 里的这部作品', async () => {
+    const opened = await open(browser, { url: 'https://video.dmm.co.jp/amateur/content/?id=mfc288&utm_medium=dmm_affiliate&utm_source=x',
+      title: '作品详情', html: '<h1>作品详情</h1>', automatic: false });
+    const { page } = opened;
+    try {
+      await pending(page, 1);
+      const asked = new URL(await page.evaluate(() => window.javMock.calls[0]!.url));
+      assert.equal(asked.pathname, '/api/jav-browser/identify');
+      assert.equal(asked.searchParams.get('source_url'), 'https://video.dmm.co.jp/amateur/content/?id=mfc288');
+      await page.evaluate(() => window.javMock.reply(0, { ok: true, code: 'MFC-288', state: 'owned', message: 'owned', asset_id: 4321 }));
+      await ready(page, '在 Peach 中打开');
+      assert.equal(await page.locator(ROOT).locator('.bar strong').innerText(), 'MFC-288');
+      await page.evaluate(() => { Object.assign(window, { opened: [] as unknown[] });
+        window.open = (...args: unknown[]) => { (window as unknown as { opened: unknown[] }).opened.push(args); return null; }; });
+      await button(page).click();
+      assert.deepEqual(await page.evaluate(() => (window as unknown as { opened: unknown[] }).opened),
+        [[`${BASE}/assets/4321`, '_blank', 'noopener']]);
+      assert.equal(await page.evaluate(() => window.javMock.calls.length), 1);
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
   it('MGS 店铺前缀由 Peach 归一成账本番号，本页列表不重复', async () => {
     const html = '<table><tr><th>品番：</th><td>107STZY-019</td></tr></table>';
     const opened = await open(browser, { url: 'https://www.mgstage.com/product/product_detail/107STZY-019/', title: '作品详情',

@@ -358,7 +358,7 @@
         "dt",
         "[data-video-code]"
       ],
-      "detail_pattern": "^/(?:av/content/?|(?:digital/(?:videoa|videoc)|mono/dvd)/-/detail/=/cid=([A-Za-z0-9_]+)/?)$"
+      "detail_pattern": "^/(?:(?:av|amateur)/content/?|(?:digital/(?:videoa|videoc)|mono/dvd)/-/detail/=/cid=([A-Za-z0-9_]+)/?)$"
     },
     {
       "id": "mgs",

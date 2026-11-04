@@ -9,6 +9,11 @@ Source only; release assets are not published yet. / 仅源码更新，尚未发
 ### Added / 新增
 
 - **Subscribe to new releases** from a performer's page on JavDB, DMM and MISSAV. The Peach panel names her with her avatar and offers 订阅新作; once subscribed it reads 取消订阅新作. JavDB and DMM pages are matched by the site ID in the address, and Peach adds her if she is not in the library yet; MISSAV pages only carry a name, so Peach subscribes her when it already knows her ID or when JavDB confirms a single person, and otherwise explains why on the panel. The panel opens by itself once Peach recognizes the page. Needs a Peach with `GET`/`POST /api/jav-browser/performer`; older versions show nothing new. / 在 JavDB、DMM、MISSAV 的女优页上订阅她的新作：Peach 面板显示她的头像和名字以及「订阅新作」，订阅后变成「取消订阅新作」。JavDB 与 DMM 页按地址里的站内编号认人，Peach 里还没有她时会新建；MISSAV 页只有名字，Peach 已有她的编号或 JavDB 确认是同一个人时才订，否则在面板上写明原因。Peach 认出这一页后面板自动展开。需要提供 `GET`/`POST /api/jav-browser/performer` 的 Peach；旧版不显示这一块。
+- **Open in Peach**: when Peach already has the title (owned or ingested) and reports its asset, the panel's main button reads 在 Peach 中打开 and opens the title's page in Peach in a new tab. / 馆藏已有或已入库、Peach 带回作品编号时，浮卡主按钮显示「在 Peach 中打开」，点了在新标签页打开 Peach 里这部作品的详情页。
+
+### Fixed / 修复
+
+- **DMM amateur titles** (`video.dmm.co.jp/amateur/content/?id=…`, such as `mfc288`) are recognized as title pages, so the panel shows their Peach status right away instead of only after scanning the page. / DMM 素人作品页（`video.dmm.co.jp/amateur/content/?id=…`，如 `mfc288`）按作品页识别，浮卡直接显示它在 Peach 的状态，不必先识别本页番号。
 
 [Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/8a79b31...main)
 

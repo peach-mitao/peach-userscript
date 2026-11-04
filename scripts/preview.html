@@ -160,7 +160,10 @@
         if (previewState === 'magnet' && request.method !== 'POST') {
           request.onload({status:200,responseText:JSON.stringify({ok:true,code,state:'failed',cause:'magnet',failure:'no_source',message:'没有可用下载源或进度长时间未更新'})}); return;
         }
-        request.onload({status:200,responseText:JSON.stringify({ok:true,code,state:request.method === 'POST' ? 'queued' : previewState === 'owned' ? 'owned' : 'idle'})});
+        // 馆藏已有时 Peach 带回作品编号，主按钮直达 Peach 里的这部作品。
+        const owned = request.method !== 'POST' && previewState === 'owned';
+        request.onload({status:200,responseText:JSON.stringify({ok:true,code,state:request.method === 'POST' ? 'queued' : owned ? 'owned' : 'idle',
+          ...(owned ? {asset_id:4321} : {})})});
       }, 650),
     });
     document.querySelector('#open-settings').addEventListener('click', () => previewMenus['设置']());

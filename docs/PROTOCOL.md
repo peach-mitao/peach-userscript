@@ -99,7 +99,7 @@ JavDB 演员页 `/actors/<id>`、DMM 女优片单 `/av/list/?actress=<编号>` �
 | --- | --- |
 | `idle` | 允许主动添加 |
 | `queued`、`searching`、`submitted` | 查询进度，不重复提交 |
-| `ingested`、`owned` | 显示完成状态，添加按钮禁用 |
+| `ingested`、`owned` | 显示完成状态；带正整数 `asset_id` 时主按钮显示「在 Peach 中打开」，在新标签页打开 `<Peach 地址>/assets/<asset_id>`，否则按钮禁用 |
 | `failed`、`no_match` | 允许用户主动重试 |
 
 队列状态每 2 秒查询一次，最多追加 30 次，轮询总预算 120 秒。达到上限后保留查询按钮。网络超时、401 / 403、非成功 HTTP、未知状态、无效 JSON 和番号不匹配都保留查询入口。请求结果不确定时不会自动重复 POST。
