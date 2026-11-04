@@ -199,6 +199,8 @@
   // 女优页：入口面板顶部那一块的状态，以及用户在这一页收起过面板（收起后不再自动展开）。
   let performerView = null;
   let performerDismissed = '';
+  // 入口面板折叠成只剩标题栏；从图标重新展开时复原。
+  let entryCollapsed = false;
   let updateGeneration = 0;
   let updateTimer;
   let updateDisposed = false;
@@ -327,7 +329,7 @@
     .stage-blocks i{background:currentColor;border-radius:1.125px;animation:stage-block 1300ms ease-in-out infinite;animation-delay:calc(1300ms * (var(--ld-step) - 5) / 5)}
     @keyframes stage-block{0%,70%,100%{transform:scale(1)}35%{transform:scale(0)}}
     .bar{min-height:var(--fieldset-bar-h);padding:8px 16px 8px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
-    .bar.subpage-bar{justify-content:flex-start;gap:8px}
+    .bar.subpage-bar{justify-content:flex-start;gap:8px}.task-page .bar-title{flex:1}
     .bar strong{font-weight:500;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
     .bar-heading{display:grid;min-width:0;gap:2px}.bar-title{display:flex;align-items:center;gap:8px;min-width:0}.bar-summary{font:var(--board-caption);color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .bar-actions{display:flex;gap:4px;flex:none}
@@ -1243,26 +1245,34 @@
       launcher.replaceChildren(logo);
       const panel = element('section', 'panel');
       wireDrag(entry.root, launcher, panel);
-      const bar = element('header', 'bar');
-      const later = control('收起', { icon: 'close' });
+      // 右上角与作品浮卡同一组：设置、折叠、隐藏。
+      const bar = element('header', 'bar'), actions = element('div', 'bar-actions');
+      const settings = control('Peach 设置', { icon: 'settings' }); settings.addEventListener('click', configure);
+      const collapse = control('折叠 Peach 详情', { icon: 'collapse' });
+      collapse.addEventListener('click', () => { closeTaskPage(panel); entryCollapsed = !entryCollapsed; refreshUpdateEntry(); collapse.focus(); });
+      const later = control('隐藏 Peach 面板', { icon: 'close' });
       later.addEventListener('click', () => {
         const shown = updateModel();
         if (shown.kind !== 'current') updateDismissed = shown.key;
         performerDismissed = performerPage()?.source || performerDismissed;
-        entryOpen = false; refreshUpdateEntry(); updateEntry?.launcher.focus();
+        closeTaskPage(panel); entryOpen = false; refreshUpdateEntry(); updateEntry?.launcher.focus();
       });
-      bar.append(element('strong', '', 'Peach'), later);
+      actions.append(settings, collapse, later);
+      bar.append(element('strong', '', 'Peach'), actions);
       const scan = control('识别本页全部番号', { primary: true }); scan.addEventListener('click', openPageActions);
-      const settings = control('Peach 设置'); settings.addEventListener('click', configure);
-      const body = element('div', 'body'); body.append(performerSection(), updateSection({ availableOnly: true }), sharedSection(), scan, settings);
-      launcher.addEventListener('click', () => { entryOpen = true; refreshUpdateEntry(); later.focus(); });
+      const body = element('div', 'body'); body.append(performerSection(), updateSection({ availableOnly: true }), sharedSection(), scan);
+      launcher.addEventListener('click', () => { entryOpen = true; entryCollapsed = false; refreshUpdateEntry(); later.focus(); });
       panel.append(bar, body); entry.shadow.append(panel, launcher);
-      updateEntry = { ...entry, launcher, panel, scan };
+      updateEntry = { ...entry, launcher, panel, body, collapse, scan };
     }
     // 女优页上「订阅新作」是这张面板的主操作，识别本页番号退成次要按钮。
     updateEntry.scan.classList.toggle('primary', !performer);
     paintPerformer(performer);
-    updateEntry.root.dataset.panelMode = expanded ? 'expanded' : 'minimized';
+    const folded = expanded && entryCollapsed;
+    updateEntry.root.dataset.panelMode = !expanded ? 'minimized' : folded ? 'collapsed' : 'expanded';
+    updateEntry.body.hidden = folded; updateEntry.body.inert = folded;
+    updateEntry.collapse.setAttribute('aria-expanded', String(!folded));
+    updateEntry.collapse.setAttribute('aria-label', folded ? '展开 Peach 详情' : '折叠 Peach 详情');
     placeSurface(updateEntry.root);
     updateEntry.launcher.hidden = expanded; updateEntry.panel.hidden = !expanded;
     updateEntry.root.toggleAttribute('data-settings-open', subpageOpen());
@@ -2494,7 +2504,15 @@
     const title = element('div', 'bar-title'), people = element('span', 'batch-people');
     people.append(defaultPersonAvatar());
     title.append(people, element('strong', '', code));
-    bar.append(back, title);
+    // 右上角与主页同一组：设置、折叠、隐藏，点了交给主页标题栏上的那一枚。
+    const actions = element('div', 'bar-actions');
+    for (const [label, icon] of [['Peach 设置', 'settings'], ['折叠 Peach 详情', 'collapse'], ['隐藏 Peach 面板', 'close']]) {
+      const proxy = control(label, { icon });
+      if (icon === 'collapse') proxy.setAttribute('aria-expanded', 'true');
+      proxy.addEventListener('click', () => panel.querySelector(`:scope > .bar [aria-label="${label}"]`)?.click());
+      actions.append(proxy);
+    }
+    bar.append(back, title, actions);
     const body = element('div', 'body');
     const note = element('p', 'geist-note');
     note.setAttribute('role', 'status'); note.setAttribute('aria-live', 'polite'); note.setAttribute('aria-label', `${code} 的任务状态`);

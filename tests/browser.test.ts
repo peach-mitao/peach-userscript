@@ -1444,7 +1444,13 @@ describe('JAV 用户脚本', () => {
         dialog.getBoundingClientRect().bottom - dialog.querySelector('form')!.getBoundingClientRect().bottom);
       assert.ok(gap <= 1, `设置底栏下方空出 ${gap}px`);
       await settingsDialog(page).getByRole('button', {name:'取消', exact:true}).click();
-      await entry.getByRole('button', {name:'收起', exact:true}).click();
+      // 右上角与作品浮卡同一组：折叠只留标题栏，再点展开；隐藏收成图标。
+      await entry.getByRole('button', {name:'折叠 Peach 详情', exact:true}).click();
+      assert.equal(await scan.isVisible(), false);
+      assert.equal(await entry.getAttribute('data-panel-mode'), 'collapsed');
+      await entry.getByRole('button', {name:'展开 Peach 详情', exact:true}).click();
+      await scan.waitFor();
+      await entry.getByRole('button', {name:'隐藏 Peach 面板', exact:true}).click();
       await entry.getByRole('button', {name:'Peach 设置与更新'}).waitFor();
       assert.deepEqual(opened.problems, []);
     } finally { await opened.close(); }
@@ -2027,6 +2033,9 @@ describe('JAV 用户脚本', () => {
       assert.equal(await task.locator('[aria-label="ABP-616 的任务状态"]').textContent(), '已排队');
       assert.equal(await task.locator('.flow-step[aria-current="step"] .flow-label').textContent(), '排队');
       assert.equal(await page.locator(ROOT).locator('.panel > .body').isHidden(), true);
+      // 进度页右上角与主页同一组按钮。
+      assert.deepEqual(await task.locator('.bar-actions button').evaluateAll(nodes => nodes.map(node => node.getAttribute('aria-label'))),
+        ['Peach 设置', '折叠 Peach 详情', '隐藏 Peach 面板']);
       await task.getByRole('button', { name: '返回 Peach 主页' }).click();
       assert.equal(await task.count(), 0);
       assert.ok(await moving() >= 2);
