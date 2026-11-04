@@ -12,7 +12,7 @@
 // @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
 // @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.7.3
+// @version      0.7.4
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -351,8 +351,10 @@
     .shared-fold{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s ease}
     .shared-heading[aria-expanded=false] .shared-fold{transform:rotate(-90deg)}
     /* 折叠沿用 Peach Collapse（frontend/src/ui-kit/collapse.css）：过渡时裁边，展开停稳后摘掉，行的悬停底色才不被切。 */
-    .shared-body{display:flow-root;overflow:hidden;transition:height .2s ease-in-out}.shared-body.fold-settled{overflow:visible}
-    .shared-list{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:4px;max-height:172px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
+    .shared-body{position:relative;display:flow-root;overflow:hidden;transition:height .2s ease-in-out}.shared-body.fold-settled{overflow:visible}
+    .shared-list{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:4px;max-height:172px;overflow:auto;overscroll-behavior:contain;scrollbar-width:none}
+    /* 滚动条用 Peach 的悬浮轨道（overlayScrollbar）；能滚动时右侧留出轨道位置，不压住行尾的关闭键。 */
+    .shared-list::-webkit-scrollbar{display:none}.shared-list[data-overflowing]{padding-right:12px}
     .shared-list li{min-width:0}.shared-row{display:flex;align-items:center;gap:8px;width:calc(100% + 16px);min-width:0;min-height:32px;margin:0 -8px;padding:4px 8px;border:0;border-radius:6px;
       background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;transition:background-color .15s ease}.shared-row:hover{background:var(--surface)}
     .shared-row:focus-visible{outline:2px solid var(--tungsten);outline-offset:-2px}
@@ -779,6 +781,7 @@
       const left = container.offsetLeft, top = container.offsetTop + container.clientTop + head, width = container.clientWidth;
       const height = container.clientHeight - head, content = container.scrollHeight - head;
       range = content - height; travel = 0;
+      container.toggleAttribute('data-overflowing', range > 1);
       Object.assign(edges.style, {left:`${left + container.clientLeft}px`, top:`${top}px`, width:`${width}px`, height:`${height}px`});
       if (range <= 1) { track.hidden = true; paint(); return; }
       track.hidden = false;
@@ -2376,6 +2379,7 @@
       body.hidden = !open;
       body.append(list, foot);
       node.replaceChildren(heading, note, body);
+      overlayScrollbar(list, { square: true });
       node.parts = { heading, label, retryAll, clear, note, body, list, open };
     }
     const { heading, label, retryAll, clear, body: fold, list } = node.parts;

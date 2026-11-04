@@ -2,6 +2,16 @@
 
 Notable changes are grouped by version. English and Chinese describe the same behavior; source-only versions are marked explicitly. / 按版本记录面向使用者的变化；中英文保持事实一致，未单独发布的源码版本明确标注。
 
+## 0.7.4 — 2026-11-05
+
+Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
+
+### Fixed / 修复
+
+- **Other tasks** scroll with Peach's overlay scrollbar, the same one the page list and dialogs already use, instead of the browser's native bar; the list leaves room for the track only when it can scroll, so the close buttons stay clickable. / 「其他任务」列表的滚动条换成 Peach 的悬浮滚动条，与本页番号列表和弹窗一致，不再露出浏览器原生滚动条；只有能滚动时右侧才留出轨道位置，行尾的关闭键不会被压住。
+
+[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/c7caa61...main)
+
 ## 0.7.3 — 2026-11-05
 
 Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
