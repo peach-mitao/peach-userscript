@@ -12,7 +12,7 @@
 // @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
 // @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.7.1
+// @version      0.7.2
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -336,15 +336,21 @@
     .geist-button.launcher[data-count]{position:relative;overflow:visible}
     .geist-button.launcher[data-count]::after{content:attr(data-count);position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:9px;
       display:grid;place-items:center;background:var(--color-status-blue-background);color:var(--color-status-blue-text);font:var(--board-caption-semibold);box-shadow:0 0 0 2px var(--ground);pointer-events:none}
-    .shared-tasks{display:grid;gap:8px;min-width:0}.shared-heading{display:flex;align-items:center;gap:4px;width:fit-content;margin:0;padding:0;border:0;background:transparent;
-      font:var(--board-caption-semibold);color:var(--muted);cursor:pointer}.shared-heading:hover{color:var(--ink)}
-    .shared-heading:focus-visible{outline:2px solid var(--tungsten);outline-offset:2px;border-radius:4px}
+    .geist-button.launcher[data-count-tone=ended]::after{background:var(--color-status-lime-background);color:var(--color-status-lime-text)}
+    .shared-note{margin:8px 0 0}.shared-foot{display:flex;justify-content:flex-end;gap:16px;margin-top:8px}.shared-foot:not(:has(>:not([hidden]))){display:none}
+    .shared-tasks{min-width:0}.shared-heading,.shared-action{display:flex;align-items:center;gap:4px;width:fit-content;margin:0;padding:0;border:0;background:transparent;
+      font:var(--board-caption-semibold);color:var(--muted);cursor:pointer}.shared-heading:hover,.shared-action:hover{color:var(--ink)}.shared-action:disabled{opacity:.5;cursor:default}
+    .shared-heading:focus-visible,.shared-action:focus-visible{outline:2px solid var(--tungsten);outline-offset:2px;border-radius:4px}
     .shared-fold{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s ease}
     .shared-heading[aria-expanded=false] .shared-fold{transform:rotate(-90deg)}
-    .shared-list{list-style:none;margin:0;padding:0;display:grid;gap:4px;max-height:172px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
+    /* 折叠沿用 Peach Collapse（frontend/src/ui-kit/collapse.css）：过渡时裁边，展开停稳后摘掉，行的悬停底色才不被切。 */
+    .shared-body{display:flow-root;overflow:hidden;transition:height .2s ease-in-out}.shared-body.fold-settled{overflow:visible}
+    .shared-list{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:4px;max-height:172px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
     .shared-list li{min-width:0}.shared-row{display:flex;align-items:center;gap:8px;width:calc(100% + 16px);min-width:0;min-height:32px;margin:0 -8px;padding:4px 8px;border:0;border-radius:6px;
       background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;transition:background-color .15s ease}.shared-row:hover{background:var(--surface)}
     .shared-row:focus-visible{outline:2px solid var(--tungsten);outline-offset:-2px}
+    .shared-item{display:flex;align-items:center;gap:4px}.shared-item .shared-row{flex:1;width:auto;margin-right:0}
+    .shared-item .geist-button.icon{width:28px;height:28px;color:var(--muted)}.shared-item .geist-button.icon:hover{color:var(--ink)}
     .shared-code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:var(--board-body-medium)}
     .shared-chevron{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;color:var(--muted)}
     .task-page .bar strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1360,6 +1366,7 @@
     if (body.state === 'failed') return ['failed', failureText(body), {magnet:'磁力失效', cloud:'网盘问题'}[body.cause] || '失败'];
     if (body.state === 'no_match') return ['no_match', failureText(body)];
     if (body.state === 'submitted' && ['remote_done', 'landed'].includes(download?.state)) return ['importing', download.label || '入库中'];
+    if (body.state === 'submitted' && download?.state === 'submit_pending') return ['submitted', '等待自动重新提交', '待重新提交'];
     if (body.state === 'submitted' && download?.state === 'remote_running' && typeof download.progress === 'number' && Number.isFinite(download.progress)) {
       const percent = Math.round(Math.min(1, Math.max(0, download.progress)) * 100);
       return ['submitted', `网盘下载中 ${percent}%`, `下载中 ${percent}%`];
@@ -2018,16 +2025,41 @@
             if ([404, 405].includes(response.status)) { resolve(null); return; }
             try {
               if (response.status !== 200 || response.responseText.length > 2 * 1024 * 1024) throw new Error();
-              const data = JSON.parse(response.responseText);
-              if (data.ok !== true || !Array.isArray(data.items)) throw new Error();
-              resolve(data.items.filter(body => body?.ok === true && STATES.has(body.state) && typeof body.code === 'string'
-                && candidates(body.code).size === 1).slice(0, 200));
+              resolve(activeItems(JSON.parse(response.responseText)));
             } catch { reject(new Error('Peach 返回的任务列表无效')); }
           },
           onerror: () => reject(new Error('无法连接 Peach')), ontimeout: () => reject(new Error('Peach 请求超时')),
           onabort: () => reject(new Error('Peach 请求已中止')),
         });
       } catch { reject(new Error('无法连接 Peach')); }
+    });
+  }
+
+  function activeItems(data) {
+    if (data?.ok !== true || !Array.isArray(data.items)) throw new Error();
+    return data.items.filter(body => body?.ok === true && STATES.has(body.state) && typeof body.code === 'string'
+      && candidates(body.code).size === 1).slice(0, 200);
+  }
+
+  // 确认已结束的任务，返回 Peach 的新任务列表；旧版 Peach 没有这个接口。
+  function requestDismiss(config, request) {
+    return new Promise((resolve, reject) => {
+      try {
+        GM_xmlhttpRequest({ method: 'POST', url: `${config.base}/api/jav-browser/dismiss`, anonymous: true, timeout: 30_000,
+          headers: { Authorization: `Bearer ${config.token}`, Accept: 'application/json', 'Content-Type': 'application/json' },
+          data: JSON.stringify(request),
+          onload(response) {
+            if ([404, 405].includes(response.status)) { reject(new Error('Peach 尚不支持确认已结束的任务，请更新 Peach。')); return; }
+            if (response.status === 401 || response.status === 403) { reject(new Error('令牌无效或无权限，请重新配置。')); return; }
+            try {
+              if (response.status !== 200 || response.responseText.length > 2 * 1024 * 1024) throw new Error();
+              resolve(activeItems(JSON.parse(response.responseText)));
+            } catch { reject(new Error('没有确认成功，请稍后重试。')); }
+          },
+          onerror: () => reject(new Error('无法连接 Peach，请稍后重试。')), ontimeout: () => reject(new Error('Peach 请求超时，请稍后重试。')),
+          onabort: () => reject(new Error('Peach 请求已中止。')),
+        });
+      } catch { reject(new Error('无法连接 Peach，请稍后重试。')); }
     });
   }
 
@@ -2110,11 +2142,15 @@
       if (!node.isConnected) { sharedLists.delete(node); continue; }
       paintSharedList(node); paintTaskPage(node.closest('.panel'));
     }
+    // 角标：有进行中的显示进行中数量；都结束了还有没确认的，换成已结束的数量。
     const running = sharedMode() ? sharedSnapshot.items.filter(tracking).length : 0;
+    const ended = running ? 0 : otherTasks().filter(awaitingAck).length;
     for (const launcher of [current?.launcher, updateEntry?.launcher]) {
       if (!launcher) continue;
-      if (running) launcher.dataset.count = running > 99 ? '99+' : String(running); else delete launcher.dataset.count;
-      launcher.title = running ? `Peach 有 ${running} 项任务进行中` : '';
+      const count = running || ended;
+      if (count) launcher.dataset.count = count > 99 ? '99+' : String(count); else delete launcher.dataset.count;
+      if (ended) launcher.dataset.countTone = 'ended'; else delete launcher.dataset.countTone;
+      launcher.title = running ? `Peach 有 ${running} 项任务进行中` : ended ? `Peach 有 ${ended} 项任务已结束，待确认` : '';
     }
     for (const root of surfaces) if (root.isConnected) placeSurface(root);
   }
@@ -2154,28 +2190,61 @@
   // 其他任务超过 3 项，或本页番号正在抓取时，列表自动折叠；手动展开或折叠一直有效，直到自动条件变化。
   const SHARED_FOLD_LIMIT = 3;
 
-  // 本页番号已有整体进度，这里只列其他番号：进行中的在前，最近 10 分钟结束的在后。
-  // 每项一行，点开进入该番号的进度页。
+  // 其他番号：本页番号已有整体进度，不在这里列。确认过的已结束任务不再列出。
+  const ownKey = () => current && alive(current) && !current.identity.conflict ? comparisonKey(current.identity.code) : '';
+  function otherTasks() {
+    const own = ownKey();
+    return sharedMode() ? sharedSnapshot.items.filter(body => comparisonKey(body.code) !== own && body.dismissed !== true) : [];
+  }
+
+  // 结束后等用户确认的任务：Peach 给了确认键的才能确认；旧版 Peach 没有，照旧 10 分钟后自行离开列表。
+  const awaitingAck = body => !tracking(body) && typeof body.ended_key === 'string' && body.dismissed !== true;
+
+  // 进行中的在前，已结束的在后；每项一行，点开进入该番号的进度页，已结束的行尾可以标为已读。
+  // 标题与列表跨重绘保留，开合状态变了（点标题或自动条件变化）才播高度过渡。
   function paintSharedList(node) {
-    const own = current && alive(current) && !current.identity.conflict ? comparisonKey(current.identity.code) : '';
-    const items = sharedMode() ? sharedSnapshot.items.filter(body => comparisonKey(body.code) !== own) : [];
+    const items = otherTasks();
     node.hidden = !items.length;
-    const focused = node.getRootNode().activeElement?.closest?.('.shared-row,.shared-heading');
-    const focusKey = focused?.dataset.code || (focused ? 'heading' : '');
-    if (!items.length) { node.replaceChildren(); return; }
+    const focused = node.getRootNode().activeElement?.closest?.('.shared-row');
+    // 列表空了只藏起整段，标题、提示与开合状态留着，确认失败时提示仍有处可写。
+    if (!items.length) return;
     loadSharedPeople(items);
-    const auto = items.length > SHARED_FOLD_LIMIT || Boolean(own && current && (current.tracking || current.busy));
+    const auto = items.length > SHARED_FOLD_LIMIT || Boolean(ownKey() && (current.tracking || current.busy));
     if (node.foldChoice && node.foldChoice.auto !== auto) node.foldChoice = null;
     const open = node.foldChoice ? node.foldChoice.open : !auto;
     const running = items.filter(tracking), ended = items.filter(body => !tracking(body));
-    const heading = element('button', 'shared-heading');
-    heading.type = 'button';
+    if (!node.parts) {
+      const heading = element('button', 'shared-heading'), label = element('span');
+      heading.type = 'button';
+      heading.append(label, chevronIcon('shared-fold', 'm6 9 6 6 6-6'));
+      heading.addEventListener('click', () => {
+        node.foldChoice = { auto: node.parts.auto, open: !node.parts.open };
+        paintSharedList(node);
+      });
+      const retryAll = element('button', 'shared-action', '重试失败项');
+      retryAll.type = 'button';
+      retryAll.addEventListener('click', () => void retryFailed(node));
+      const clear = element('button', 'shared-action', '全部标为已读');
+      clear.type = 'button';
+      clear.addEventListener('click', () => void acknowledgeEnded(node, { all: true }));
+      const foot = element('div', 'shared-foot'); foot.append(retryAll, clear);
+      const note = element('p', 'geist-note shared-note');
+      note.dataset.variant = 'error'; note.setAttribute('role', 'alert'); note.hidden = true;
+      const body = element('div', 'shared-body fold-settled'), list = element('ul', 'shared-list');
+      body.hidden = !open;
+      body.append(list, foot);
+      node.replaceChildren(heading, note, body);
+      node.parts = { heading, label, retryAll, clear, note, body, list, open };
+    }
+    const { heading, label, retryAll, clear, body: fold, list } = node.parts;
+    label.textContent = ['其他任务', running.length ? `进行中 ${running.length} 项` : '', ended.length ? `已结束 ${ended.length} 项` : '']
+      .filter(Boolean).join(' · ');
+    clear.hidden = !ended.some(awaitingAck);
+    retryAll.hidden = !ended.some(retryableTask);
     heading.setAttribute('aria-expanded', String(open));
-    heading.append(element('span', '', running.length ? `其他任务 · 进行中 ${running.length} 项` : '其他任务 · 最近结束'),
-      chevronIcon('shared-fold', 'm6 9 6 6 6-6'));
-    heading.addEventListener('click', () => { node.foldChoice = { auto, open: !open }; paintSharedList(node); placeSurface(node.getRootNode().host); });
-    const list = element('ul', 'shared-list');
-    list.hidden = !open;
+    if (open !== node.parts.open) setFoldOpen(fold, open, () => placeSurface(node.getRootNode().host));
+    Object.assign(node.parts, { auto, open });
+    const rows = [];
     for (const body of [...running, ...ended].slice(0, 20)) {
       const row = element('button', 'shared-row'), status = element('span', 'chip');
       row.type = 'button'; row.dataset.code = body.code;
@@ -2183,11 +2252,103 @@
       setRowState({ row, status }, ...rowState(body));
       row.setAttribute('aria-label', `${body.code}，${status.textContent}，查看进度`);
       row.addEventListener('click', () => openTaskPage(node.closest('.panel'), body.code));
-      const item = element('li'); item.append(row); list.append(item);
+      const item = element('li', 'shared-item'); item.append(row);
+      if (awaitingAck(body)) {
+        const dismiss = control(`将 ${body.code} 标为已读`, { icon: 'close' });
+        dismiss.addEventListener('click', () => {
+          // 标为已读后焦点交给下一行，最后一行交给上一行，列表空了交给标题。
+          const next = (item.nextElementSibling || item.previousElementSibling)?.querySelector('.shared-row')?.dataset.code;
+          void acknowledgeEnded(node, { keys: [body.ended_key] });
+          ([...list.querySelectorAll('.shared-row')].find(row => row.dataset.code === next) || heading).focus();
+        });
+        item.append(dismiss);
+      }
+      rows.push(item);
     }
-    node.replaceChildren(heading, list);
-    if (focusKey === 'heading') heading.focus();
-    else if (focusKey) [...list.querySelectorAll('.shared-row')].find(row => row.dataset.code === focusKey)?.focus();
+    list.replaceChildren(...rows);
+    if (focused) [...list.querySelectorAll('.shared-row')].find(row => row.dataset.code === focused.dataset.code)?.focus();
+  }
+
+  // 失败的其他任务可以重试：入库后整理失败的走「重试整理」，其余按原来源重新加入，磁力本身的问题换一个磁力。
+  const retryableTask = body => !tracking(body) && (['failed', 'no_match'].includes(body.state) || organizeFailed(body));
+  const switchesMagnet = body => body.state === 'failed' && body.cause === 'magnet';
+  const retryLabel = body => organizeFailed(body) ? '重试整理' : switchesMagnet(body) ? '换一个磁力' : '重试加入';
+  function retryTask(config, body) {
+    if (organizeFailed(body)) return requestRetryOrganize(config, body.code);
+    return request(config, body.code, typeof body.source_url === 'string' ? body.source_url : '', 'POST', false,
+      switchesMagnet(body) ? { switch: true } : {});
+  }
+
+  // 列表底部「重试失败项」：逐项重试列出的失败任务，一项出错不影响其余，最后取一次新列表。
+  async function retryFailed(node) {
+    const config = configuration(), parts = node.parts;
+    if (!config || !parts || parts.retryAll.disabled) return;
+    const failed = otherTasks().filter(retryableTask).slice(0, 20);
+    parts.retryAll.disabled = true; parts.note.hidden = true;
+    let errors = 0, reason = '';
+    for (const body of failed) {
+      try { await retryTask(config, body); } catch (error) { errors++; reason = error.message; }
+    }
+    parts.retryAll.disabled = false;
+    await sharedTick(true);
+    if (errors && parts.note.isConnected) {
+      parts.note.textContent = `${errors} 项没有重试成功：${reason}`; parts.note.hidden = false;
+      placeSurface(parts.note.getRootNode().host);
+    }
+  }
+
+  // 确认已结束的任务。先在本地标为已确认并写进共享快照，各窗口立刻收起；Peach 返回的列表再作为新快照。
+  async function acknowledgeEnded(node, request) {
+    const config = configuration();
+    if (!config || !sharedMode()) return;
+    if (node?.parts) node.parts.note.hidden = true;
+    const keys = new Set(request.keys || []);
+    const marked = sharedSnapshot.items.map(body => awaitingAck(body) && (request.all || keys.has(body.ended_key)) ? { ...body, dismissed: true } : body);
+    const local = { ...sharedSnapshot, at: Date.now(), items: marked };
+    GM_setValue(STORAGE_TASKS, JSON.stringify(local)); applyShared(local);
+    try {
+      const items = await requestDismiss(config, request.all ? { all: true } : { keys: [...keys] });
+      if (configuration()?.base !== config.base) return;
+      const snapshot = { version: 1, base: config.base, at: Date.now(), available: true, items };
+      GM_setValue(STORAGE_TASKS, JSON.stringify(snapshot)); applyShared(snapshot);
+    } catch (error) {
+      void sharedTick(true);
+      const note = node?.parts?.note;
+      if (note?.isConnected) { note.textContent = error.message; note.hidden = false; placeSurface(note.getRootNode().host); }
+    }
+  }
+
+  // 折叠正文的高度过渡，与 Peach frontend/src/ui-kit/collapse.ts 的 setCollapseRegionOpen 同一做法：
+  // 量出起止高度写进 inline height，跑完交回自然高度；过渡途中又被反向点按时，前一次的收尾不再做。
+  const foldRuns = new WeakMap();
+  function setFoldOpen(body, open, place) {
+    const run = (foldRuns.get(body) || 0) + 1;
+    foldRuns.set(body, run);
+    const finish = done => {
+      let finished = false;
+      const end = event => {
+        if ((event && event.propertyName !== 'height') || finished) return;
+        finished = true; body.removeEventListener('transitionend', end); clearTimeout(timer);
+        if (foldRuns.get(body) === run) { done(); place(); }
+      };
+      body.addEventListener('transitionend', end);
+      // 减少动效时没有 transitionend，260ms 兜底。
+      const timer = setTimeout(end, 260);
+    };
+    body.classList.remove('fold-settled');
+    if (open) {
+      const start = body.hidden ? 0 : body.getBoundingClientRect().height;
+      body.hidden = false; body.inert = false;
+      body.style.height = `${start}px`; body.getBoundingClientRect();
+      body.style.height = `${body.scrollHeight}px`;
+      finish(() => { body.style.height = ''; body.classList.add('fold-settled'); });
+    } else {
+      body.inert = true;
+      body.style.height = `${body.getBoundingClientRect().height}px`; body.getBoundingClientRect();
+      body.style.height = '0px';
+      finish(() => { body.hidden = true; body.inert = false; body.style.height = ''; });
+    }
+    place();
   }
 
   // 其他任务的进度页：在同一张浮卡里替换主页，显示该番号的五段整体进度与状态说明；返回回到主页。
@@ -2206,40 +2367,75 @@
     const note = element('p', 'geist-note');
     note.setAttribute('role', 'status'); note.setAttribute('aria-live', 'polite'); note.setAttribute('aria-label', `${code} 的任务状态`);
     const parts = buildFlow();
-    const retry = control('重试整理');
+    // 失败的番号在进度页直接重试，按钮文字随失败原因变：重试整理、换一个磁力或重试加入。
+    const retry = control('重试加入');
     retry.hidden = true;
     retry.addEventListener('click', async () => {
-      const config = configuration();
-      if (!config || retry.disabled) return;
+      const config = configuration(), body = panel.taskPage?.body;
+      if (!config || !body || retry.disabled) return;
       retry.disabled = true;
       try {
-        const result = await requestRetryOrganize(config, code);
+        const result = await retryTask(config, body);
         if (panel.taskPage?.page === page) { panel.taskPage.body = result; paintTaskPage(panel); }
         void sharedTick(true);
       } catch (error) {
         if (panel.taskPage?.page === page) { note.textContent = error.message; note.dataset.variant = 'error'; }
       } finally { retry.disabled = false; }
     });
-    body.append(note, parts.flow, retry);
+    // 已结束、等确认的番号：标为已读并回到主页。
+    const ack = control('标为已读');
+    ack.hidden = true;
+    ack.addEventListener('click', () => {
+      const key = panel.taskPage?.body?.ended_key;
+      if (!key) return;
+      void acknowledgeEnded(panel.querySelector('.shared-tasks'), { keys: [key] });
+      closeTaskPage(panel, true);
+    });
+    body.append(note, parts.flow, retry, ack);
     page.append(bar, body);
-    for (const child of panel.children) if (!child.hidden) { child.hidden = true; child.dataset.taskHidden = ''; }
-    panel.append(page);
-    panel.taskPage = { page, code, note, people, retry, body: null, ...parts };
+    switchPanel(panel, () => {
+      for (const child of panel.children) if (!child.hidden) { child.hidden = true; child.dataset.taskHidden = ''; }
+      panel.append(page);
+      panel.taskPage = { page, code, note, people, retry, ack, body: null, ...parts };
+      paintTaskPage(panel);
+      return [page];
+    });
     back.addEventListener('click', () => closeTaskPage(panel, true));
-    paintTaskPage(panel);
     back.focus();
   }
 
+  // focus：用户点了返回，回到主页并播返回动效；切换面板模式时直接收起。
   function closeTaskPage(panel, focus = false) {
     const open = panel?.taskPage;
     if (!open) return;
-    open.page.remove(); panel.taskPage = null;
-    for (const child of panel.querySelectorAll(':scope > [data-task-hidden]')) { child.hidden = false; delete child.dataset.taskHidden; }
-    if (focus) [...panel.querySelectorAll('.shared-row')].find(row => row.dataset.code === open.code)?.focus();
+    const restore = () => {
+      open.page.remove(); panel.taskPage = null;
+      const shown = [...panel.querySelectorAll(':scope > [data-task-hidden]')];
+      for (const child of shown) { child.hidden = false; delete child.dataset.taskHidden; }
+      return shown;
+    };
+    if (focus) switchPanel(panel, restore);
+    else { panel.motion?.forEach(animation => animation.cancel()); restore(); }
+    // 回到这一行；这一行已确认收起时回到「其他任务」标题。
+    if (focus) ([...panel.querySelectorAll('.shared-row')].find(row => row.dataset.code === open.code)
+      || panel.querySelector('.shared-heading'))?.focus();
     for (const root of surfaces) if (root.isConnected) placeSurface(root);
   }
 
-  // 番号结束超过 10 分钟后会离开快照，进度页保留最后一次看到的状态。
+  // 主页与进度页在同一张浮卡里切换：浮卡高度从旧值过渡到新值，进来的一层播 Peach 设置面板的
+  // board-dialog-in（缩放、模糊、淡入），时长与缓动同 --board-dialog-motion。浮卡按底边定位，高度变化向上长，不会跳位。
+  function switchPanel(panel, change) {
+    const from = panel.getBoundingClientRect().height;
+    panel.motion?.forEach(animation => animation.cancel());
+    const entering = change();
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches || !from) return;
+    const to = panel.getBoundingClientRect().height, timing = { duration: 300, easing: 'cubic-bezier(.32,.72,0,1)' };
+    panel.motion = [panel.animate([{ height: `${from}px` }, { height: `${to}px` }], timing),
+      ...entering.map(node => node.animate([{ opacity: 0, transform: 'scale(.85)', filter: 'blur(4px)' },
+        { opacity: 1, transform: 'scale(1)', filter: 'blur(0)' }], timing))];
+  }
+
+  // 番号确认过或由旧版 Peach 列出时，结束 10 分钟后离开快照，进度页保留最后一次看到的状态。
   function paintTaskPage(panel) {
     const open = panel?.taskPage;
     if (!open) return;
@@ -2253,7 +2449,9 @@
     }
     open.note.textContent = statusLabel(open.body);
     open.note.dataset.variant = statusVariant(open.body);
-    open.retry.hidden = !organizeFailed(open.body);
+    open.retry.hidden = !retryableTask(open.body);
+    open.retry.textContent = retryLabel(open.body);
+    open.ack.hidden = !awaitingAck(open.body);
     for (const root of surfaces) if (root.isConnected) placeSurface(root);
   }
 
@@ -2323,7 +2521,7 @@
   // 状态说明：下载任务的具体阶段、整理状态与百分比，失败时给出原因；浮卡与其他任务的进度页共用。
   function statusLabel(body) {
     const download = body.download;
-    const known = download && ['submitted', 'remote_running', 'remote_done', 'landed', 'ingested', 'failed', 'cancelled', 'stalled'].includes(download.state);
+    const known = download && ['submit_pending', 'submitted', 'remote_running', 'remote_done', 'landed', 'ingested', 'failed', 'cancelled', 'stalled'].includes(download.state);
     let label = body.stage === 'submitting' ? '正在提交网盘' : LABELS[body.state];
     if (known && typeof download.label === 'string') {
       label = download.label.slice(0, 80);

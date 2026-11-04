@@ -2,6 +2,22 @@
 
 Notable changes are grouped by version. English and Chinese describe the same behavior; source-only versions are marked explicitly. / 按版本记录面向使用者的变化；中英文保持事实一致，未单独发布的源码版本明确标注。
 
+## 0.7.2 — 2026-11-04
+
+Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
+
+### Added / 新增
+
+- **Finished tasks stay** under 其他任务 until you mark them as read, including ones that finished while every window was closed: use the close button on a row, 标为已读 on its progress page, or 全部标为已读 at the bottom of the list. The heading counts running and finished titles, and when nothing is running the minimized icon shows how many finished titles are unread. Needs a Peach that keeps finished browser tasks (`POST /api/jav-browser/dismiss`); older versions keep showing them for 10 minutes. / 别的页面添加的任务结束后一直留在「其他任务」里，窗口全关时结束的也在，直到标为已读：点行尾的关闭键、在进度页点「标为已读」，或点列表底部的「全部标为已读」。标题写出进行中与已结束的项数；没有进行中的任务时，收成图标的角标显示未读的已结束数量。需要会保留已结束任务的 Peach（`POST /api/jav-browser/dismiss`）；旧版照旧只显示 10 分钟。
+- **Retry failed tasks** from 其他任务: 重试失败项 at the bottom of the list retries every failed title, and a failed title's progress page offers the matching retry. Organizing failures retry organizing, broken magnets try another magnet, and other failures add the title again from its original page. / 在「其他任务」里重试失败的番号：列表底部的「重试失败项」逐项重试，失败番号的进度页也有对应的重试按钮。整理失败的重试整理，磁力失效的换一个磁力，其余从原来的网页重新加入。
+
+### Changed / 变更
+
+- **Other tasks** fold and unfold with Peach's Collapse height transition, whether by clicking the heading or automatically. Opening a title's progress page or going back plays the motion of Peach's settings panel while the panel height eases to fit. Reduced-motion settings switch instantly. / 「其他任务」展开、折叠时沿用 Peach Collapse 的高度过渡，点标题或自动折叠都一样；进出番号的进度页时播 Peach 设置面板的进场动效，浮卡高度随之过渡。系统设为减少动效时直接切换。
+- **Resubmitting**: a title whose cloud download Peach is resubmitting by itself, because the network drive did not answer at submission, shows 等待自动重新提交 and still counts as running. / 提交云下载时网盘没应答、Peach 正在自动重新提交的番号显示「等待自动重新提交」，仍算进行中。
+
+[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/v0.7.1...main)
+
 ## 0.7.1 — 2026-11-04
 
 Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
