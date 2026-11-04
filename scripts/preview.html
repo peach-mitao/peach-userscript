@@ -23,7 +23,7 @@
       <button type="button" id="activate-script">开启</button>
       <button type="button" id="check-script-update">检测更新</button>
       <button type="button" id="copy-pairing">复制模拟配对信息</button>
-      <a href="?site=dmm&state=idle">DMM 商品号</a><a href="?site=mgs&state=idle">MGS 商品号</a><a href="?state=idle&scan=javdb">JavDB 整页扫描</a><a href="?state=idle&scan=states">本页番号行状态</a><a href="?site=list&state=idle&scan=javdb">JavDB 首页</a><a href="?state=idle&tasks=1">共享进度</a><a href="?site=list&state=idle&tasks=1">共享进度（无本页番号）</a>
+      <a href="?site=dmm&state=idle">DMM 商品号</a><a href="?site=mgs&state=idle">MGS 商品号</a><a href="?state=idle&scan=javdb">JavDB 整页扫描</a><a href="?state=idle&scan=states">本页番号行状态</a><a href="?site=list&state=idle&scan=javdb">JavDB 首页</a><a href="?state=idle&tasks=1">共享进度</a><a href="?site=list&state=idle&tasks=1">共享进度（无本页番号）</a><a href="?site=actress&state=idle">JavDB 女优页</a><a href="?site=missav-actress&state=idle">MISSAV 女优页</a><a href="?site=missav-actress&state=idle&performer=ambiguous">MISSAV 同名多位</a>
     </nav>
     <h1>REAL-864 作品详情</h1>
     <p class="meta">来源页面示意</p>
@@ -39,6 +39,17 @@
       document.title = code + ' 作品详情';
       document.querySelector('h1').textContent = code + ' 作品详情';
     }
+    // 女优页：JavDB 演员页的标题栏把几种写法用逗号连成一串；MISSAV 女优页的名字只在地址里。
+    if (previewSite === 'actress' || previewSite === 'missav-actress') {
+      document.title = '女优页';
+      document.querySelector('h1').innerHTML = previewSite === 'actress'
+        ? '<span class="actor-section-name">森日向子, 白石アイリ</span>' : '涼森れむ';
+    }
+    // performer=ambiguous 模拟 MISSAV 页同名不止一位：订阅时 Peach 拒绝并说明原因。
+    const previewPerformer = { following: false, ambiguous: new URLSearchParams(location.search).get('performer') === 'ambiguous' };
+    const performerBody = () => previewSite === 'actress'
+      ? { ok: true, name: '森日向子', entity_id: 8112, following: previewPerformer.following }
+      : { ok: true, name: '涼森れむ', entity_id: previewPerformer.following ? 9001 : null, following: previewPerformer.following };
     if (new URLSearchParams(location.search).get('scan') === 'javdb') {
       // 仿 JavDB 详情页：导航、磁链、相关作品与短评用户名，外加 30 部相关作品用于查看表格滚动。
       const related = Array.from({length: 30}, (_, index) => `<li>ABP-${100 + index}</li>`).join('');
@@ -80,6 +91,13 @@
           return;
         }
         if (previewState === 'failed') { request.onerror(); return; }
+        if (new URL(request.url).pathname.endsWith('/api/jav-browser/performer')) {
+          if (request.method === 'POST' && previewPerformer.ambiguous && previewSite === 'missav-actress') {
+            request.onload({status:400,responseText:JSON.stringify({detail:'JavDB 上按「涼森れむ」没能确认是同一位女优，请到她的 JavDB 演员页订阅'})}); return;
+          }
+          if (request.method === 'POST') previewPerformer.following = JSON.parse(request.data).enabled;
+          request.onload({status:200,responseText:JSON.stringify(performerBody())}); return;
+        }
         // tasks=1 模拟 Peach 的进行中任务列表，下载百分比随每次查询往前走；其余预览按旧版 Peach 没有列表接口作答。
         if (new URLSearchParams(location.search).get('tasks') === '1' && new URL(request.url).pathname.endsWith('/people')) {
           const people = {'ABP-616':[{name:'Alice'}],'SSIS-057':[{name:'Bella'},{name:'Cora'}],'IPX-001':[{name:'Dana'}]};
@@ -142,7 +160,10 @@
         if (previewState === 'magnet' && request.method !== 'POST') {
           request.onload({status:200,responseText:JSON.stringify({ok:true,code,state:'failed',cause:'magnet',failure:'no_source',message:'没有可用下载源或进度长时间未更新'})}); return;
         }
-        request.onload({status:200,responseText:JSON.stringify({ok:true,code,state:request.method === 'POST' ? 'queued' : previewState === 'owned' ? 'owned' : 'idle'})});
+        // 馆藏已有时 Peach 带回作品编号，主按钮直达 Peach 里的这部作品。
+        const owned = request.method !== 'POST' && previewState === 'owned';
+        request.onload({status:200,responseText:JSON.stringify({ok:true,code,state:request.method === 'POST' ? 'queued' : owned ? 'owned' : 'idle',
+          ...(owned ? {asset_id:4321} : {})})});
       }, 650),
     });
     document.querySelector('#open-settings').addEventListener('click', () => previewMenus['设置']());

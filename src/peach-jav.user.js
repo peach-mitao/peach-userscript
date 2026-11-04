@@ -12,7 +12,7 @@
 // @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
 // @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.7.2
+// @version      0.7.3
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -196,6 +196,11 @@
   let updateDismissed = '';
   // 没有单部作品浮卡的页面，图标展开的是入口面板；本页番号返回时回到这里。
   let entryOpen = false;
+  // 女优页：入口面板顶部那一块的状态，以及用户在这一页收起过面板（收起后不再自动展开）。
+  let performerView = null;
+  let performerDismissed = '';
+  // 入口面板折叠成只剩标题栏；从图标重新展开时复原。
+  let entryCollapsed = false;
   let updateGeneration = 0;
   let updateTimer;
   let updateDisposed = false;
@@ -324,7 +329,7 @@
     .stage-blocks i{background:currentColor;border-radius:1.125px;animation:stage-block 1300ms ease-in-out infinite;animation-delay:calc(1300ms * (var(--ld-step) - 5) / 5)}
     @keyframes stage-block{0%,70%,100%{transform:scale(1)}35%{transform:scale(0)}}
     .bar{min-height:var(--fieldset-bar-h);padding:8px 16px 8px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
-    .bar.subpage-bar{justify-content:flex-start;gap:8px}
+    .bar.subpage-bar{justify-content:flex-start;gap:8px}.task-page .bar-title{flex:1}
     .bar strong{font-weight:500;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
     .bar-heading{display:grid;min-width:0;gap:2px}.bar-title{display:flex;align-items:center;gap:8px;min-width:0}.bar-summary{font:var(--board-caption);color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .bar-actions{display:flex;gap:4px;flex:none}
@@ -338,6 +343,8 @@
       display:grid;place-items:center;background:var(--color-status-blue-background);color:var(--color-status-blue-text);font:var(--board-caption-semibold);box-shadow:0 0 0 2px var(--ground);pointer-events:none}
     .geist-button.launcher[data-count-tone=ended]::after{background:var(--color-status-lime-background);color:var(--color-status-lime-text)}
     .shared-note{margin:8px 0 0}.shared-foot{display:flex;justify-content:flex-end;gap:16px;margin-top:8px}.shared-foot:not(:has(>:not([hidden]))){display:none}
+    .performer-follow{display:grid;gap:8px;min-width:0}.performer-head{display:flex;align-items:center;gap:8px;min-width:0}
+    .performer-head strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:var(--board-body-medium)}
     .shared-tasks{min-width:0}.shared-heading,.shared-action{display:flex;align-items:center;gap:4px;width:fit-content;margin:0;padding:0;border:0;background:transparent;
       font:var(--board-caption-semibold);color:var(--muted);cursor:pointer}.shared-heading:hover,.shared-action:hover{color:var(--ink)}.shared-action:disabled{opacity:.5;cursor:default}
     .shared-heading:focus-visible,.shared-action:focus-visible{outline:2px solid var(--tungsten);outline-offset:2px;border-radius:4px}
@@ -1108,12 +1115,127 @@
     for (const root of surfaces) if (root.isConnected) placeSurface(root); else surfaces.delete(root);
   }
 
+  // 女优页：JavDB 演员页与 DMM 女优片单带站内编号，MISSAV 女优页只有名字（Peach 端规则见 ADR-0143）。
+  // JavDB 标题栏把几种写法用逗号连成一串，原样交给 Peach 拆。
+  function performerPage(url = new URL(location.href)) {
+    const site = siteFor(url);
+    if (!site) return null;
+    const path = url.pathname;
+    if (site.id === 'javdb' && /^\/actors\/[A-Za-z0-9]{1,16}\/?$/.test(path)) {
+      const name = (document.querySelector('.actor-section-name')?.textContent || '').trim().slice(0, 200);
+      return { source: url.origin + path.replace(/\/$/, ''), names: name ? [name] : [], byId: true };
+    }
+    if (site.id === 'dmm') {
+      const listed = path.replace(/\/$/, '') === '/av/list' ? url.searchParams.get('actress') || '' : '';
+      if (/^\d{1,12}$/.test(listed)) return { source: `${url.origin}/av/list/?actress=${listed}`, names: [], byId: true };
+      if (/\/article=actress\/id=\d{1,12}\//.test(`${path}/`)) return { source: url.origin + path, names: [], byId: true };
+    }
+    if (site.id === 'missav' && /^\/(?:dm\d+\/)?(?:(?:en|ja|zh|cn|tw|ko)\/)?actresses\/[^/]+\/?$/.test(path)) {
+      return { source: url.origin + path, names: [], byId: false };
+    }
+    return null;
+  }
+
+  // 查或改这位女优的「订阅新作」；返回 Peach 认出的名字、是否已订与头像。旧版 Peach 没有这个接口。
+  function requestPerformer(config, page, enabled = null) {
+    const query = [`source_url=${encodeURIComponent(page.source)}`, ...page.names.map(name => `names=${encodeURIComponent(name)}`)].join('&');
+    return new Promise((resolve, reject) => {
+      try {
+        GM_xmlhttpRequest({ method: enabled === null ? 'GET' : 'POST', anonymous: true, timeout: 60_000,
+          url: `${config.base}/api/jav-browser/performer${enabled === null ? `?${query}` : ''}`,
+          headers: { Authorization: `Bearer ${config.token}`, Accept: 'application/json',
+            ...(enabled === null ? {} : { 'Content-Type': 'application/json' }) },
+          ...(enabled === null ? {} : { data: JSON.stringify({ source_url: page.source, names: page.names, enabled }) }),
+          onload(response) {
+            let detail = '';
+            try { const value = JSON.parse(response.responseText).detail; if (typeof value === 'string' && value.length <= 200) detail = value; } catch { /* 非 JSON 错误按状态提示。 */ }
+            if ([404, 405].includes(response.status)) { reject(Object.assign(new Error('Peach 尚不支持在女优页订阅新作，请更新 Peach。'), { unsupported: true })); return; }
+            if (response.status === 401 || response.status === 403) { reject(new Error('令牌无效或无权限，请重新配置。')); return; }
+            if (response.status !== 200) { reject(new Error(detail || '这一次没有完成，请稍后重试。')); return; }
+            try {
+              const body = JSON.parse(response.responseText);
+              if (body.ok !== true || typeof body.name !== 'string' || body.name.length > 200 || typeof body.following !== 'boolean'
+                || !(body.entity_id === null || Number.isInteger(body.entity_id))) throw new Error();
+              resolve(body);
+            } catch { reject(new Error('Peach 返回的女优信息无效。')); }
+          },
+          onerror: () => reject(new Error('无法连接 Peach，请稍后重试。')), ontimeout: () => reject(new Error('Peach 请求超时，请稍后重试。')),
+          onabort: () => reject(new Error('Peach 请求已中止。')),
+        });
+      } catch { reject(new Error('无法连接 Peach，请稍后重试。')); }
+    });
+  }
+
+  // 入口面板顶部的女优订阅：头像、名字、状态说明和一枚开关按钮。
+  function performerSection() {
+    const node = element('section', 'performer-follow');
+    node.setAttribute('aria-label', '女优新作订阅');
+    node.hidden = true;
+    const head = element('div', 'performer-head'), people = element('span', 'batch-people'), label = element('strong');
+    people.append(defaultPersonAvatar());
+    head.append(people, label);
+    const note = element('p', 'geist-note');
+    note.setAttribute('role', 'status'); note.setAttribute('aria-live', 'polite');
+    const button = control('订阅新作', { primary: true });
+    button.addEventListener('click', () => void togglePerformer());
+    node.append(head, note, button);
+    performerView = { node, people, label, note, button, key: '', page: null, body: null, busy: false, error: '', unsupported: false };
+    return node;
+  }
+
+  function paintPerformer(page) {
+    const view = performerView;
+    if (!view?.node.isConnected) return;
+    const config = configuration();
+    view.node.hidden = !page || !config || view.unsupported;
+    if (view.node.hidden) return;
+    const key = `${config.base}|${page.source}|${page.names.join(',')}`;
+    if (key !== view.key) {
+      Object.assign(view, { key, page, body: null, error: '' });
+      view.busy = true;
+      // Peach 认出这一页之后入口面板才自动展开；旧版 Peach 没有这个接口时面板保持原样。
+      requestPerformer(config, page).then(body => { if (view.key === key) view.body = body; })
+        .catch(error => { if (view.key === key) { view.error = error.message; view.unsupported = Boolean(error.unsupported); } })
+        .finally(() => { if (view.key === key) { view.busy = false; refreshUpdateEntry(); } });
+    }
+    const body = view.body, name = body?.name || page.names[0]?.split(/[,，、]/)[0]?.trim() || '';
+    view.label.textContent = name || '女优页';
+    try { if (body?.name) renderPeople(view.people, [{ name: body.name, ...(body.avatar ? { avatar: body.avatar } : {}) }]); } catch { /* 保留默认人像。 */ }
+    view.note.dataset.variant = view.error ? 'error' : 'secondary';
+    view.note.textContent = view.error || (!body ? '正在向 Peach 查询这位女优'
+      : body.following ? '已订阅新作，Peach 会定期查她的新作。'
+      : body.entity_id !== null ? '订阅后，Peach 会定期查她的新作。'
+      : page.byId ? 'Peach 里还没有这位女优，订阅时会新建她。'
+      : 'Peach 里还没有这位女优，订阅时会到 JavDB 确认是同一个人。');
+    view.button.textContent = view.busy ? '正在处理' : body?.following ? '取消订阅新作' : '订阅新作';
+    view.button.classList.toggle('primary', !body?.following);
+    view.button.disabled = view.busy || (!body && !view.error);
+    view.button.setAttribute('aria-busy', String(view.busy));
+  }
+
+  async function togglePerformer() {
+    const view = performerView, config = configuration();
+    if (!view || !config || view.busy || !view.page) return;
+    const { key, page } = view, enabled = !view.body?.following;
+    view.busy = true; view.error = ''; paintPerformer(page);
+    try {
+      const body = await requestPerformer(config, page, enabled);
+      if (view.key === key) view.body = body;
+    } catch (error) {
+      if (view.key === key) { view.error = error.message; view.unsupported = Boolean(error.unsupported); }
+    } finally {
+      if (view.key === key) { view.busy = false; paintPerformer(performerPage()); placeSurface(view.node.getRootNode().host); }
+    }
+  }
+
   function refreshUpdateEntry() {
     if (!document.body || updateDisposed) return;
     if (!pageInterfaceAllowed()) {updateEntry?.root.remove();updateEntry=null;return;}
     if (current) { updateEntry?.root.remove(); updateEntry = null; return; }
-    const model = updateModel();
-    const expanded = document.visibilityState !== 'hidden' && (entryOpen || model.kind !== 'current' && updateDismissed !== model.key);
+    const model = updateModel(), performer = performerPage();
+    const expanded = document.visibilityState !== 'hidden' && (entryOpen || model.kind !== 'current' && updateDismissed !== model.key
+      || Boolean(performer && performerView?.body && performerView.page?.source === performer.source
+        && performerDismissed !== performer.source));
     if (!updateEntry?.root.isConnected) {
       const entry = surface('peach-jav-updates', 'Peach');
       const launcher = control('Peach 设置与更新');
@@ -1123,22 +1245,34 @@
       launcher.replaceChildren(logo);
       const panel = element('section', 'panel');
       wireDrag(entry.root, launcher, panel);
-      const bar = element('header', 'bar');
-      const later = control('收起', { icon: 'close' });
+      // 右上角与作品浮卡同一组：设置、折叠、隐藏。
+      const bar = element('header', 'bar'), actions = element('div', 'bar-actions');
+      const settings = control('Peach 设置', { icon: 'settings' }); settings.addEventListener('click', configure);
+      const collapse = control('折叠 Peach 详情', { icon: 'collapse' });
+      collapse.addEventListener('click', () => { closeTaskPage(panel); entryCollapsed = !entryCollapsed; refreshUpdateEntry(); collapse.focus(); });
+      const later = control('隐藏 Peach 面板', { icon: 'close' });
       later.addEventListener('click', () => {
         const shown = updateModel();
         if (shown.kind !== 'current') updateDismissed = shown.key;
-        entryOpen = false; refreshUpdateEntry(); updateEntry?.launcher.focus();
+        performerDismissed = performerPage()?.source || performerDismissed;
+        closeTaskPage(panel); entryOpen = false; refreshUpdateEntry(); updateEntry?.launcher.focus();
       });
-      bar.append(element('strong', '', 'Peach'), later);
+      actions.append(settings, collapse, later);
+      bar.append(element('strong', '', 'Peach'), actions);
       const scan = control('识别本页全部番号', { primary: true }); scan.addEventListener('click', openPageActions);
-      const settings = control('Peach 设置'); settings.addEventListener('click', configure);
-      const body = element('div', 'body'); body.append(updateSection({ availableOnly: true }), sharedSection(), scan, settings);
-      launcher.addEventListener('click', () => { entryOpen = true; refreshUpdateEntry(); later.focus(); });
+      const body = element('div', 'body'); body.append(performerSection(), updateSection({ availableOnly: true }), sharedSection(), scan);
+      launcher.addEventListener('click', () => { entryOpen = true; entryCollapsed = false; refreshUpdateEntry(); later.focus(); });
       panel.append(bar, body); entry.shadow.append(panel, launcher);
-      updateEntry = { ...entry, launcher, panel };
+      updateEntry = { ...entry, launcher, panel, body, collapse, scan };
     }
-    updateEntry.root.dataset.panelMode = expanded ? 'expanded' : 'minimized';
+    // 女优页上「订阅新作」是这张面板的主操作，识别本页番号退成次要按钮。
+    updateEntry.scan.classList.toggle('primary', !performer);
+    paintPerformer(performer);
+    const folded = expanded && entryCollapsed;
+    updateEntry.root.dataset.panelMode = !expanded ? 'minimized' : folded ? 'collapsed' : 'expanded';
+    updateEntry.body.hidden = folded; updateEntry.body.inert = folded;
+    updateEntry.collapse.setAttribute('aria-expanded', String(!folded));
+    updateEntry.collapse.setAttribute('aria-label', folded ? '展开 Peach 详情' : '折叠 Peach 详情');
     placeSurface(updateEntry.root);
     updateEntry.launcher.hidden = expanded; updateEntry.panel.hidden = !expanded;
     updateEntry.root.toggleAttribute('data-settings-open', subpageOpen());
@@ -1909,16 +2043,24 @@
     }
   }
 
+  // Peach 里这部作品的详情页；只在馆藏已有或已入库、Peach 带回作品编号时有。
+  function libraryLink(view) {
+    const config = configuration();
+    return config && view.assetId && ['ingested', 'owned'].includes(view.state) ? `${config.base}/assets/${view.assetId}` : '';
+  }
+
   function render(view) {
     if (!alive(view)) return;
     view.summary.textContent = panelMode === 'collapsed' ? view.note.textContent : '';
     const terminalSuccess = ['ingested', 'owned'].includes(view.state) && !view.tracking && !view.organizeFailed;
-    view.button.disabled = view.busy || view.identity.conflict || terminalSuccess;
+    const opens = Boolean(terminalSuccess && libraryLink(view));
+    view.button.disabled = view.busy || view.identity.conflict || terminalSuccess && !opens;
     view.button.setAttribute('aria-busy', String(view.busy));
     view.button.setAttribute('aria-disabled', String(view.busy || view.button.disabled));
     view.button.textContent = view.identity.conflict ? '番号存在冲突'
       : !configuration() ? '配置 Peach'
       : view.organizeFailed && !view.busy ? '重试整理'
+      : opens ? '在 Peach 中打开'
       : terminalSuccess ? '已有该影片'
       : view.busy ? '正在查询 Peach'
       : view.queryOnly || ACTIVE.has(view.state) ? '查询 Peach 状态'
@@ -2362,7 +2504,15 @@
     const title = element('div', 'bar-title'), people = element('span', 'batch-people');
     people.append(defaultPersonAvatar());
     title.append(people, element('strong', '', code));
-    bar.append(back, title);
+    // 右上角与主页同一组：设置、折叠、隐藏，点了交给主页标题栏上的那一枚。
+    const actions = element('div', 'bar-actions');
+    for (const [label, icon] of [['Peach 设置', 'settings'], ['折叠 Peach 详情', 'collapse'], ['隐藏 Peach 面板', 'close']]) {
+      const proxy = control(label, { icon });
+      if (icon === 'collapse') proxy.setAttribute('aria-expanded', 'true');
+      proxy.addEventListener('click', () => panel.querySelector(`:scope > .bar [aria-label="${label}"]`)?.click());
+      actions.append(proxy);
+    }
+    bar.append(back, title, actions);
     const body = element('div', 'body');
     const note = element('p', 'geist-note');
     note.setAttribute('role', 'status'); note.setAttribute('aria-live', 'polite'); note.setAttribute('aria-label', `${code} 的任务状态`);
@@ -2504,6 +2654,8 @@
     view.cause = body.state === 'failed' ? body.cause || '' : '';
     view.tracking = tracking(body);
     view.organizeFailed = organizeFailed(body);
+    // 馆藏已有或已入库时 Peach 带回作品编号，主按钮改成直达 Peach 里的这部作品。
+    view.assetId = Number.isSafeInteger(body.asset_id) && body.asset_id > 0 ? body.asset_id : null;
     view.queryOnly = view.tracking;
     if (!view.queryOnly) attempts.delete(comparisonKey(view.identity.code));
     renderFlow(view, body);
@@ -2631,7 +2783,8 @@
     }
     const item = identity();
     const key = `${location.href}|${item?.code || ''}|${Boolean(item?.conflict)}`;
-    if (key === pageKey && (!item || current?.root.isConnected)) return;
+    // 地址没变也要重画女优那一块：JavDB 标题栏的名字可能晚于地址出现。
+    if (key === pageKey && (!item || current?.root.isConnected)) { if (!item) paintPerformer(performerPage()); return; }
     pageKey = key;
     generation++;
     current?.root.remove();
@@ -2717,6 +2870,8 @@
       if (!alive(view) || view.busy || view.button.disabled) return;
       if (!configuration()) { configure(); return; }
       if (view.organizeFailed) { void retryOrganize(view); return; }
+      const link = libraryLink(view);
+      if (link && !view.tracking) { window.open(link, '_blank', 'noopener'); return; }
       void query(view, view.queryOnly || ACTIVE.has(view.state) ? 'GET' : 'POST');
     });
     render(view);

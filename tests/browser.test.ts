@@ -38,6 +38,9 @@ type Mock = {
   activeRequests: number;
   dismissals: unknown[];
   dismissStatus: number;
+  performer: { name: string; entity_id: number | null; following: boolean } | null;
+  performerCalls: Call[];
+  performerError: string;
 };
 declare global { interface Window { javMock: Mock } }
 
@@ -48,6 +51,7 @@ function body(state: State, code = 'SSIS-057'): Body {
 async function open(browser: Browser, options: {
   url?: string; title?: string; html?: string; quirks?: boolean; configured?: boolean; viewport?: typeof VIEWPORTS[number]; initial?: State; postState?: State; peopleItems?: Mock['peopleItems']; script?: string; resolved?: string; automatic?: boolean; updateAutomatic?: boolean; updateValues?: Record<string, string | boolean>;
   activeItems?: Body[];
+  performer?: Mock['performer'];
 } = {}) {
   const viewport = options.viewport || VIEWPORTS[0]!;
   const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
@@ -59,11 +63,11 @@ async function open(browser: Browser, options: {
     // FANZA 等来源页没有 doctype，按怪异模式渲染。
     contentType: 'text/html; charset=utf-8', body: `${options.quirks ? '' : '<!doctype html>'}<html><head><meta charset="utf-8"><title>${options.title || 'SSIS-057 作品详情'}</title></head><body>${options.html ?? '<h1>SSIS-057 作品详情</h1>'}</body></html>`,
   }));
-  await page.addInitScript(({ configured, token, base, initial, postState, peopleItems, resolved, automatic, version, updateAutomatic, updateValues, activeItems }) => {
+  await page.addInitScript(({ configured, token, base, initial, postState, peopleItems, resolved, automatic, version, updateAutomatic, updateValues, activeItems, performer }) => {
     const listeners = new Map<number, { key: string; callback: (key: string, oldValue: string | boolean, newValue: string | boolean, remote: boolean) => void }>();
     let nextListener = 0;
     const mock: Mock = {
-      calls: [], reports: [], pending: [], updates: [], automatic, updateAutomatic, menus: {}, peopleItems, peopleRequests:[], activeItems, activeRequests: 0, dismissals: [], dismissStatus: 200,
+      calls: [], reports: [], pending: [], updates: [], automatic, updateAutomatic, menus: {}, peopleItems, peopleRequests:[], activeItems, activeRequests: 0, dismissals: [], dismissStatus: 200, performer, performerCalls: [], performerError: '',
       values: { ...(configured ? { 'peach.jav.base': base, 'peach.jav.token': token } : {}), ...updateValues },
       changed(key, value, remote = false) {
         const previous = mock.values[key] ?? '';
@@ -107,6 +111,19 @@ async function open(browser: Browser, options: {
             : { status: 404, responseText: '{"detail":"Not Found"}' }), 0);
           return { abort: () => request.onabort?.() };
         }
+        // 女优页订阅：performer 为空时按旧版 Peach 回 404；performerError 模拟订阅被拒。
+        if (new URL(request.url).pathname === '/api/jav-browser/performer') {
+          mock.performerCalls.push({ method: request.method, url: request.url, headers: request.headers,
+            anonymous: request.anonymous, ...(request.data ? { data: request.data } : {}) });
+          const posted = request.data ? JSON.parse(request.data) : null;
+          setTimeout(() => {
+            if (!mock.performer) { request.onload({ status: 404, responseText: '{"detail":"Not Found"}' }); return; }
+            if (posted && mock.performerError) { request.onload({ status: 400, responseText: JSON.stringify({ detail: mock.performerError }) }); return; }
+            if (posted) mock.performer = { ...mock.performer, following: posted.enabled, entity_id: mock.performer.entity_id ?? 77 };
+            request.onload({ status: 200, responseText: JSON.stringify({ ok: true, ...mock.performer }) });
+          }, 0);
+          return { abort: () => request.onabort?.() };
+        }
         // 确认已结束的任务：按键或全部标为 dismissed，回新的任务列表；dismissStatus 设 404 模拟旧版 Peach。
         if (request.url.endsWith('/api/jav-browser/dismiss')) {
           const body = JSON.parse(request.data!);
@@ -131,7 +148,7 @@ async function open(browser: Browser, options: {
     });
   }, { configured: options.configured !== false, token: TOKEN, base: BASE, initial: options.initial || 'idle', postState: options.postState, peopleItems: options.peopleItems || {}, resolved: options.resolved,
     automatic: options.automatic !== false, version: VERSION, updateAutomatic: options.updateAutomatic !== false, updateValues: options.updateValues || {},
-    activeItems: options.activeItems || null });
+    activeItems: options.activeItems || null, performer: options.performer || null });
   await page.goto(options.url || 'https://missav.ws/en/ssis-057?private=value#player');
   await page.clock.install();
   await page.addScriptTag({ content: options.script ?? SCRIPT });
@@ -205,6 +222,8 @@ async function selectCode(page: Page) {
 const AUTOMATIC: Record<string, { path: string; title: string; html: string; source?: string; code?: string }> = {
   dmm: { path: '/av/content/?id=ssis00519&private=secret#player', source: '/av/content/?id=ssis00519', code: 'SSIS-519', title: '作品详情', html: '<h1>作品详情</h1>' },
   mgs: { path: '/product/product_detail/300MIUM-1239/', code: '300MIUM-1239', title: '作品详情', html: '<h1>作品详情</h1>' },
+  // FC2 商品页地址里只有编号，番号由 Peach 换算成 FC2-PPV-<编号>。
+  'fc2-market': { path: '/article/4900901/', code: 'FC2-PPV-4900901', title: '作品详情', html: '<h1>作品详情</h1>' },
   missav: { path: '/en/ssis-057', title: 'SSIS-057', html: '<h1>SSIS-057 作品</h1>' },
   jable: { path: '/videos/ssis-057/', title: 'Jable', html: '<div class="video-info"><h4>SSIS-057 作品</h4></div>' },
   'jav-guru': { path: '/12345/ssis-057-detail/', title: 'JAV.guru', html: '<h1 class="entry-title">[SSIS-057] 作品</h1>' },
@@ -490,6 +509,28 @@ describe('JAV 用户脚本', () => {
       });
     }
   }
+
+  it('DMM 素人作品页按商品号认出番号；馆藏已有时主按钮直达 Peach 里的这部作品', async () => {
+    const opened = await open(browser, { url: 'https://video.dmm.co.jp/amateur/content/?id=mfc288&utm_medium=dmm_affiliate&utm_source=x',
+      title: '作品详情', html: '<h1>作品详情</h1>', automatic: false });
+    const { page } = opened;
+    try {
+      await pending(page, 1);
+      const asked = new URL(await page.evaluate(() => window.javMock.calls[0]!.url));
+      assert.equal(asked.pathname, '/api/jav-browser/identify');
+      assert.equal(asked.searchParams.get('source_url'), 'https://video.dmm.co.jp/amateur/content/?id=mfc288');
+      await page.evaluate(() => window.javMock.reply(0, { ok: true, code: 'MFC-288', state: 'owned', message: 'owned', asset_id: 4321 }));
+      await ready(page, '在 Peach 中打开');
+      assert.equal(await page.locator(ROOT).locator('.bar strong').innerText(), 'MFC-288');
+      await page.evaluate(() => { Object.assign(window, { opened: [] as unknown[] });
+        window.open = (...args: unknown[]) => { (window as unknown as { opened: unknown[] }).opened.push(args); return null; }; });
+      await button(page).click();
+      assert.deepEqual(await page.evaluate(() => (window as unknown as { opened: unknown[] }).opened),
+        [[`${BASE}/assets/4321`, '_blank', 'noopener']]);
+      assert.equal(await page.evaluate(() => window.javMock.calls.length), 1);
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
 
   it('MGS 店铺前缀由 Peach 归一成账本番号，本页列表不重复', async () => {
     const html = '<table><tr><th>品番：</th><td>107STZY-019</td></tr></table>';
@@ -1405,7 +1446,13 @@ describe('JAV 用户脚本', () => {
         dialog.getBoundingClientRect().bottom - dialog.querySelector('form')!.getBoundingClientRect().bottom);
       assert.ok(gap <= 1, `设置底栏下方空出 ${gap}px`);
       await settingsDialog(page).getByRole('button', {name:'取消', exact:true}).click();
-      await entry.getByRole('button', {name:'收起', exact:true}).click();
+      // 右上角与作品浮卡同一组：折叠只留标题栏，再点展开；隐藏收成图标。
+      await entry.getByRole('button', {name:'折叠 Peach 详情', exact:true}).click();
+      assert.equal(await scan.isVisible(), false);
+      assert.equal(await entry.getAttribute('data-panel-mode'), 'collapsed');
+      await entry.getByRole('button', {name:'展开 Peach 详情', exact:true}).click();
+      await scan.waitFor();
+      await entry.getByRole('button', {name:'隐藏 Peach 面板', exact:true}).click();
       await entry.getByRole('button', {name:'Peach 设置与更新'}).waitFor();
       assert.deepEqual(opened.problems, []);
     } finally { await opened.close(); }
@@ -1988,6 +2035,9 @@ describe('JAV 用户脚本', () => {
       assert.equal(await task.locator('[aria-label="ABP-616 的任务状态"]').textContent(), '已排队');
       assert.equal(await task.locator('.flow-step[aria-current="step"] .flow-label').textContent(), '排队');
       assert.equal(await page.locator(ROOT).locator('.panel > .body').isHidden(), true);
+      // 进度页右上角与主页同一组按钮。
+      assert.deepEqual(await task.locator('.bar-actions button').evaluateAll(nodes => nodes.map(node => node.getAttribute('aria-label'))),
+        ['Peach 设置', '折叠 Peach 详情', '隐藏 Peach 面板']);
       await task.getByRole('button', { name: '返回 Peach 主页' }).click();
       assert.equal(await task.count(), 0);
       assert.ok(await moving() >= 2);
@@ -2120,6 +2170,66 @@ describe('JAV 用户脚本', () => {
         ['/api/jav-browser', { code: 'JUR-112', source_url: 'https://missav.ws/en/jur-112' }]]);
       assert.deepEqual(opened.problems, []);
     } finally { await opened.close(); }
+  });
+
+  it('JavDB 女优页带上标题栏的名字向 Peach 认人，订阅新作后可以取消', async () => {
+    const opened = await open(browser, { url: 'https://javdb.com/actors/bkxd?page=2', title: '森日向子 | JavDB',
+      html: '<h2><span class="actor-section-name">森日向子, 白石アイリ</span></h2>',
+      performer: { name: '森日向子', entity_id: 8112, following: false } });
+    const { page } = opened;
+    try {
+      const panel = page.locator('#peach-jav-updates'), section = panel.locator('.performer-follow');
+      await section.getByRole('button', { name: '订阅新作' }).waitFor();
+      assert.equal(await section.locator('strong').textContent(), '森日向子');
+      assert.equal(await section.getByRole('status').textContent(), '订阅后，Peach 会定期查她的新作。');
+      // 识别本页番号退成次要按钮，订阅是这张面板的主操作。
+      assert.equal(await panel.getByRole('button', { name: '识别本页全部番号' }).evaluate(node => node.classList.contains('primary')), false);
+      const [lookup] = await page.evaluate(() => window.javMock.performerCalls);
+      const asked = new URL(lookup!.url);
+      assert.deepEqual([lookup!.method, asked.searchParams.get('source_url'), asked.searchParams.getAll('names')],
+        ['GET', 'https://javdb.com/actors/bkxd', ['森日向子, 白石アイリ']]);
+      assert.equal(lookup!.headers.Authorization, `Bearer ${TOKEN}`);
+      await section.getByRole('button', { name: '订阅新作' }).click();
+      await section.getByRole('button', { name: '取消订阅新作' }).waitFor();
+      assert.equal(await section.getByRole('status').textContent(), '已订阅新作，Peach 会定期查她的新作。');
+      const posted = await page.evaluate(() => window.javMock.performerCalls.at(-1)!);
+      assert.deepEqual([posted.method, JSON.parse(posted.data!)],
+        ['POST', { source_url: 'https://javdb.com/actors/bkxd', names: ['森日向子, 白石アイリ'], enabled: true }]);
+      await section.getByRole('button', { name: '取消订阅新作' }).click();
+      await section.getByRole('button', { name: '订阅新作' }).waitFor();
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
+  it('DMM 与 MISSAV 女优页按地址认人；订阅被拒时原因写在面板上，旧版 Peach 不显示这一块', async () => {
+    for (const [url, source] of [
+      ['https://video.dmm.co.jp/av/list/?actress=1061586&sort=date', 'https://video.dmm.co.jp/av/list/?actress=1061586'],
+      ['https://missav.ws/dm127/cn/actresses/%E6%B6%BC%E6%A3%AE%E3%82%8C%E3%82%80', 'https://missav.ws/dm127/cn/actresses/%E6%B6%BC%E6%A3%AE%E3%82%8C%E3%82%80'],
+    ] as const) {
+      const opened = await open(browser, { url, title: '女优页', html: '<h1>女优页</h1>',
+        performer: { name: '涼森れむ', entity_id: null, following: false } });
+      const { page } = opened;
+      try {
+        const section = page.locator('#peach-jav-updates .performer-follow');
+        await section.getByRole('button', { name: '订阅新作' }).waitFor();
+        assert.equal(new URL((await page.evaluate(() => window.javMock.performerCalls[0]!)).url).searchParams.get('source_url'), source);
+        assert.match(await section.getByRole('status').textContent() || '',
+          url.includes('dmm') ? /订阅时会新建她/ : /订阅时会到 JavDB 确认是同一个人/);
+        await page.evaluate(() => { window.javMock.performerError = 'JavDB 上按「涼森れむ」没能确认是同一位女优，请到她的 JavDB 演员页订阅'; });
+        await section.getByRole('button', { name: '订阅新作' }).click();
+        await page.waitForFunction(() => /没能确认是同一位女优/.test(document.querySelector('#peach-jav-updates')!.shadowRoot!.querySelector('.performer-follow [role=status]')!.textContent!));
+        assert.equal(await section.getByRole('button', { name: '订阅新作' }).isEnabled(), true);
+      } finally { await opened.close(); }
+    }
+    const old = await open(browser, { url: 'https://javdb.com/actors/bkxd', html: '<h2><span class="actor-section-name">森日向子</span></h2>' });
+    try {
+      await old.page.waitForFunction(() => window.javMock.performerCalls.length > 0);
+      await old.page.locator('#peach-jav-updates .panel').waitFor({ state: 'attached' });
+      await old.page.clock.fastForward(1000);
+      // 旧版 Peach 认不了人：这一块不显示，入口面板也不为它自动展开。
+      assert.equal(await old.page.locator('#peach-jav-updates').getAttribute('data-panel-mode'), 'minimized');
+      assert.equal(await old.page.locator('#peach-jav-updates .performer-follow').evaluate(node => (node as HTMLElement).hidden), true);
+    } finally { await old.close(); }
   });
 
   it('旧版 Peach 没有任务列表时记为不可用，浮卡不显示其他任务，仍逐个查询', async () => {
