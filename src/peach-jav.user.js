@@ -336,9 +336,11 @@
     .geist-button.launcher[data-count]{position:relative;overflow:visible}
     .geist-button.launcher[data-count]::after{content:attr(data-count);position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:9px;
       display:grid;place-items:center;background:var(--color-status-blue-background);color:var(--color-status-blue-text);font:var(--board-caption-semibold);box-shadow:0 0 0 2px var(--ground);pointer-events:none}
-    .shared-tasks{min-width:0}.shared-heading{display:flex;align-items:center;gap:4px;width:fit-content;margin:0;padding:0;border:0;background:transparent;
-      font:var(--board-caption-semibold);color:var(--muted);cursor:pointer}.shared-heading:hover{color:var(--ink)}
-    .shared-heading:focus-visible{outline:2px solid var(--tungsten);outline-offset:2px;border-radius:4px}
+    .geist-button.launcher[data-count-tone=ended]::after{background:var(--color-status-lime-background);color:var(--color-status-lime-text)}
+    .shared-note{margin:8px 0 0}.shared-foot{display:flex;justify-content:flex-end;margin-top:8px}.shared-foot:has(>[hidden]){display:none}
+    .shared-tasks{min-width:0}.shared-heading,.shared-clear{display:flex;align-items:center;gap:4px;width:fit-content;margin:0;padding:0;border:0;background:transparent;
+      font:var(--board-caption-semibold);color:var(--muted);cursor:pointer}.shared-heading:hover,.shared-clear:hover{color:var(--ink)}
+    .shared-heading:focus-visible,.shared-clear:focus-visible{outline:2px solid var(--tungsten);outline-offset:2px;border-radius:4px}
     .shared-fold{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s ease}
     .shared-heading[aria-expanded=false] .shared-fold{transform:rotate(-90deg)}
     /* 折叠沿用 Peach Collapse（frontend/src/ui-kit/collapse.css）：过渡时裁边，展开停稳后摘掉，行的悬停底色才不被切。 */
@@ -347,6 +349,8 @@
     .shared-list li{min-width:0}.shared-row{display:flex;align-items:center;gap:8px;width:calc(100% + 16px);min-width:0;min-height:32px;margin:0 -8px;padding:4px 8px;border:0;border-radius:6px;
       background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;transition:background-color .15s ease}.shared-row:hover{background:var(--surface)}
     .shared-row:focus-visible{outline:2px solid var(--tungsten);outline-offset:-2px}
+    .shared-item{display:flex;align-items:center;gap:4px}.shared-item .shared-row{flex:1;width:auto;margin-right:0}
+    .shared-item .geist-button.icon{width:28px;height:28px;color:var(--muted)}.shared-item .geist-button.icon:hover{color:var(--ink)}
     .shared-code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:var(--board-body-medium)}
     .shared-chevron{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;color:var(--muted)}
     .task-page .bar strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -2021,16 +2025,41 @@
             if ([404, 405].includes(response.status)) { resolve(null); return; }
             try {
               if (response.status !== 200 || response.responseText.length > 2 * 1024 * 1024) throw new Error();
-              const data = JSON.parse(response.responseText);
-              if (data.ok !== true || !Array.isArray(data.items)) throw new Error();
-              resolve(data.items.filter(body => body?.ok === true && STATES.has(body.state) && typeof body.code === 'string'
-                && candidates(body.code).size === 1).slice(0, 200));
+              resolve(activeItems(JSON.parse(response.responseText)));
             } catch { reject(new Error('Peach 返回的任务列表无效')); }
           },
           onerror: () => reject(new Error('无法连接 Peach')), ontimeout: () => reject(new Error('Peach 请求超时')),
           onabort: () => reject(new Error('Peach 请求已中止')),
         });
       } catch { reject(new Error('无法连接 Peach')); }
+    });
+  }
+
+  function activeItems(data) {
+    if (data?.ok !== true || !Array.isArray(data.items)) throw new Error();
+    return data.items.filter(body => body?.ok === true && STATES.has(body.state) && typeof body.code === 'string'
+      && candidates(body.code).size === 1).slice(0, 200);
+  }
+
+  // 确认已结束的任务，返回 Peach 的新任务列表；旧版 Peach 没有这个接口。
+  function requestDismiss(config, request) {
+    return new Promise((resolve, reject) => {
+      try {
+        GM_xmlhttpRequest({ method: 'POST', url: `${config.base}/api/jav-browser/dismiss`, anonymous: true, timeout: 30_000,
+          headers: { Authorization: `Bearer ${config.token}`, Accept: 'application/json', 'Content-Type': 'application/json' },
+          data: JSON.stringify(request),
+          onload(response) {
+            if ([404, 405].includes(response.status)) { reject(new Error('Peach 尚不支持确认已结束的任务，请更新 Peach。')); return; }
+            if (response.status === 401 || response.status === 403) { reject(new Error('令牌无效或无权限，请重新配置。')); return; }
+            try {
+              if (response.status !== 200 || response.responseText.length > 2 * 1024 * 1024) throw new Error();
+              resolve(activeItems(JSON.parse(response.responseText)));
+            } catch { reject(new Error('没有确认成功，请稍后重试。')); }
+          },
+          onerror: () => reject(new Error('无法连接 Peach，请稍后重试。')), ontimeout: () => reject(new Error('Peach 请求超时，请稍后重试。')),
+          onabort: () => reject(new Error('Peach 请求已中止。')),
+        });
+      } catch { reject(new Error('无法连接 Peach，请稍后重试。')); }
     });
   }
 
@@ -2113,11 +2142,15 @@
       if (!node.isConnected) { sharedLists.delete(node); continue; }
       paintSharedList(node); paintTaskPage(node.closest('.panel'));
     }
+    // 角标：有进行中的显示进行中数量；都结束了还有没确认的，换成已结束的数量。
     const running = sharedMode() ? sharedSnapshot.items.filter(tracking).length : 0;
+    const ended = running ? 0 : otherTasks().filter(awaitingAck).length;
     for (const launcher of [current?.launcher, updateEntry?.launcher]) {
       if (!launcher) continue;
-      if (running) launcher.dataset.count = running > 99 ? '99+' : String(running); else delete launcher.dataset.count;
-      launcher.title = running ? `Peach 有 ${running} 项任务进行中` : '';
+      const count = running || ended;
+      if (count) launcher.dataset.count = count > 99 ? '99+' : String(count); else delete launcher.dataset.count;
+      if (ended) launcher.dataset.countTone = 'ended'; else delete launcher.dataset.countTone;
+      launcher.title = running ? `Peach 有 ${running} 项任务进行中` : ended ? `Peach 有 ${ended} 项任务已结束，待确认` : '';
     }
     for (const root of surfaces) if (root.isConnected) placeSurface(root);
   }
@@ -2157,17 +2190,26 @@
   // 其他任务超过 3 项，或本页番号正在抓取时，列表自动折叠；手动展开或折叠一直有效，直到自动条件变化。
   const SHARED_FOLD_LIMIT = 3;
 
-  // 本页番号已有整体进度，这里只列其他番号：进行中的在前，最近 10 分钟结束的在后。
-  // 每项一行，点开进入该番号的进度页。
+  // 其他番号：本页番号已有整体进度，不在这里列。确认过的已结束任务不再列出。
+  const ownKey = () => current && alive(current) && !current.identity.conflict ? comparisonKey(current.identity.code) : '';
+  function otherTasks() {
+    const own = ownKey();
+    return sharedMode() ? sharedSnapshot.items.filter(body => comparisonKey(body.code) !== own && body.dismissed !== true) : [];
+  }
+
+  // 结束后等用户确认的任务：Peach 给了确认键的才能确认；旧版 Peach 没有，照旧 10 分钟后自行离开列表。
+  const awaitingAck = body => !tracking(body) && typeof body.ended_key === 'string' && body.dismissed !== true;
+
+  // 进行中的在前，已结束的在后；每项一行，点开进入该番号的进度页，已结束的行尾可以关掉。
   // 标题与列表跨重绘保留，开合状态变了（点标题或自动条件变化）才播高度过渡。
   function paintSharedList(node) {
-    const own = current && alive(current) && !current.identity.conflict ? comparisonKey(current.identity.code) : '';
-    const items = sharedMode() ? sharedSnapshot.items.filter(body => comparisonKey(body.code) !== own) : [];
+    const items = otherTasks();
     node.hidden = !items.length;
     const focused = node.getRootNode().activeElement?.closest?.('.shared-row');
-    if (!items.length) { node.replaceChildren(); node.parts = null; return; }
+    // 列表空了只藏起整段，标题、提示与开合状态留着，确认失败时提示仍有处可写。
+    if (!items.length) return;
     loadSharedPeople(items);
-    const auto = items.length > SHARED_FOLD_LIMIT || Boolean(own && current && (current.tracking || current.busy));
+    const auto = items.length > SHARED_FOLD_LIMIT || Boolean(ownKey() && (current.tracking || current.busy));
     if (node.foldChoice && node.foldChoice.auto !== auto) node.foldChoice = null;
     const open = node.foldChoice ? node.foldChoice.open : !auto;
     const running = items.filter(tracking), ended = items.filter(body => !tracking(body));
@@ -2179,14 +2221,22 @@
         node.foldChoice = { auto: node.parts.auto, open: !node.parts.open };
         paintSharedList(node);
       });
+      const clear = element('button', 'shared-clear', '全部知道了');
+      clear.type = 'button';
+      clear.addEventListener('click', () => void acknowledgeEnded(node, { all: true }));
+      const foot = element('div', 'shared-foot'); foot.append(clear);
+      const note = element('p', 'geist-note shared-note');
+      note.dataset.variant = 'error'; note.setAttribute('role', 'alert'); note.hidden = true;
       const body = element('div', 'shared-body fold-settled'), list = element('ul', 'shared-list');
       body.hidden = !open;
-      body.append(list);
-      node.replaceChildren(heading, body);
-      node.parts = { heading, label, body, list, open };
+      body.append(list, foot);
+      node.replaceChildren(heading, note, body);
+      node.parts = { heading, label, clear, note, body, list, open };
     }
-    const { heading, label, body: fold, list } = node.parts;
-    label.textContent = running.length ? `其他任务 · 进行中 ${running.length} 项` : '其他任务 · 最近结束';
+    const { heading, label, clear, body: fold, list } = node.parts;
+    label.textContent = ['其他任务', running.length ? `进行中 ${running.length} 项` : '', ended.length ? `已结束 ${ended.length} 项` : '']
+      .filter(Boolean).join(' · ');
+    clear.hidden = !ended.some(awaitingAck);
     heading.setAttribute('aria-expanded', String(open));
     if (open !== node.parts.open) setFoldOpen(fold, open, () => placeSurface(node.getRootNode().host));
     Object.assign(node.parts, { auto, open });
@@ -2198,10 +2248,42 @@
       setRowState({ row, status }, ...rowState(body));
       row.setAttribute('aria-label', `${body.code}，${status.textContent}，查看进度`);
       row.addEventListener('click', () => openTaskPage(node.closest('.panel'), body.code));
-      const item = element('li'); item.append(row); rows.push(item);
+      const item = element('li', 'shared-item'); item.append(row);
+      if (awaitingAck(body)) {
+        const dismiss = control(`关掉 ${body.code}`, { icon: 'close' });
+        dismiss.addEventListener('click', () => {
+          // 关掉后焦点交给下一行，最后一行交给上一行，列表空了交给标题。
+          const next = (item.nextElementSibling || item.previousElementSibling)?.querySelector('.shared-row')?.dataset.code;
+          void acknowledgeEnded(node, { keys: [body.ended_key] });
+          ([...list.querySelectorAll('.shared-row')].find(row => row.dataset.code === next) || heading).focus();
+        });
+        item.append(dismiss);
+      }
+      rows.push(item);
     }
     list.replaceChildren(...rows);
     if (focused) [...list.querySelectorAll('.shared-row')].find(row => row.dataset.code === focused.dataset.code)?.focus();
+  }
+
+  // 确认已结束的任务。先在本地标为已确认并写进共享快照，各窗口立刻收起；Peach 返回的列表再作为新快照。
+  async function acknowledgeEnded(node, request) {
+    const config = configuration();
+    if (!config || !sharedMode()) return;
+    if (node?.parts) node.parts.note.hidden = true;
+    const keys = new Set(request.keys || []);
+    const marked = sharedSnapshot.items.map(body => awaitingAck(body) && (request.all || keys.has(body.ended_key)) ? { ...body, dismissed: true } : body);
+    const local = { ...sharedSnapshot, at: Date.now(), items: marked };
+    GM_setValue(STORAGE_TASKS, JSON.stringify(local)); applyShared(local);
+    try {
+      const items = await requestDismiss(config, request.all ? { all: true } : { keys: [...keys] });
+      if (configuration()?.base !== config.base) return;
+      const snapshot = { version: 1, base: config.base, at: Date.now(), available: true, items };
+      GM_setValue(STORAGE_TASKS, JSON.stringify(snapshot)); applyShared(snapshot);
+    } catch (error) {
+      void sharedTick(true);
+      const note = node?.parts?.note;
+      if (note?.isConnected) { note.textContent = error.message; note.hidden = false; placeSurface(note.getRootNode().host); }
+    }
   }
 
   // 折叠正文的高度过渡，与 Peach frontend/src/ui-kit/collapse.ts 的 setCollapseRegionOpen 同一做法：
@@ -2267,12 +2349,21 @@
         if (panel.taskPage?.page === page) { note.textContent = error.message; note.dataset.variant = 'error'; }
       } finally { retry.disabled = false; }
     });
-    body.append(note, parts.flow, retry);
+    // 已结束、等确认的番号：知道了就确认并回到主页。
+    const ack = control('知道了');
+    ack.hidden = true;
+    ack.addEventListener('click', () => {
+      const key = panel.taskPage?.body?.ended_key;
+      if (!key) return;
+      void acknowledgeEnded(panel.querySelector('.shared-tasks'), { keys: [key] });
+      closeTaskPage(panel, true);
+    });
+    body.append(note, parts.flow, retry, ack);
     page.append(bar, body);
     slidePanel(panel, 1, () => {
       for (const child of panel.children) if (!child.hidden) { child.hidden = true; child.dataset.taskHidden = ''; }
       panel.append(page);
-      panel.taskPage = { page, code, note, people, retry, body: null, ...parts };
+      panel.taskPage = { page, code, note, people, retry, ack, body: null, ...parts };
       paintTaskPage(panel);
       return [page];
     });
@@ -2292,7 +2383,9 @@
     };
     if (focus) slidePanel(panel, -1, restore);
     else { panel.motion?.forEach(animation => animation.cancel()); restore(); }
-    if (focus) [...panel.querySelectorAll('.shared-row')].find(row => row.dataset.code === open.code)?.focus();
+    // 回到这一行；这一行已确认收起时回到「其他任务」标题。
+    if (focus) ([...panel.querySelectorAll('.shared-row')].find(row => row.dataset.code === open.code)
+      || panel.querySelector('.shared-heading'))?.focus();
     for (const root of surfaces) if (root.isConnected) placeSurface(root);
   }
 
@@ -2309,7 +2402,7 @@
         { opacity: 1, transform: 'translateX(0)' }], timing))];
   }
 
-  // 番号结束超过 10 分钟后会离开快照，进度页保留最后一次看到的状态。
+  // 番号确认过或由旧版 Peach 列出时，结束 10 分钟后离开快照，进度页保留最后一次看到的状态。
   function paintTaskPage(panel) {
     const open = panel?.taskPage;
     if (!open) return;
@@ -2324,6 +2417,7 @@
     open.note.textContent = statusLabel(open.body);
     open.note.dataset.variant = statusVariant(open.body);
     open.retry.hidden = !organizeFailed(open.body);
+    open.ack.hidden = !awaitingAck(open.body);
     for (const root of surfaces) if (root.isConnected) placeSurface(root);
   }
 

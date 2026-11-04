@@ -16,7 +16,7 @@ const TOKEN = 'test-only-peach-jav-secret-8b4d';
 const BASE = 'https://peach.example.invalid';
 const ROOT = '#peach-jav-action';
 type State = 'idle' | 'queued' | 'searching' | 'submitted' | 'ingested' | 'owned' | 'failed' | 'no_match';
-type Body = { ok: boolean; code: string; state: State; message: string; stage?: string;
+type Body = { ok: boolean; code: string; state: State; message: string; stage?: string; ended_key?: string; dismissed?: boolean;
   download?: { state: string; label: string; phase?: string; progress: number | null; postprocess_state?: string; postprocess_label?: string } };
 type Call = { method: string; url: string; headers: Record<string, string>; anonymous: boolean; data?: string };
 type MockRequest = Call & { onload(value: unknown): void; ontimeout(): void; onerror(): void; onabort?(): void };
@@ -36,6 +36,8 @@ type Mock = {
   reply(index: number, body: unknown, status?: number): void;
   activeItems: Body[] | null;
   activeRequests: number;
+  dismissals: unknown[];
+  dismissStatus: number;
 };
 declare global { interface Window { javMock: Mock } }
 
@@ -61,7 +63,7 @@ async function open(browser: Browser, options: {
     const listeners = new Map<number, { key: string; callback: (key: string, oldValue: string | boolean, newValue: string | boolean, remote: boolean) => void }>();
     let nextListener = 0;
     const mock: Mock = {
-      calls: [], reports: [], pending: [], updates: [], automatic, updateAutomatic, menus: {}, peopleItems, peopleRequests:[], activeItems, activeRequests: 0,
+      calls: [], reports: [], pending: [], updates: [], automatic, updateAutomatic, menus: {}, peopleItems, peopleRequests:[], activeItems, activeRequests: 0, dismissals: [], dismissStatus: 200,
       values: { ...(configured ? { 'peach.jav.base': base, 'peach.jav.token': token } : {}), ...updateValues },
       changed(key, value, remote = false) {
         const previous = mock.values[key] ?? '';
@@ -103,6 +105,16 @@ async function open(browser: Browser, options: {
           mock.activeRequests++;
           setTimeout(() => request.onload(mock.activeItems ? { status: 200, responseText: JSON.stringify({ ok: true, items: mock.activeItems }) }
             : { status: 404, responseText: '{"detail":"Not Found"}' }), 0);
+          return { abort: () => request.onabort?.() };
+        }
+        // 确认已结束的任务：按键或全部标为 dismissed，回新的任务列表；dismissStatus 设 404 模拟旧版 Peach。
+        if (request.url.endsWith('/api/jav-browser/dismiss')) {
+          const body = JSON.parse(request.data!);
+          mock.dismissals.push(body);
+          if (mock.dismissStatus === 200 && mock.activeItems) mock.activeItems = mock.activeItems.map(item =>
+            item.ended_key && (body.all || body.keys.includes(item.ended_key)) ? { ...item, dismissed: true } : item);
+          setTimeout(() => request.onload(mock.dismissStatus === 200 ? { status: 200, responseText: JSON.stringify({ ok: true, items: mock.activeItems }) }
+            : { status: mock.dismissStatus, responseText: '{"detail":"Not Found"}' }), 0);
           return { abort: () => request.onabort?.() };
         }
         mock.calls.push({ method: request.method, url: request.url, headers: request.headers,
@@ -2023,6 +2035,58 @@ describe('JAV 用户脚本', () => {
         items: ['ABP-616', 'MIDV-339', 'IPX-001', 'JUR-112'].map(code => ({ ok: true, code, state: 'queued', message: 'queued' })) }), true), BASE);
       assert.equal(await page.locator(ROOT).locator('.shared-heading').getAttribute('aria-expanded'), 'false');
       assert.equal(await page.locator(ROOT).locator('.shared-heading').textContent(), '其他任务 · 进行中 4 项');
+    } finally { await opened.close(); }
+  });
+
+  it('共享进度：别的番号结束后一直留在其他任务里，直到关掉、点知道了或全部知道了', async () => {
+    const ended = (code: string, state: State, key: string, dismissed = false): Body => ({ ...body(state, code), ended_key: key, dismissed,
+      ...(state === 'ingested' ? { download: { state: 'ingested', label: '已入库', progress: 1, postprocess_state: 'complete', postprocess_label: '已整理' } } : {}) });
+    const opened = await open(browser, { initial: 'owned', activeItems: [
+      body('submitted', 'MIDV-339'),
+      ended('ABP-616', 'ingested', '11@2026-11-04T08:00:00+00:00'),
+      ended('IPX-001', 'failed', '12@2026-11-04T08:01:00+00:00'),
+      ended('JUR-112', 'ingested', '13@2026-11-04T07:00:00+00:00', true)] });
+    const { page } = opened;
+    try {
+      const root = page.locator(ROOT), shared = root.locator('.shared-tasks'), heading = shared.locator('.shared-heading');
+      await page.waitForFunction(root => root && document.querySelector(root)?.shadowRoot?.querySelector('.shared-row'), ROOT);
+      assert.equal(await heading.textContent(), '其他任务 · 进行中 1 项 · 已结束 2 项');
+      // 确认过的 JUR-112 不再列出。
+      assert.deepEqual(await shared.locator('.shared-code').allTextContents(), ['MIDV-339', 'ABP-616', 'IPX-001']);
+      assert.equal(await shared.getByRole('button', { name: '关掉 MIDV-339' }).count(), 0);
+      await shared.getByRole('button', { name: '关掉 ABP-616' }).click();
+      assert.deepEqual(await page.evaluate(() => window.javMock.dismissals), [{ keys: ['11@2026-11-04T08:00:00+00:00'] }]);
+      assert.deepEqual(await shared.locator('.shared-code').allTextContents(), ['MIDV-339', 'IPX-001']);
+      // 关掉后焦点落到下一行；Peach 的列表回来重绘时焦点仍留在这一行。
+      await page.waitForFunction(root => (document.querySelector(root)!.shadowRoot!.activeElement as HTMLElement | null)?.dataset.code === 'IPX-001', ROOT);
+      // 进度页的「知道了」确认后回到主页。
+      await shared.locator('.shared-row[data-code="IPX-001"]').click();
+      await root.locator('.task-page').getByRole('button', { name: '知道了' }).click();
+      assert.equal(await root.locator('.task-page').count(), 0);
+      assert.deepEqual(await page.evaluate(() => window.javMock.dismissals.at(-1)), { keys: ['12@2026-11-04T08:01:00+00:00'] });
+      assert.deepEqual(await shared.locator('.shared-code').allTextContents(), ['MIDV-339']);
+      assert.equal(await shared.locator('.shared-clear').isHidden(), true);
+      // 都结束了还有没确认的：图标角标换成已结束的数量。
+      await page.evaluate(() => { window.javMock.activeItems = [{ ok: true, code: 'MIDV-339', state: 'failed', message: 'failed',
+        ended_key: '14@2026-11-04T08:02:00+00:00', dismissed: false } as never]; });
+      await page.clock.fastForward(5_000);
+      await page.waitForFunction(root => document.querySelector(root)!.shadowRoot!.querySelector('.shared-heading')!.textContent === '其他任务 · 已结束 1 项', ROOT);
+      await root.getByRole('button', { name: '隐藏 Peach 面板' }).click();
+      const launcher = root.locator('.launcher');
+      assert.deepEqual(await launcher.evaluate(node => [node.dataset.count, node.dataset.countTone]), ['1', 'ended']);
+      await launcher.press('Enter');
+      await shared.getByRole('button', { name: '全部知道了' }).click();
+      assert.deepEqual(await page.evaluate(() => window.javMock.dismissals.at(-1)), { all: true });
+      assert.equal(await shared.isHidden(), true);
+      // 旧版 Peach 没有确认接口：提示更新，任务照旧留在列表里。
+      await page.evaluate(() => { window.javMock.dismissStatus = 404; window.javMock.activeItems = [{ ok: true, code: 'ABW-123', state: 'failed',
+        message: 'failed', ended_key: '15@2026-11-04T08:03:00+00:00', dismissed: false } as never]; });
+      await page.clock.fastForward(31_000);
+      await shared.locator('.shared-row[data-code="ABW-123"]').waitFor();
+      await shared.getByRole('button', { name: '关掉 ABW-123' }).click();
+      await shared.getByRole('alert').filter({ hasText: 'Peach 尚不支持确认已结束的任务，请更新 Peach。' }).waitFor();
+      await shared.locator('.shared-row[data-code="ABW-123"]').waitFor();
+      assert.deepEqual(opened.problems, []);
     } finally { await opened.close(); }
   });
 

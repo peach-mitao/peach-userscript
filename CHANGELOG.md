@@ -6,6 +6,10 @@ Notable changes are grouped by version. English and Chinese describe the same be
 
 Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
 
+### Added / 新增
+
+- **Finished tasks stay** under 其他任务 until you acknowledge them, including ones that finished while every window was closed: close a row, press 知道了 on its progress page, or 全部知道了 next to the heading. The heading counts running and finished titles, and when nothing is running the minimized icon shows how many finished titles wait for you. Needs a Peach that keeps finished browser tasks (`POST /api/jav-browser/dismiss`); older versions keep showing them for 10 minutes. / 别的页面添加的任务结束后一直留在「其他任务」里，窗口全关时结束的也在，直到确认：关掉那一行、在进度页点「知道了」，或点标题旁的「全部知道了」。标题写出进行中与已结束的项数；没有进行中的任务时，收成图标的角标显示待确认的已结束数量。需要会保留已结束任务的 Peach（`POST /api/jav-browser/dismiss`）；旧版照旧只显示 10 分钟。
+
 ### Changed / 变更
 
 - **Other tasks** fold and unfold with Peach's Collapse height transition, whether by clicking the heading or automatically. Opening a title's progress page slides it in while the panel height eases to fit, and the back button slides the panel home the other way. Reduced-motion settings switch instantly. / 「其他任务」展开、折叠时沿用 Peach Collapse 的高度过渡，点标题或自动折叠都一样；点开番号的进度页时进度页滑入、浮卡高度随之过渡，返回时反向滑回主页。系统设为减少动效时直接切换。

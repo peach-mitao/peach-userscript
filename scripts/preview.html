@@ -68,6 +68,7 @@
     const previewValues = previewState === 'unconfigured' ? {} : { 'peach.jav.base': 'https://peach.example.com', 'peach.jav.token': 'preview-only-token' };
     const previewMenus = {};
     let previewActive = 0, previewRetried = false;
+    const previewDismissed = new Set();
     Object.assign(window, {
       GM_getValue: (key, fallback) => previewValues[key] ?? fallback,
       GM_setValue: (key, value) => { previewValues[key] = value; },
@@ -85,15 +86,23 @@
           const items = Object.fromEntries(new URL(request.url).searchParams.get('codes').split(',').map(code => [code, people[code] || []]));
           request.onload({status:200,responseText:JSON.stringify({ok:true,source:'local-cache',items})}); return;
         }
+        // 已结束的两项带确认键，确认后标为 dismissed；刷新页面后复原。
+        const previewItems = () => [
+          {ok:true,code:'ABP-616',state:'submitted',download:{state:'remote_running',label:'网盘下载中',progress:previewActive}},
+          {ok:true,code:'MIDV-339',state:previewActive < .3 ? 'queued' : 'searching'},
+          {ok:true,code:'SSIS-057',state:'ingested',download:{state:'ingested',label:'已入库',progress:1,postprocess_state:'running',postprocess_label:'整理中'}},
+          {ok:true,code:'IPX-001',state:'ingested',download:{state:'ingested',label:'已入库',progress:1,postprocess_state:'complete',postprocess_label:'已整理'},ended_key:'101@2026-11-04T08:00:00+00:00'},
+          {ok:true,code:'JUR-112',state:'failed',cause:'magnet',failure:'no_source',message:'没有可用下载源',ended_key:'102@2026-11-04T07:30:00+00:00'}]
+          .map(item => ({...item, ...(item.ended_key ? {dismissed: previewDismissed.has(item.ended_key)} : {})}));
+        if (new URL(request.url).pathname.endsWith('/dismiss')) {
+          const body = JSON.parse(request.data);
+          for (const item of previewItems()) if (item.ended_key && (body.all || body.keys.includes(item.ended_key))) previewDismissed.add(item.ended_key);
+          request.onload({status:200,responseText:JSON.stringify({ok:true,items:previewItems()})}); return;
+        }
         if (new URL(request.url).pathname.endsWith('/active')) {
           if (new URLSearchParams(location.search).get('tasks') !== '1') { request.onload({status:404,responseText:'{"detail":"Not Found"}'}); return; }
           previewActive = Math.min(previewActive + .07, 1);
-          request.onload({status:200,responseText:JSON.stringify({ok:true,items:[
-            {ok:true,code:'ABP-616',state:'submitted',download:{state:'remote_running',label:'网盘下载中',progress:previewActive}},
-            {ok:true,code:'MIDV-339',state:previewActive < .3 ? 'queued' : 'searching'},
-            {ok:true,code:'SSIS-057',state:'ingested',download:{state:'ingested',label:'已入库',progress:1,postprocess_state:'running',postprocess_label:'整理中'}},
-            {ok:true,code:'IPX-001',state:'ingested',download:{state:'ingested',label:'已入库',progress:1,postprocess_state:'complete',postprocess_label:'已整理'}},
-            {ok:true,code:'JUR-112',state:'failed',cause:'magnet',failure:'no_source',message:'没有可用下载源'}]})}); return;
+          request.onload({status:200,responseText:JSON.stringify({ok:true,items:previewItems()})}); return;
         }
         if (new URLSearchParams(location.search).get('scan') === 'states') {
           const url = new URL(request.url);
