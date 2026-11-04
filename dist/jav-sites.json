@@ -419,7 +419,9 @@
       "domains": [
         "adult.contents.fc2.com"
       ],
-      "mode": "selection"
+      "mode": "automatic",
+      "identity": "peach",
+      "detail_pattern": "^/article/([0-9]{1,10})/?$"
     },
     {
       "id": "s1",

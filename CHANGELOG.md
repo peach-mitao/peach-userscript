@@ -17,6 +17,7 @@ Source only; release assets are not published yet. / 仅源码更新，尚未发
 
 ### Fixed / 修复
 
+- **FC2 Contents Market** title pages (`adult.contents.fc2.com/article/<id>/`) are recognized automatically: the panel asks Peach, which turns the ID into `FC2-PPV-<id>`, instead of waiting for the code to be selected. Needs a Peach that knows this rule; older versions say the code could not be recognized. / FC2 内容市场的商品页（`adult.contents.fc2.com/article/<编号>/`）自动识别：浮卡交给 Peach 把编号换算成 `FC2-PPV-<编号>`，不必再选中番号。需要认得这条规则的 Peach；旧版会提示未识别到番号。
 - **DMM amateur titles** (`video.dmm.co.jp/amateur/content/?id=…`, such as `mfc288`) are recognized as title pages, so the panel shows their Peach status right away instead of only after scanning the page. / DMM 素人作品页（`video.dmm.co.jp/amateur/content/?id=…`，如 `mfc288`）按作品页识别，浮卡直接显示它在 Peach 的状态，不必先识别本页番号。
 
 [Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/8a79b31...main)
