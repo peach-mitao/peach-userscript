@@ -75,6 +75,10 @@
 
 `state` 为 `ingested` 且 `download.postprocess_state` 为 `failed` 时，按钮显示「重试整理」，向 `POST /api/jav-browser/postprocess` 发送 `{"code": "SSIS-057"}`。Peach 走任务中心「重试整理」的同一入口，返回状态查询同一结构，脚本接着跟踪整理进度。接口返回 404 或 405 的旧版 Peach 提示到任务中心重试，不改用其他请求。
 
+## 女优页订阅新作
+
+JavDB 演员页 `/actors/<id>`、DMM 女优片单 `/av/list/?actress=<编号>` 与旧版 `article=actress/id=<编号>`、MISSAV 女优页 `/actresses/<名字>` 上，入口面板顶部显示这位女优与「订阅新作」。脚本发 `GET /api/jav-browser/performer?source_url=<女优页>&names=<名字>`，`source_url` 去掉查询参数（DMM 只留 `actress`），`names` 只在 JavDB 页带上标题栏 `.actor-section-name` 的原文；返回 `{"ok": true, "name": "…", "entity_id": 8112, "following": false, "avatar": "data:image/jpeg;base64,…"}`，`entity_id` 为 `null` 表示 Peach 里还没有她。按钮发 `POST /api/jav-browser/performer`，正文 `{"source_url": "…", "names": [...], "enabled": true}`，返回同一结构。认人与新建的规则由 Peach 决定（Peach ADR-0143）：JavDB 与 DMM 页按站内编号，MISSAV 页只有名字时由 JavDB 确认是同一个人；订阅被拒时返回 400 与原因，脚本把原因写在面板上。Peach 认出这一页后入口面板自动展开，用户收起后这一页不再自动展开。接口返回 404 或 405 的旧版 Peach 不显示这一块，面板也不自动展开。
+
 ## 共享进度
 
 `GET /api/jav-browser/active` 使用同一专用令牌，无需番号，返回 `{"ok": true, "items": [...]}`。每项与状态查询同一结构，包括排队、搜索、云下载和入库后整理未结束的任务，以及最近 10 分钟内结束的任务，最多 200 项。不论任务从哪个窗口、浏览器或 Peach 界面添加，都会列出。
