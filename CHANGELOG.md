@@ -2,6 +2,17 @@
 
 Notable changes are grouped by version. English and Chinese describe the same behavior; source-only versions are marked explicitly. / 按版本记录面向使用者的变化；中英文保持事实一致，未单独发布的源码版本明确标注。
 
+## 0.7.2 — 2026-11-04
+
+Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
+
+### Changed / 变更
+
+- **Other tasks** fold and unfold with Peach's Collapse height transition, whether by clicking the heading or automatically. Opening a title's progress page slides it in while the panel height eases to fit, and the back button slides the panel home the other way. Reduced-motion settings switch instantly. / 「其他任务」展开、折叠时沿用 Peach Collapse 的高度过渡，点标题或自动折叠都一样；点开番号的进度页时进度页滑入、浮卡高度随之过渡，返回时反向滑回主页。系统设为减少动效时直接切换。
+- **Resubmitting**: a title whose cloud download Peach is resubmitting by itself, because the network drive did not answer at submission, shows 等待自动重新提交 and still counts as running. / 提交云下载时网盘没应答、Peach 正在自动重新提交的番号显示「等待自动重新提交」，仍算进行中。
+
+[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/v0.7.1...main)
+
 ## 0.7.1 — 2026-11-04
 
 Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。

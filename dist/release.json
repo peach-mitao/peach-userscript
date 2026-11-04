@@ -1,11 +1,11 @@
 {
-  "version": "0.7.1",
+  "version": "0.7.2",
   "site_schema_version": 1,
   "install_url": "/integrations/peach-jav.user.js",
   "bridge_min_version": "0.5.1",
   "repository": "https://github.com/peach-mitao/peach-userscript",
   "files": {
-    "peach-jav.user.js": "954420bed6c5ee3be36435f2043572bf1133f71588dacbb4f0a24cf3d1e5a3ab",
+    "peach-jav.user.js": "5819ca661b8899489a9dd675533d62eae7cb241465bb0cddeb04bb86b0218772",
     "jav-sites.json": "74983ac48fb8dda583bd066f7dce7fbc01834137a8be07f5cbe779dcfb7b83db"
   }
 }

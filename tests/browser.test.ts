@@ -1945,7 +1945,8 @@ describe('JAV 用户脚本', () => {
     const running = (code: string, state: State, download?: Body['download']): Body => ({ ...body(state, code), ...(download ? { download } : {}) });
     const opened = await open(browser, { initial: 'submitted', activeItems: [
       running('SSIS-057', 'submitted', { state: 'remote_running', label: '网盘下载中', progress: .4 }),
-      running('ABP-616', 'queued')], peopleItems: { 'ABP-616': [{ name: 'Alice' }] } });
+      running('ABP-616', 'queued'),
+      running('IPX-001', 'submitted', { state: 'submit_pending', label: '等待自动重新提交' })], peopleItems: { 'ABP-616': [{ name: 'Alice' }] } });
     const { page } = opened;
     try {
       await ready(page, '查询 Peach 状态');
@@ -1953,17 +1954,22 @@ describe('JAV 用户脚本', () => {
       assert.equal(JSON.parse(String(await page.evaluate(() => window.javMock.values['peach.jav.poller']))).visible, true);
       const shared = page.locator(ROOT).locator('.shared-tasks');
       const heading = shared.locator('.shared-heading');
-      assert.equal(await heading.textContent(), '其他任务 · 进行中 1 项');
-      // 本页番号还在抓取，其他任务默认折叠；点标题展开。
+      assert.equal(await heading.textContent(), '其他任务 · 进行中 2 项');
+      // 本页番号还在抓取，其他任务默认折叠；点标题展开，高度按 Peach Collapse 过渡。
       assert.equal(await heading.getAttribute('aria-expanded'), 'false');
       assert.equal(await shared.locator('.shared-list').isHidden(), true);
       await heading.click();
       assert.equal(await heading.getAttribute('aria-expanded'), 'true');
+      assert.equal(await shared.locator('.shared-body').evaluate(node => node.getAnimations().some(animation => animation instanceof CSSTransition)), true);
       await shared.locator('.shared-row .batch-person[title="Alice"]').waitFor();
-      assert.deepEqual(await shared.locator('.shared-code').allTextContents(), ['ABP-616']);
-      assert.equal(await shared.locator('.chip').textContent(), '排队中');
-      // 每项默认折叠成一行，点开进入该番号的进度页，返回回到浮卡主页。
+      assert.deepEqual(await shared.locator('.shared-code').allTextContents(), ['ABP-616', 'IPX-001']);
+      // 提交时网盘没应答、Peach 正在自动重新提交的任务仍算进行中。
+      assert.deepEqual(await shared.locator('.chip').allTextContents(), ['排队中', '待重新提交']);
+      // 每项默认折叠成一行，点开进入该番号的进度页，返回回到浮卡主页；切换时浮卡高度过渡、进来的一层滑入。
+      const panel = page.locator(ROOT).locator('.panel');
+      const moving = () => panel.evaluate(node => node.getAnimations({ subtree: true }).length);
       await shared.getByRole('button', { name: 'ABP-616，排队中，查看进度' }).click();
+      assert.ok(await moving() >= 2);
       const task = page.locator(ROOT).locator('.task-page');
       assert.equal(await task.locator('strong').textContent(), 'ABP-616');
       assert.equal(await task.locator('.batch-person').getAttribute('title'), 'Alice');
@@ -1972,8 +1978,12 @@ describe('JAV 用户脚本', () => {
       assert.equal(await page.locator(ROOT).locator('.panel > .body').isHidden(), true);
       await task.getByRole('button', { name: '返回 Peach 主页' }).click();
       assert.equal(await task.count(), 0);
+      assert.ok(await moving() >= 2);
       assert.equal(await page.locator(ROOT).locator('.panel > .body').isVisible(), true);
-      assert.equal(await shared.locator('.shared-row').evaluate(node => node.getRootNode().activeElement === node), true);
+      assert.equal(await shared.locator('.shared-row').first().evaluate(node => node.getRootNode().activeElement === node), true);
+      await heading.click();
+      assert.equal(await heading.getAttribute('aria-expanded'), 'false');
+      await shared.locator('.shared-list').waitFor({ state: 'hidden' });
       await page.clock.fastForward(20_000);
       assert.equal(await page.evaluate(() => window.javMock.calls.filter(call => call.method === 'GET').length), 1);
       await page.waitForFunction(root => /40%/.test(document.querySelector(root)!.shadowRoot!.querySelector('[aria-label="Peach 任务状态"]')!.textContent!), ROOT);

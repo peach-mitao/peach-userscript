@@ -12,7 +12,7 @@
 // @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
 // @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.7.1
+// @version      0.7.2
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -336,12 +336,14 @@
     .geist-button.launcher[data-count]{position:relative;overflow:visible}
     .geist-button.launcher[data-count]::after{content:attr(data-count);position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:9px;
       display:grid;place-items:center;background:var(--color-status-blue-background);color:var(--color-status-blue-text);font:var(--board-caption-semibold);box-shadow:0 0 0 2px var(--ground);pointer-events:none}
-    .shared-tasks{display:grid;gap:8px;min-width:0}.shared-heading{display:flex;align-items:center;gap:4px;width:fit-content;margin:0;padding:0;border:0;background:transparent;
+    .shared-tasks{min-width:0}.shared-heading{display:flex;align-items:center;gap:4px;width:fit-content;margin:0;padding:0;border:0;background:transparent;
       font:var(--board-caption-semibold);color:var(--muted);cursor:pointer}.shared-heading:hover{color:var(--ink)}
     .shared-heading:focus-visible{outline:2px solid var(--tungsten);outline-offset:2px;border-radius:4px}
     .shared-fold{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s ease}
     .shared-heading[aria-expanded=false] .shared-fold{transform:rotate(-90deg)}
-    .shared-list{list-style:none;margin:0;padding:0;display:grid;gap:4px;max-height:172px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
+    /* 折叠沿用 Peach Collapse（frontend/src/ui-kit/collapse.css）：过渡时裁边，展开停稳后摘掉，行的悬停底色才不被切。 */
+    .shared-body{display:flow-root;overflow:hidden;transition:height .2s ease-in-out}.shared-body.fold-settled{overflow:visible}
+    .shared-list{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:4px;max-height:172px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin}
     .shared-list li{min-width:0}.shared-row{display:flex;align-items:center;gap:8px;width:calc(100% + 16px);min-width:0;min-height:32px;margin:0 -8px;padding:4px 8px;border:0;border-radius:6px;
       background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;transition:background-color .15s ease}.shared-row:hover{background:var(--surface)}
     .shared-row:focus-visible{outline:2px solid var(--tungsten);outline-offset:-2px}
@@ -1360,6 +1362,7 @@
     if (body.state === 'failed') return ['failed', failureText(body), {magnet:'磁力失效', cloud:'网盘问题'}[body.cause] || '失败'];
     if (body.state === 'no_match') return ['no_match', failureText(body)];
     if (body.state === 'submitted' && ['remote_done', 'landed'].includes(download?.state)) return ['importing', download.label || '入库中'];
+    if (body.state === 'submitted' && download?.state === 'submit_pending') return ['submitted', '等待自动重新提交', '待重新提交'];
     if (body.state === 'submitted' && download?.state === 'remote_running' && typeof download.progress === 'number' && Number.isFinite(download.progress)) {
       const percent = Math.round(Math.min(1, Math.max(0, download.progress)) * 100);
       return ['submitted', `网盘下载中 ${percent}%`, `下载中 ${percent}%`];
@@ -2156,26 +2159,38 @@
 
   // 本页番号已有整体进度，这里只列其他番号：进行中的在前，最近 10 分钟结束的在后。
   // 每项一行，点开进入该番号的进度页。
+  // 标题与列表跨重绘保留，开合状态变了（点标题或自动条件变化）才播高度过渡。
   function paintSharedList(node) {
     const own = current && alive(current) && !current.identity.conflict ? comparisonKey(current.identity.code) : '';
     const items = sharedMode() ? sharedSnapshot.items.filter(body => comparisonKey(body.code) !== own) : [];
     node.hidden = !items.length;
-    const focused = node.getRootNode().activeElement?.closest?.('.shared-row,.shared-heading');
-    const focusKey = focused?.dataset.code || (focused ? 'heading' : '');
-    if (!items.length) { node.replaceChildren(); return; }
+    const focused = node.getRootNode().activeElement?.closest?.('.shared-row');
+    if (!items.length) { node.replaceChildren(); node.parts = null; return; }
     loadSharedPeople(items);
     const auto = items.length > SHARED_FOLD_LIMIT || Boolean(own && current && (current.tracking || current.busy));
     if (node.foldChoice && node.foldChoice.auto !== auto) node.foldChoice = null;
     const open = node.foldChoice ? node.foldChoice.open : !auto;
     const running = items.filter(tracking), ended = items.filter(body => !tracking(body));
-    const heading = element('button', 'shared-heading');
-    heading.type = 'button';
+    if (!node.parts) {
+      const heading = element('button', 'shared-heading'), label = element('span');
+      heading.type = 'button';
+      heading.append(label, chevronIcon('shared-fold', 'm6 9 6 6 6-6'));
+      heading.addEventListener('click', () => {
+        node.foldChoice = { auto: node.parts.auto, open: !node.parts.open };
+        paintSharedList(node);
+      });
+      const body = element('div', 'shared-body fold-settled'), list = element('ul', 'shared-list');
+      body.hidden = !open;
+      body.append(list);
+      node.replaceChildren(heading, body);
+      node.parts = { heading, label, body, list, open };
+    }
+    const { heading, label, body: fold, list } = node.parts;
+    label.textContent = running.length ? `其他任务 · 进行中 ${running.length} 项` : '其他任务 · 最近结束';
     heading.setAttribute('aria-expanded', String(open));
-    heading.append(element('span', '', running.length ? `其他任务 · 进行中 ${running.length} 项` : '其他任务 · 最近结束'),
-      chevronIcon('shared-fold', 'm6 9 6 6 6-6'));
-    heading.addEventListener('click', () => { node.foldChoice = { auto, open: !open }; paintSharedList(node); placeSurface(node.getRootNode().host); });
-    const list = element('ul', 'shared-list');
-    list.hidden = !open;
+    if (open !== node.parts.open) setFoldOpen(fold, open, () => placeSurface(node.getRootNode().host));
+    Object.assign(node.parts, { auto, open });
+    const rows = [];
     for (const body of [...running, ...ended].slice(0, 20)) {
       const row = element('button', 'shared-row'), status = element('span', 'chip');
       row.type = 'button'; row.dataset.code = body.code;
@@ -2183,11 +2198,43 @@
       setRowState({ row, status }, ...rowState(body));
       row.setAttribute('aria-label', `${body.code}，${status.textContent}，查看进度`);
       row.addEventListener('click', () => openTaskPage(node.closest('.panel'), body.code));
-      const item = element('li'); item.append(row); list.append(item);
+      const item = element('li'); item.append(row); rows.push(item);
     }
-    node.replaceChildren(heading, list);
-    if (focusKey === 'heading') heading.focus();
-    else if (focusKey) [...list.querySelectorAll('.shared-row')].find(row => row.dataset.code === focusKey)?.focus();
+    list.replaceChildren(...rows);
+    if (focused) [...list.querySelectorAll('.shared-row')].find(row => row.dataset.code === focused.dataset.code)?.focus();
+  }
+
+  // 折叠正文的高度过渡，与 Peach frontend/src/ui-kit/collapse.ts 的 setCollapseRegionOpen 同一做法：
+  // 量出起止高度写进 inline height，跑完交回自然高度；过渡途中又被反向点按时，前一次的收尾不再做。
+  const foldRuns = new WeakMap();
+  function setFoldOpen(body, open, place) {
+    const run = (foldRuns.get(body) || 0) + 1;
+    foldRuns.set(body, run);
+    const finish = done => {
+      let finished = false;
+      const end = event => {
+        if ((event && event.propertyName !== 'height') || finished) return;
+        finished = true; body.removeEventListener('transitionend', end); clearTimeout(timer);
+        if (foldRuns.get(body) === run) { done(); place(); }
+      };
+      body.addEventListener('transitionend', end);
+      // 减少动效时没有 transitionend，260ms 兜底。
+      const timer = setTimeout(end, 260);
+    };
+    body.classList.remove('fold-settled');
+    if (open) {
+      const start = body.hidden ? 0 : body.getBoundingClientRect().height;
+      body.hidden = false; body.inert = false;
+      body.style.height = `${start}px`; body.getBoundingClientRect();
+      body.style.height = `${body.scrollHeight}px`;
+      finish(() => { body.style.height = ''; body.classList.add('fold-settled'); });
+    } else {
+      body.inert = true;
+      body.style.height = `${body.getBoundingClientRect().height}px`; body.getBoundingClientRect();
+      body.style.height = '0px';
+      finish(() => { body.hidden = true; body.inert = false; body.style.height = ''; });
+    }
+    place();
   }
 
   // 其他任务的进度页：在同一张浮卡里替换主页，显示该番号的五段整体进度与状态说明；返回回到主页。
@@ -2222,21 +2269,44 @@
     });
     body.append(note, parts.flow, retry);
     page.append(bar, body);
-    for (const child of panel.children) if (!child.hidden) { child.hidden = true; child.dataset.taskHidden = ''; }
-    panel.append(page);
-    panel.taskPage = { page, code, note, people, retry, body: null, ...parts };
+    slidePanel(panel, 1, () => {
+      for (const child of panel.children) if (!child.hidden) { child.hidden = true; child.dataset.taskHidden = ''; }
+      panel.append(page);
+      panel.taskPage = { page, code, note, people, retry, body: null, ...parts };
+      paintTaskPage(panel);
+      return [page];
+    });
     back.addEventListener('click', () => closeTaskPage(panel, true));
-    paintTaskPage(panel);
     back.focus();
   }
 
+  // focus：用户点了返回，回到主页并播返回动效；切换面板模式时直接收起。
   function closeTaskPage(panel, focus = false) {
     const open = panel?.taskPage;
     if (!open) return;
-    open.page.remove(); panel.taskPage = null;
-    for (const child of panel.querySelectorAll(':scope > [data-task-hidden]')) { child.hidden = false; delete child.dataset.taskHidden; }
+    const restore = () => {
+      open.page.remove(); panel.taskPage = null;
+      const shown = [...panel.querySelectorAll(':scope > [data-task-hidden]')];
+      for (const child of shown) { child.hidden = false; delete child.dataset.taskHidden; }
+      return shown;
+    };
+    if (focus) slidePanel(panel, -1, restore);
+    else { panel.motion?.forEach(animation => animation.cancel()); restore(); }
     if (focus) [...panel.querySelectorAll('.shared-row')].find(row => row.dataset.code === open.code)?.focus();
     for (const root of surfaces) if (root.isConnected) placeSurface(root);
+  }
+
+  // 主页与进度页在同一张浮卡里切换：浮卡高度从旧值过渡到新值，进来的一层沿前进或返回方向滑入。
+  // 时长与缓动同浮卡展开（present）；浮卡按底边定位，高度变化向上长，不会跳位。
+  function slidePanel(panel, direction, change) {
+    const from = panel.getBoundingClientRect().height;
+    panel.motion?.forEach(animation => animation.cancel());
+    const entering = change();
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches || !from) return;
+    const to = panel.getBoundingClientRect().height, timing = { duration: 200, easing: 'ease-in-out' };
+    panel.motion = [panel.animate([{ height: `${from}px` }, { height: `${to}px` }], timing),
+      ...entering.map(node => node.animate([{ opacity: 0, transform: `translateX(${direction * 16}px)` },
+        { opacity: 1, transform: 'translateX(0)' }], timing))];
   }
 
   // 番号结束超过 10 分钟后会离开快照，进度页保留最后一次看到的状态。
@@ -2323,7 +2393,7 @@
   // 状态说明：下载任务的具体阶段、整理状态与百分比，失败时给出原因；浮卡与其他任务的进度页共用。
   function statusLabel(body) {
     const download = body.download;
-    const known = download && ['submitted', 'remote_running', 'remote_done', 'landed', 'ingested', 'failed', 'cancelled', 'stalled'].includes(download.state);
+    const known = download && ['submit_pending', 'submitted', 'remote_running', 'remote_done', 'landed', 'ingested', 'failed', 'cancelled', 'stalled'].includes(download.state);
     let label = body.stage === 'submitting' ? '正在提交网盘' : LABELS[body.state];
     if (known && typeof download.label === 'string') {
       label = download.label.slice(0, 80);
