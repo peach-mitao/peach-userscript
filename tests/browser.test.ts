@@ -2020,6 +2020,9 @@ describe('JAV 用户脚本', () => {
       await heading.click();
       assert.equal(await heading.getAttribute('aria-expanded'), 'true');
       assert.equal(await shared.locator('.shared-body').evaluate(node => node.getAnimations().some(animation => animation instanceof CSSTransition)), true);
+      // 列表的滚动条沿用 Peach 悬浮轨道，不画原生滚动条。
+      assert.equal(await shared.locator('.shared-list').evaluate(node => getComputedStyle(node).scrollbarWidth), 'none');
+      assert.equal(await shared.locator('.shared-body > .ovtrack.ov-y').count(), 1);
       await shared.locator('.shared-row .batch-person[title="Alice"]').waitFor();
       assert.deepEqual(await shared.locator('.shared-code').allTextContents(), ['ABP-616', 'IPX-001']);
       // 提交时网盘没应答、Peach 正在自动重新提交的任务仍算进行中。
