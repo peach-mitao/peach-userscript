@@ -2038,7 +2038,7 @@ describe('JAV 用户脚本', () => {
     } finally { await opened.close(); }
   });
 
-  it('共享进度：别的番号结束后一直留在其他任务里，直到关掉、点知道了或全部知道了', async () => {
+  it('共享进度：别的番号结束后一直留在其他任务里，直到逐条或全部标为已读', async () => {
     const ended = (code: string, state: State, key: string, dismissed = false): Body => ({ ...body(state, code), ended_key: key, dismissed,
       ...(state === 'ingested' ? { download: { state: 'ingested', label: '已入库', progress: 1, postprocess_state: 'complete', postprocess_label: '已整理' } } : {}) });
     const opened = await open(browser, { initial: 'owned', activeItems: [
@@ -2053,19 +2053,19 @@ describe('JAV 用户脚本', () => {
       assert.equal(await heading.textContent(), '其他任务 · 进行中 1 项 · 已结束 2 项');
       // 确认过的 JUR-112 不再列出。
       assert.deepEqual(await shared.locator('.shared-code').allTextContents(), ['MIDV-339', 'ABP-616', 'IPX-001']);
-      assert.equal(await shared.getByRole('button', { name: '关掉 MIDV-339' }).count(), 0);
-      await shared.getByRole('button', { name: '关掉 ABP-616' }).click();
+      assert.equal(await shared.getByRole('button', { name: '将 MIDV-339 标为已读' }).count(), 0);
+      await shared.getByRole('button', { name: '将 ABP-616 标为已读' }).click();
       assert.deepEqual(await page.evaluate(() => window.javMock.dismissals), [{ keys: ['11@2026-11-04T08:00:00+00:00'] }]);
       assert.deepEqual(await shared.locator('.shared-code').allTextContents(), ['MIDV-339', 'IPX-001']);
-      // 关掉后焦点落到下一行；Peach 的列表回来重绘时焦点仍留在这一行。
+      // 标为已读后焦点落到下一行；Peach 的列表回来重绘时焦点仍留在这一行。
       await page.waitForFunction(root => (document.querySelector(root)!.shadowRoot!.activeElement as HTMLElement | null)?.dataset.code === 'IPX-001', ROOT);
-      // 进度页的「知道了」确认后回到主页。
+      // 进度页的「标为已读」确认后回到主页。
       await shared.locator('.shared-row[data-code="IPX-001"]').click();
-      await root.locator('.task-page').getByRole('button', { name: '知道了' }).click();
+      await root.locator('.task-page').getByRole('button', { name: '标为已读' }).click();
       assert.equal(await root.locator('.task-page').count(), 0);
       assert.deepEqual(await page.evaluate(() => window.javMock.dismissals.at(-1)), { keys: ['12@2026-11-04T08:01:00+00:00'] });
       assert.deepEqual(await shared.locator('.shared-code').allTextContents(), ['MIDV-339']);
-      assert.equal(await shared.locator('.shared-clear').isHidden(), true);
+      assert.equal(await shared.getByRole('button', { name: '全部标为已读' }).isHidden(), true);
       // 都结束了还有没确认的：图标角标换成已结束的数量。
       await page.evaluate(() => { window.javMock.activeItems = [{ ok: true, code: 'MIDV-339', state: 'failed', message: 'failed',
         ended_key: '14@2026-11-04T08:02:00+00:00', dismissed: false } as never]; });
@@ -2075,7 +2075,7 @@ describe('JAV 用户脚本', () => {
       const launcher = root.locator('.launcher');
       assert.deepEqual(await launcher.evaluate(node => [node.dataset.count, node.dataset.countTone]), ['1', 'ended']);
       await launcher.press('Enter');
-      await shared.getByRole('button', { name: '全部知道了' }).click();
+      await shared.getByRole('button', { name: '全部标为已读' }).click();
       assert.deepEqual(await page.evaluate(() => window.javMock.dismissals.at(-1)), { all: true });
       assert.equal(await shared.isHidden(), true);
       // 旧版 Peach 没有确认接口：提示更新，任务照旧留在列表里。
@@ -2083,9 +2083,41 @@ describe('JAV 用户脚本', () => {
         message: 'failed', ended_key: '15@2026-11-04T08:03:00+00:00', dismissed: false } as never]; });
       await page.clock.fastForward(31_000);
       await shared.locator('.shared-row[data-code="ABW-123"]').waitFor();
-      await shared.getByRole('button', { name: '关掉 ABW-123' }).click();
+      await shared.getByRole('button', { name: '将 ABW-123 标为已读' }).click();
       await shared.getByRole('alert').filter({ hasText: 'Peach 尚不支持确认已结束的任务，请更新 Peach。' }).waitFor();
       await shared.locator('.shared-row[data-code="ABW-123"]').waitFor();
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
+  it('共享进度：重试失败项按失败原因逐项重试，进度页的重试按钮随原因改字', async () => {
+    const failed = (code: string, extra: Record<string, unknown>): Body => ({ ...body('failed', code), ended_key: `2${code.slice(-1)}@2026-11-04T08:00:00+00:00`, dismissed: false, ...extra });
+    const opened = await open(browser, { initial: 'owned', activeItems: [
+      failed('IPX-001', { cause: 'magnet', source_url: 'https://javdb.com/v/abc' }),
+      { ...body('no_match', 'ABW-123'), ended_key: '23@2026-11-04T08:00:00+00:00', dismissed: false },
+      { ...body('ingested', 'ABP-616'), ended_key: '26@2026-11-04T08:00:00+00:00', dismissed: false,
+        download: { state: 'ingested', label: '已入库', progress: 1, postprocess_state: 'failed', postprocess_label: '整理失败' } },
+      failed('JUR-112', { cause: 'cloud', source_url: 'https://missav.ws/en/jur-112' })] as Body[] });
+    const { page } = opened;
+    try {
+      const root = page.locator(ROOT), shared = root.locator('.shared-tasks');
+      await page.waitForFunction(root => document.querySelector(root)?.shadowRoot?.querySelector('.shared-row'), ROOT);
+      if (await shared.locator('.shared-heading').getAttribute('aria-expanded') === 'false') await shared.locator('.shared-heading').click();
+      // 进度页：磁力失效的换一个磁力，网盘问题的重试加入，整理失败的重试整理。
+      for (const [code, label] of [['IPX-001', '换一个磁力'], ['JUR-112', '重试加入'], ['ABP-616', '重试整理']]) {
+        await shared.locator(`.shared-row[data-code="${code}"]`).click();
+        assert.equal(await root.locator('.task-page').getByRole('button', { name: label }).isVisible(), true);
+        await root.locator('.task-page').getByRole('button', { name: '返回 Peach 主页' }).click();
+      }
+      await shared.getByRole('button', { name: '重试失败项' }).click();
+      await page.waitForFunction(() => window.javMock.calls.filter(call => call.method === 'POST').length === 4);
+      const posts = await page.evaluate(() => window.javMock.calls.filter(call => call.method === 'POST')
+        .map(call => [new URL(call.url).pathname, JSON.parse(call.data!)]));
+      assert.deepEqual(posts, [
+        ['/api/jav-browser', { code: 'IPX-001', source_url: 'https://javdb.com/v/abc', switch: true }],
+        ['/api/jav-browser', { code: 'ABW-123', manual: true }],
+        ['/api/jav-browser/postprocess', { code: 'ABP-616' }],
+        ['/api/jav-browser', { code: 'JUR-112', source_url: 'https://missav.ws/en/jur-112' }]]);
       assert.deepEqual(opened.problems, []);
     } finally { await opened.close(); }
   });

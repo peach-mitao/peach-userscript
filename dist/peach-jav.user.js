@@ -548,10 +548,10 @@
     .geist-button.launcher[data-count]::after{content:attr(data-count);position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:9px;
       display:grid;place-items:center;background:var(--color-status-blue-background);color:var(--color-status-blue-text);font:var(--board-caption-semibold);box-shadow:0 0 0 2px var(--ground);pointer-events:none}
     .geist-button.launcher[data-count-tone=ended]::after{background:var(--color-status-lime-background);color:var(--color-status-lime-text)}
-    .shared-note{margin:8px 0 0}.shared-foot{display:flex;justify-content:flex-end;margin-top:8px}.shared-foot:has(>[hidden]){display:none}
-    .shared-tasks{min-width:0}.shared-heading,.shared-clear{display:flex;align-items:center;gap:4px;width:fit-content;margin:0;padding:0;border:0;background:transparent;
-      font:var(--board-caption-semibold);color:var(--muted);cursor:pointer}.shared-heading:hover,.shared-clear:hover{color:var(--ink)}
-    .shared-heading:focus-visible,.shared-clear:focus-visible{outline:2px solid var(--tungsten);outline-offset:2px;border-radius:4px}
+    .shared-note{margin:8px 0 0}.shared-foot{display:flex;justify-content:flex-end;gap:16px;margin-top:8px}.shared-foot:not(:has(>:not([hidden]))){display:none}
+    .shared-tasks{min-width:0}.shared-heading,.shared-action{display:flex;align-items:center;gap:4px;width:fit-content;margin:0;padding:0;border:0;background:transparent;
+      font:var(--board-caption-semibold);color:var(--muted);cursor:pointer}.shared-heading:hover,.shared-action:hover{color:var(--ink)}.shared-action:disabled{opacity:.5;cursor:default}
+    .shared-heading:focus-visible,.shared-action:focus-visible{outline:2px solid var(--tungsten);outline-offset:2px;border-radius:4px}
     .shared-fold{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s ease}
     .shared-heading[aria-expanded=false] .shared-fold{transform:rotate(-90deg)}
     /* 折叠沿用 Peach Collapse（frontend/src/ui-kit/collapse.css）：过渡时裁边，展开停稳后摘掉，行的悬停底色才不被切。 */
@@ -2411,7 +2411,7 @@
   // 结束后等用户确认的任务：Peach 给了确认键的才能确认；旧版 Peach 没有，照旧 10 分钟后自行离开列表。
   const awaitingAck = body => !tracking(body) && typeof body.ended_key === 'string' && body.dismissed !== true;
 
-  // 进行中的在前，已结束的在后；每项一行，点开进入该番号的进度页，已结束的行尾可以关掉。
+  // 进行中的在前，已结束的在后；每项一行，点开进入该番号的进度页，已结束的行尾可以标为已读。
   // 标题与列表跨重绘保留，开合状态变了（点标题或自动条件变化）才播高度过渡。
   function paintSharedList(node) {
     const items = otherTasks();
@@ -2432,22 +2432,26 @@
         node.foldChoice = { auto: node.parts.auto, open: !node.parts.open };
         paintSharedList(node);
       });
-      const clear = element('button', 'shared-clear', '全部知道了');
+      const retryAll = element('button', 'shared-action', '重试失败项');
+      retryAll.type = 'button';
+      retryAll.addEventListener('click', () => void retryFailed(node));
+      const clear = element('button', 'shared-action', '全部标为已读');
       clear.type = 'button';
       clear.addEventListener('click', () => void acknowledgeEnded(node, { all: true }));
-      const foot = element('div', 'shared-foot'); foot.append(clear);
+      const foot = element('div', 'shared-foot'); foot.append(retryAll, clear);
       const note = element('p', 'geist-note shared-note');
       note.dataset.variant = 'error'; note.setAttribute('role', 'alert'); note.hidden = true;
       const body = element('div', 'shared-body fold-settled'), list = element('ul', 'shared-list');
       body.hidden = !open;
       body.append(list, foot);
       node.replaceChildren(heading, note, body);
-      node.parts = { heading, label, clear, note, body, list, open };
+      node.parts = { heading, label, retryAll, clear, note, body, list, open };
     }
-    const { heading, label, clear, body: fold, list } = node.parts;
+    const { heading, label, retryAll, clear, body: fold, list } = node.parts;
     label.textContent = ['其他任务', running.length ? `进行中 ${running.length} 项` : '', ended.length ? `已结束 ${ended.length} 项` : '']
       .filter(Boolean).join(' · ');
     clear.hidden = !ended.some(awaitingAck);
+    retryAll.hidden = !ended.some(retryableTask);
     heading.setAttribute('aria-expanded', String(open));
     if (open !== node.parts.open) setFoldOpen(fold, open, () => placeSurface(node.getRootNode().host));
     Object.assign(node.parts, { auto, open });
@@ -2461,9 +2465,9 @@
       row.addEventListener('click', () => openTaskPage(node.closest('.panel'), body.code));
       const item = element('li', 'shared-item'); item.append(row);
       if (awaitingAck(body)) {
-        const dismiss = control(`关掉 ${body.code}`, { icon: 'close' });
+        const dismiss = control(`将 ${body.code} 标为已读`, { icon: 'close' });
         dismiss.addEventListener('click', () => {
-          // 关掉后焦点交给下一行，最后一行交给上一行，列表空了交给标题。
+          // 标为已读后焦点交给下一行，最后一行交给上一行，列表空了交给标题。
           const next = (item.nextElementSibling || item.previousElementSibling)?.querySelector('.shared-row')?.dataset.code;
           void acknowledgeEnded(node, { keys: [body.ended_key] });
           ([...list.querySelectorAll('.shared-row')].find(row => row.dataset.code === next) || heading).focus();
@@ -2474,6 +2478,34 @@
     }
     list.replaceChildren(...rows);
     if (focused) [...list.querySelectorAll('.shared-row')].find(row => row.dataset.code === focused.dataset.code)?.focus();
+  }
+
+  // 失败的其他任务可以重试：入库后整理失败的走「重试整理」，其余按原来源重新加入，磁力本身的问题换一个磁力。
+  const retryableTask = body => !tracking(body) && (['failed', 'no_match'].includes(body.state) || organizeFailed(body));
+  const switchesMagnet = body => body.state === 'failed' && body.cause === 'magnet';
+  const retryLabel = body => organizeFailed(body) ? '重试整理' : switchesMagnet(body) ? '换一个磁力' : '重试加入';
+  function retryTask(config, body) {
+    if (organizeFailed(body)) return requestRetryOrganize(config, body.code);
+    return request(config, body.code, typeof body.source_url === 'string' ? body.source_url : '', 'POST', false,
+      switchesMagnet(body) ? { switch: true } : {});
+  }
+
+  // 列表底部「重试失败项」：逐项重试列出的失败任务，一项出错不影响其余，最后取一次新列表。
+  async function retryFailed(node) {
+    const config = configuration(), parts = node.parts;
+    if (!config || !parts || parts.retryAll.disabled) return;
+    const failed = otherTasks().filter(retryableTask).slice(0, 20);
+    parts.retryAll.disabled = true; parts.note.hidden = true;
+    let errors = 0, reason = '';
+    for (const body of failed) {
+      try { await retryTask(config, body); } catch (error) { errors++; reason = error.message; }
+    }
+    parts.retryAll.disabled = false;
+    await sharedTick(true);
+    if (errors && parts.note.isConnected) {
+      parts.note.textContent = `${errors} 项没有重试成功：${reason}`; parts.note.hidden = false;
+      placeSurface(parts.note.getRootNode().host);
+    }
   }
 
   // 确认已结束的任务。先在本地标为已确认并写进共享快照，各窗口立刻收起；Peach 返回的列表再作为新快照。
@@ -2546,22 +2578,23 @@
     const note = element('p', 'geist-note');
     note.setAttribute('role', 'status'); note.setAttribute('aria-live', 'polite'); note.setAttribute('aria-label', `${code} 的任务状态`);
     const parts = buildFlow();
-    const retry = control('重试整理');
+    // 失败的番号在进度页直接重试，按钮文字随失败原因变：重试整理、换一个磁力或重试加入。
+    const retry = control('重试加入');
     retry.hidden = true;
     retry.addEventListener('click', async () => {
-      const config = configuration();
-      if (!config || retry.disabled) return;
+      const config = configuration(), body = panel.taskPage?.body;
+      if (!config || !body || retry.disabled) return;
       retry.disabled = true;
       try {
-        const result = await requestRetryOrganize(config, code);
+        const result = await retryTask(config, body);
         if (panel.taskPage?.page === page) { panel.taskPage.body = result; paintTaskPage(panel); }
         void sharedTick(true);
       } catch (error) {
         if (panel.taskPage?.page === page) { note.textContent = error.message; note.dataset.variant = 'error'; }
       } finally { retry.disabled = false; }
     });
-    // 已结束、等确认的番号：知道了就确认并回到主页。
-    const ack = control('知道了');
+    // 已结束、等确认的番号：标为已读并回到主页。
+    const ack = control('标为已读');
     ack.hidden = true;
     ack.addEventListener('click', () => {
       const key = panel.taskPage?.body?.ended_key;
@@ -2571,7 +2604,7 @@
     });
     body.append(note, parts.flow, retry, ack);
     page.append(bar, body);
-    slidePanel(panel, 1, () => {
+    switchPanel(panel, () => {
       for (const child of panel.children) if (!child.hidden) { child.hidden = true; child.dataset.taskHidden = ''; }
       panel.append(page);
       panel.taskPage = { page, code, note, people, retry, ack, body: null, ...parts };
@@ -2592,7 +2625,7 @@
       for (const child of shown) { child.hidden = false; delete child.dataset.taskHidden; }
       return shown;
     };
-    if (focus) slidePanel(panel, -1, restore);
+    if (focus) switchPanel(panel, restore);
     else { panel.motion?.forEach(animation => animation.cancel()); restore(); }
     // 回到这一行；这一行已确认收起时回到「其他任务」标题。
     if (focus) ([...panel.querySelectorAll('.shared-row')].find(row => row.dataset.code === open.code)
@@ -2600,17 +2633,17 @@
     for (const root of surfaces) if (root.isConnected) placeSurface(root);
   }
 
-  // 主页与进度页在同一张浮卡里切换：浮卡高度从旧值过渡到新值，进来的一层沿前进或返回方向滑入。
-  // 时长与缓动同浮卡展开（present）；浮卡按底边定位，高度变化向上长，不会跳位。
-  function slidePanel(panel, direction, change) {
+  // 主页与进度页在同一张浮卡里切换：浮卡高度从旧值过渡到新值，进来的一层播 Peach 设置面板的
+  // board-dialog-in（缩放、模糊、淡入），时长与缓动同 --board-dialog-motion。浮卡按底边定位，高度变化向上长，不会跳位。
+  function switchPanel(panel, change) {
     const from = panel.getBoundingClientRect().height;
     panel.motion?.forEach(animation => animation.cancel());
     const entering = change();
     if (matchMedia('(prefers-reduced-motion: reduce)').matches || !from) return;
-    const to = panel.getBoundingClientRect().height, timing = { duration: 200, easing: 'ease-in-out' };
+    const to = panel.getBoundingClientRect().height, timing = { duration: 300, easing: 'cubic-bezier(.32,.72,0,1)' };
     panel.motion = [panel.animate([{ height: `${from}px` }, { height: `${to}px` }], timing),
-      ...entering.map(node => node.animate([{ opacity: 0, transform: `translateX(${direction * 16}px)` },
-        { opacity: 1, transform: 'translateX(0)' }], timing))];
+      ...entering.map(node => node.animate([{ opacity: 0, transform: 'scale(.85)', filter: 'blur(4px)' },
+        { opacity: 1, transform: 'scale(1)', filter: 'blur(0)' }], timing))];
   }
 
   // 番号确认过或由旧版 Peach 列出时，结束 10 分钟后离开快照，进度页保留最后一次看到的状态。
@@ -2627,7 +2660,8 @@
     }
     open.note.textContent = statusLabel(open.body);
     open.note.dataset.variant = statusVariant(open.body);
-    open.retry.hidden = !organizeFailed(open.body);
+    open.retry.hidden = !retryableTask(open.body);
+    open.retry.textContent = retryLabel(open.body);
     open.ack.hidden = !awaitingAck(open.body);
     for (const root of surfaces) if (root.isConnected) placeSurface(root);
   }
