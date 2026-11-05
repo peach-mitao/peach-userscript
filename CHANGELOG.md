@@ -2,13 +2,15 @@
 
 Notable changes are grouped by version. English and Chinese describe the same behavior; source-only versions are marked explicitly. / 按版本记录面向使用者的变化；中英文保持事实一致，未单独发布的源码版本明确标注。
 
+Entries are written for users to scan: one sentence each, saying where something changed and what you now see. Reasons, implementation, compatibility conditions and edge cases stay in commits and PRs. Changes to one feature become one entry, and within each group the bigger changes come first. The English part before ` / ` stays within 160 characters including spaces, and the Chinese part after it within 80 characters including punctuation; bold and code marks and link addresses are not counted, only the text they display. / 条目给使用者扫读：每条一句话，只写在哪儿看到了什么变化；原因、实现、兼容条件和边界情况留在提交与 PR。同一功能的几处改动合成一条，每组里影响大的排前面。` / ` 之前的英文部分不超过 160 个字符（含空格），之后的中文部分不超过 80 字（含标点）；加粗、代码标记和链接地址不计，只计显示出来的文字。
+
 ## 0.7.4 — 2026-11-05
 
 Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
 
 ### Fixed / 修复
 
-- **Other tasks** scroll with Peach's overlay scrollbar, the same one the page list and dialogs already use, instead of the browser's native bar; the list leaves room for the track only when it can scroll, so the close buttons stay clickable. / 「其他任务」列表的滚动条换成 Peach 的悬浮滚动条，与本页番号列表和弹窗一致，不再露出浏览器原生滚动条；只有能滚动时右侧才留出轨道位置，行尾的关闭键不会被压住。
+- **Other tasks** scroll with Peach's overlay scrollbar instead of the browser's native one. / 「其他任务」列表改用 Peach 的悬浮滚动条，不再露出浏览器原生滚动条。
 
 [Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/c7caa61...main)
 
@@ -18,17 +20,16 @@ Source only; release assets are not published yet. / 仅源码更新，尚未发
 
 ### Added / 新增
 
-- **Subscribe to new releases** from a performer's page on JavDB, DMM and MISSAV. The Peach panel names her with her avatar and offers 订阅新作; once subscribed it reads 取消订阅新作. JavDB and DMM pages are matched by the site ID in the address, and Peach adds her if she is not in the library yet; MISSAV pages only carry a name, so Peach subscribes her when it already knows her ID or when JavDB confirms a single person, and otherwise explains why on the panel. The panel opens by itself once Peach recognizes the page. Needs a Peach with `GET`/`POST /api/jav-browser/performer`; older versions show nothing new. / 在 JavDB、DMM、MISSAV 的女优页上订阅她的新作：Peach 面板显示她的头像和名字以及「订阅新作」，订阅后变成「取消订阅新作」。JavDB 与 DMM 页按地址里的站内编号认人，Peach 里还没有她时会新建；MISSAV 页只有名字，Peach 已有她的编号或 JavDB 确认是同一个人时才订，否则在面板上写明原因。Peach 认出这一页后面板自动展开。需要提供 `GET`/`POST /api/jav-browser/performer` 的 Peach；旧版不显示这一块。
-- **Open in Peach**: when Peach already has the title (owned or ingested) and reports its asset, the panel's main button reads 在 Peach 中打开 and opens the title's page in Peach in a new tab. / 馆藏已有或已入库、Peach 带回作品编号时，浮卡主按钮显示「在 Peach 中打开」，点了在新标签页打开 Peach 里这部作品的详情页。
+- **Performer pages** on JavDB, DMM and MISSAV let you subscribe to her new releases from the Peach panel. / JavDB、DMM、MISSAV 的女优页可以在 Peach 面板里订阅她的新作。
+- **Open in Peach**: when Peach already has the title, the panel's main button opens its page in Peach. / Peach 已有这部作品时，浮卡主按钮变成「在 Peach 中打开」，直达作品详情页。
 
 ### Changed / 变更
 
-- **Top-right buttons** are the same on every panel page except Settings and the page list: settings, fold and hide now also appear on the Peach panel of list and performer pages (whose separate Peach 设置 button moved there) and on a title's progress page. Folding that panel leaves only its title bar. / 右上角在设置页和本页番号以外的每一页都是同一组：列表页、女优页的 Peach 面板与番号进度页也有设置、折叠、隐藏三个按钮（面板里原来单独的「Peach 设置」移到这里）；折叠后只留标题栏。
+- **Top-right buttons** for settings, fold and hide now also appear on list and performer pages and on progress pages. / 列表页、女优页的 Peach 面板与番号进度页的右上角也有设置、折叠、隐藏。
 
 ### Fixed / 修复
 
-- **FC2 Contents Market** title pages (`adult.contents.fc2.com/article/<id>/`) are recognized automatically: the panel asks Peach, which turns the ID into `FC2-PPV-<id>`, instead of waiting for the code to be selected. Needs a Peach that knows this rule; older versions say the code could not be recognized. / FC2 内容市场的商品页（`adult.contents.fc2.com/article/<编号>/`）自动识别：浮卡交给 Peach 把编号换算成 `FC2-PPV-<编号>`，不必再选中番号。需要认得这条规则的 Peach；旧版会提示未识别到番号。
-- **DMM amateur titles** (`video.dmm.co.jp/amateur/content/?id=…`, such as `mfc288`) are recognized as title pages, so the panel shows their Peach status right away instead of only after scanning the page. / DMM 素人作品页（`video.dmm.co.jp/amateur/content/?id=…`，如 `mfc288`）按作品页识别，浮卡直接显示它在 Peach 的状态，不必先识别本页番号。
+- **Title pages** on FC2 Contents Market and DMM amateur titles are recognized right away, without selecting the code first. / FC2 内容市场与 DMM 素人的作品页直接识别番号，不必先选中或识别本页。
 
 [Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/8a79b31...main)
 
@@ -38,94 +39,93 @@ Source only; release assets are not published yet. / 仅源码更新，尚未发
 
 ### Added / 新增
 
-- **Finished tasks stay** under 其他任务 until you mark them as read, including ones that finished while every window was closed: use the close button on a row, 标为已读 on its progress page, or 全部标为已读 at the bottom of the list. The heading counts running and finished titles, and when nothing is running the minimized icon shows how many finished titles are unread. Needs a Peach that keeps finished browser tasks (`POST /api/jav-browser/dismiss`); older versions keep showing them for 10 minutes. / 别的页面添加的任务结束后一直留在「其他任务」里，窗口全关时结束的也在，直到标为已读：点行尾的关闭键、在进度页点「标为已读」，或点列表底部的「全部标为已读」。标题写出进行中与已结束的项数；没有进行中的任务时，收成图标的角标显示未读的已结束数量。需要会保留已结束任务的 Peach（`POST /api/jav-browser/dismiss`）；旧版照旧只显示 10 分钟。
-- **Retry failed tasks** from 其他任务: 重试失败项 at the bottom of the list retries every failed title, and a failed title's progress page offers the matching retry. Organizing failures retry organizing, broken magnets try another magnet, and other failures add the title again from its original page. / 在「其他任务」里重试失败的番号：列表底部的「重试失败项」逐项重试，失败番号的进度页也有对应的重试按钮。整理失败的重试整理，磁力失效的换一个磁力，其余从原来的网页重新加入。
+- **Other tasks** keep finished titles until you mark them as read, and the minimized icon counts the unread ones. / 「其他任务」里已结束的番号一直保留到标为已读，收成图标时角标显示未读数量。
+- **Retry failed tasks** from the bottom of 其他任务 or from a failed title's progress page. / 「其他任务」列表底部和失败番号的进度页都能重试失败的任务。
 
 ### Changed / 变更
 
-- **Other tasks** fold and unfold with Peach's Collapse height transition, whether by clicking the heading or automatically. Opening a title's progress page or going back plays the motion of Peach's settings panel while the panel height eases to fit. Reduced-motion settings switch instantly. / 「其他任务」展开、折叠时沿用 Peach Collapse 的高度过渡，点标题或自动折叠都一样；进出番号的进度页时播 Peach 设置面板的进场动效，浮卡高度随之过渡。系统设为减少动效时直接切换。
-- **Resubmitting**: a title whose cloud download Peach is resubmitting by itself, because the network drive did not answer at submission, shows 等待自动重新提交 and still counts as running. / 提交云下载时网盘没应答、Peach 正在自动重新提交的番号显示「等待自动重新提交」，仍算进行中。
+- **Resubmitting**: titles whose cloud download Peach is resubmitting by itself show 等待自动重新提交. / Peach 正在自动重新提交云下载的番号显示「等待自动重新提交」。
+- **Other tasks** fold, unfold and open progress pages with Peach's transitions. / 「其他任务」展开、折叠和进出进度页时沿用 Peach 的过渡动效。
 
 [Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/v0.7.1...main)
 
 ## 0.7.1 — 2026-11-04
 
-Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
-
 ### Added / 新增
 
-- **Retry organizing** when Peach reports that a downloaded title was ingested but organizing failed: the panel button and the progress page of another title both offer 重试整理, which hands the task back to Peach the same way the task center does and keeps tracking it. Older Peach versions without this endpoint get a note to retry from the Peach task center. / 入库后整理失败时可以直接重试：浮卡按钮和其他任务的进度页都显示「重试整理」，与 Peach 任务中心同一入口，点后接着跟踪进度。没有这个接口的旧版 Peach 会提示到 Peach 任务中心重试。
+- **Retry organizing** from the panel or another title's progress page when organizing fails after import. / 入库后整理失败时，浮卡和其他任务的进度页都能直接「重试整理」。
 
-[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/26ae5b9...main)
+[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/26ae5b9...v0.7.1)
 
 ## 0.7.0 — 2026-11-04
 
-Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
+Not published separately; included in 0.7.1. / 未单独发布，随 0.7.1 提供。
 
 ### Added / 新增
 
-- **Shared progress** across windows. With a Peach that lists running tasks (`GET /api/jav-browser/active`), one open page queries Peach for every task and the other pages show the same progress without their own requests; closing that page hands polling to another, and closed windows lose nothing because tasks keep running in Peach. The panel lists other running and recently finished titles under 其他任务, one row per title with its performers' avatars; clicking one opens its own five-stage progress page with a back button to the panel. The list folds itself when there are more than three titles or this page's own title is still in progress, and its heading folds or unfolds it by hand. The minimized icon shows how many are running, tracking no longer stops after an hour, and the success chime plays once instead of once per window. Older Peach versions keep per-page polling. / 各窗口共享任务进度。Peach 提供进行中任务列表（`GET /api/jav-browser/active`）时，只由一个打开的页面向 Peach 查询所有任务，其他页面直接显示同一份进度、不再各自请求；这个页面关闭后由别的页面接手，窗口全关了任务也照样在 Peach 继续。浮卡在「其他任务」下列出别的番号的进行中与最近结束的任务，每个番号一行并带人物头像，点开进入该番号的五段进度页，返回键回到浮卡主页；超过 3 项或本页番号还在抓取时列表自动折叠，点标题可手动展开或折叠；收成图标时角标显示进行中的数量；跟踪不再一小时后停止，成功提示音也只响一次，不再每个窗口各响一遍。旧版 Peach 照旧由各页面逐个查询。
+- **Shared progress**: open pages show the same task progress, tracking no longer stops after an hour, and the success chime plays once. / 多个窗口共享同一份任务进度，跟踪不再一小时后停止，成功提示音只响一次。
+- **Other tasks** on the panel list other titles, each with its own progress page, and the minimized icon counts running ones. / 浮卡的「其他任务」列出别的番号，点开看各自的进度页；收成图标时角标显示进行中的数量。
 
-[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/e7b9813...main)
+[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/e7b9813...26ae5b9)
 
 ## 0.6.12 — 2026-11-04
 
-Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
+Not published separately; included in 0.7.1. / 未单独发布，随 0.7.1 提供。
 
 ### Changed / 变更
 
-- **Panel** can be dragged by any empty area while expanded or collapsed, not only as the minimized icon. Buttons, links and form fields still click normally, and the position is shared with the icon. / 浮卡展开或折叠时按住任意空白处都能拖动，不再只有收成图标时能拖；按钮、链接和表单控件照常点击，位置与图标共用。
+- **Panel** can be dragged by any empty area, not only as the minimized icon. / 浮卡按住任意空白处都能拖动，不再只有收成图标时能拖。
 
-[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/1363343...main)
+[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/1363343...e7b9813)
 
 ## 0.6.11 — 2026-11-03
 
-Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
+Not published separately; included in 0.7.1. / 未单独发布，随 0.7.1 提供。
 
 ### Fixed / 修复
 
-- **Panels** switch to Settings and the page list with Peach's settings-panel enter and exit motion (BoardUI dialog motion), playing on both layers at once instead of hiding the panel first and fading the new view in from nothing, so switching no longer flashes. Returning brings the panel back as the subpage leaves, and the page list now leaves like Settings. / 浮卡与设置、本页番号切换时改用 Peach 设置面板的进出场动效（BoardUI 弹层动效），两层同时进出，不再先瞬间隐藏浮卡、再让新界面从全透明出现，切换不再闪一下；返回时子页一开始退场浮卡就进场，本页番号的返回也和设置一样退场。
-- **Page list** no longer treats reviewer names followed by an honorific (`qwert-02さん` on MGS reviews) as release codes. Local performer lookups also match codes Peach pads (`ABC-12` → `ABC-012`) instead of reporting the local data as invalid. / 本页番号不再把后面跟着敬称的评论署名（MGS 评论里的 `qwert-02さん`）当成番号；Peach 补零后的番号（`ABC-12` → `ABC-012`）也能对上本地人物资料，不再提示「本地女优资料格式无效」。
-- **Sound** plays the success chime only after the download has been ingested and organizing has finished, not while organizing is still running. / 成功提示音等入库并整理完成后才响，不再在刚入库、还在整理时就响。
+- **Page list** no longer reads reviewer names such as `qwert-02さん` as codes, and padded codes match local performer data. / 本页番号不再把 `qwert-02さん` 这类评论署名当成番号，补零后的番号也能对上本地人物资料。
+- **Switching** to Settings or the page list no longer flashes. / 切换到设置或本页番号时不再闪一下。
+- **Sound**: the success chime waits until organizing has finished. / 成功提示音等整理完成后才响。
 
-[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/b47e32f...main)
+[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/b47e32f...1363343)
 
 ## 0.6.10 — 2026-11-01
 
-Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
+Not published separately; included in 0.7.1. / 未单独发布，随 0.7.1 提供。
 
 ### Fixed / 修复
 
-- **MGS** SOD pages such as `107STZY-019` accept the release code Peach returns without the store prefix (`STZY-019`), so owned titles show as owned and magnet searches use the code the library and indexes know. The page list no longer shows the prefixed form as a second row. / MGS 的 SOD 商品页（如 `107STZY-019`）接受 Peach 去掉店铺前缀后返回的番号 `STZY-019`，已入库作品显示「已有」，磁力搜索使用账本与索引站的写法；本页番号不再把带前缀写法单列一行。
+- **MGS** SOD pages such as `107STZY-019` show owned titles as owned and search magnets without the store prefix. / MGS 的 SOD 商品页（如 `107STZY-019`）正确显示「已有」，磁力搜索改用不带店铺前缀的番号。
 
-[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/57f2ecc...main)
+[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/57f2ecc...576adc7)
 
 ## 0.6.9 — 2026-10-30
 
-Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
+Not published separately; included in 0.7.1. / 未单独发布，随 0.7.1 提供。
 
 ### Changed / 变更
 
-- **Updates** offer a page refresh after opening the installer. Returning to the page rechecks the installed version; only a confirmed newer installation is shown as updated. / 打开更新安装入口后提供「刷新本页」。返回页面时重新核对已安装版本，只有确认安装了新版本才显示「已更新」。
+- **Updates** offer a page refresh after opening the installer and show 已更新 only once the newer version is installed. / 打开更新安装入口后提供「刷新本页」，确认装上新版本才显示「已更新」。
 
-[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/280c4e67d5e87af7ba1901cda7a5195978023c40...main)
+[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/280c4e6...57f2ecc)
 
 ## 0.6.8 — 2026-10-30
 
-Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
+Not published separately; included in 0.7.1. / 未单独发布，随 0.7.1 提供。
 
 ### Fixed / 修复
 
-- **Page list** reads each title's Peach status before enabling add actions. Owned titles and active tasks no longer appear as pending or count toward **Add all**; active tasks keep updating, and unavailable status is shown explicitly. / 「本页番号」先查询每部作品的 Peach 状态，再开放加入操作。已有影片与进行中任务不再显示「待加入」或计入「全部加入」；进行中任务继续更新，查询失败明确显示「未取得」。
+- **Page list** no longer counts owned titles or running tasks as pending or toward **Add all**. / 「本页番号」不再把已有影片和进行中任务算作「待加入」或计入「全部加入」。
 
-[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/v0.6.7...main)
+[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/v0.6.7...280c4e6)
 
 ## 0.6.7 — 2026-10-28
 
 ### Changed / 变更
 
-- **Launcher** on pages without a single title, such as the JavDB home page, opens a small panel with **Scan this page** and **Settings** instead of jumping straight into the page list; going back from the list returns to that panel. / 没有单部作品的页面（如 JavDB 首页）点图标先展开入口面板，内含「识别本页全部番号」和设置，不再直接进入本页番号；从本页番号返回时回到面板。
-- **Card** drops the “可以加入 Peach 馆藏” line; the button already says it, and shows the reason when adding is not possible. / 浮卡去掉「可以加入 Peach 馆藏」这行，按钮本身已说明，不能加入时按钮会给出原因。
+- **Launcher** on pages without a single title, such as the JavDB home page, opens a small panel instead of the page list. / 没有单部作品的页面（如 JavDB 首页）点图标先展开入口面板，不再直接进入本页番号。
+- **Card** drops the “可以加入 Peach 馆藏” line, since the button already says it. / 浮卡去掉「可以加入 Peach 馆藏」这行，按钮本身已说明。
 - **Settings** and the page list scroll with the same overlay scrollbar as the table. / 设置页与本页番号的弹窗主体改用与表格相同的覆盖滚动条。
 
 ### Fixed / 修复
@@ -139,34 +139,30 @@ Source only; release assets are not published yet. / 仅源码更新，尚未发
 
 ### Changed / 变更
 
-- **Update** opens the Sleazy install file directly, so the userscript manager shows the update prompt instead of the script page. / 「更新用户脚本」直接打开 Sleazy 安装文件，脚本管理器随即弹出更新确认，不再跳到脚本主页。
+- **Update** opens the Sleazy install file directly, so the userscript manager shows the update prompt. / 「更新用户脚本」直接打开 Sleazy 安装文件，脚本管理器随即弹出更新确认。
 - **Settings** keep only the hints needed to pair and to turn the icon back on. / 设置页只保留配对和恢复图标所需的提示。
 
 ### Fixed / 修复
 
-- With a Peach release newer than 0.51.0 (from 2026-10-28 evening), switching magnets searches every source instead of stopping at the first high-definition result, and performer avatars are framed on the detected face like Peach's own avatars. / 配合 2026-10-28 晚间之后的 Peach，换磁力时会查完所有来源，不再在第一条高清结果处提前结束；人物头像按人脸取景，与 Peach 一致。
+- **Magnet switching** searches every source instead of stopping at the first high-definition result. / 换磁力时查完所有来源，不再停在第一条高清结果。
+- **Performer avatars** are framed on the face, like Peach's own. / 人物头像按人脸取景，与 Peach 一致。
 
 [Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/v0.6.5...v0.6.6)
 
 ## 0.6.5 — 2026-10-28
 
-### Fixed / 修复
-
-- Page-wide scans accept only codes written with a separator, matching Peach's validation. Usernames, navigation labels and domains such as `jay925`, `TOP250` and `hhd800.com` are no longer listed as codes. / 整页扫描只收原文带分隔符的番号，与 Peach 校验一致；`jay925`、`TOP250`、`hhd800.com` 这类用户名、导航与域名不再列为番号。
-- Long page-code lists keep a maximum height and scroll inside the table with a fixed header, using Peach's overlay scrollbar. / 本页番号较多时表格限高，用 Peach 的覆盖滚动条在表内滚动并保留表头。
-- Row statuses use short Board UI chips with Peach's status colors; the full message stays in the tooltip, and handled rows are unchecked. / 行状态改为 Board UI 短标签与 Peach 状态配色，完整说明放在悬停提示，已处理的行取消勾选。
-
 ### Added / 新增
 
-- Statuses refresh automatically after submission for up to an hour, including download progress in the page-code list. / 提交后自动刷新状态，最长一小时，本页列表也显示下载进度。
-- Failures say whether the magnet or the cloud drive is at fault. A failed magnet can be switched for the next one from the card or by adding the row again. / 失败时区分磁力问题与网盘问题；磁力失效可在浮卡或再次加入时换一个磁力。
-- Performers listed on the detail page are matched with Peach's local people, so titles outside the library show performer avatars. / 详情页的出演者与 Peach 本地人物匹配，馆藏外的作品也能显示头像。
-- The card title shows performer avatars, stacked like Peach's title cards with the same hover spread; rescanning spins its icon. / 浮卡标题显示人物头像，沿用 Peach 作品卡的叠放与悬停展开；重新识别时图标旋转。
-- Adding plays Peach's rising start tone, and each title that finishes importing plays Peach's success chime; both can be turned off in settings. / 点加入时播放 Peach 的上扬开始音，每部影片完成入库时播放 Peach 的成功音效，均可在设置中关闭。
+- **Statuses** refresh automatically for up to an hour after submission, with download progress in the page list. / 提交后自动刷新状态，最长一小时，本页番号也显示下载进度。
+- **Failures** say whether the magnet or the cloud drive is at fault, and a failed magnet can be switched for the next one. / 失败时区分磁力问题与网盘问题，磁力失效可以换下一个。
+- **Performer avatars** appear on the card title, including for titles outside the library. / 浮卡标题显示人物头像，馆藏外的作品也按 Peach 本地人物匹配出头像。
+- **Sounds**: adding plays Peach's start tone and each finished import plays its success chime; both can be turned off. / 点加入时播放 Peach 的开始音，每部影片入库完成时播放成功音效，都能在设置里关闭。
 
-### Compatibility / 兼容性
+### Fixed / 修复
 
-- Magnet switching, failure causes and performer matching need a Peach release newer than 0.51.0; Peach 0.51.0 and earlier ignore the new fields and keep retrying the same magnet. / 换磁力、失败原因与出演者匹配需要 0.51.0 之后的 Peach 版本；0.51.0 及更早版本忽略新字段，重试仍使用原磁力。
+- **Page scans** accept only codes written with a separator, so names like `jay925` or `hhd800.com` are no longer listed. / 整页扫描只收带分隔符的番号，`jay925`、`hhd800.com` 这类用户名和域名不再列出。
+- **Page list** keeps its header fixed and scrolls inside the table when long. / 本页番号较多时表格限高，表头固定、表内滚动。
+- **Row statuses** use short chips in Peach's status colors, with the full message on hover. / 行状态改为 Peach 配色的短标签，完整说明放在悬停提示。
 
 [Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/v0.6.4...v0.6.5)
 
@@ -174,8 +170,8 @@ Source only; release assets are not published yet. / 仅源码更新，尚未发
 
 ### Fixed / 修复
 
-- Declare the script author and the Peach icon, so userscript managers and Sleazy show them instead of a blank author and the default icon. / 声明脚本作者与 Peach 图标，脚本管理器与 Sleazy 不再显示空作者和默认图标。
-- Setup now links the Tampermonkey permission guide for Chromium browsers. / 配置步骤补充 Chromium 浏览器的 Tampermonkey 权限设置说明。
+- **Author and icon** are declared, so userscript managers and Sleazy no longer show a blank author and the default icon. / 声明脚本作者与 Peach 图标，脚本管理器与 Sleazy 不再显示空作者和默认图标。
+- **Setup** links the Tampermonkey permission guide for Chromium browsers. / 配置步骤补充 Chromium 浏览器的 Tampermonkey 权限设置说明。
 
 [Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/v0.6.3...v0.6.4)
 
@@ -183,12 +179,8 @@ Source only; release assets are not published yet. / 仅源码更新，尚未发
 
 ### Changed / 变更
 
-- Use English as the default script name and description, so Sleazy shows Peach Userscript, Peach 用户脚本 and Peach 使用者腳本 on the matching language pages. / 默认脚本名与简介改为英文，Sleazy 的英文、简体中文、繁体中文页面分别显示 Peach Userscript、Peach 用户脚本、Peach 使用者腳本。
-- Sleazy now syncs the script from the latest GitHub Release and the descriptions from this repository. / Sleazy 改为从最新 GitHub Release 同步脚本，从本仓库同步说明。
-
-### Compatibility / 兼容性
-
-- The update check accepts both the new and the previous name. Installs of 0.6.2 or earlier show the Sleazy source as unavailable in **Check for updates** until the userscript manager updates them. / 更新检查同时接受新旧名称。0.6.2 及更早的安装在脚本管理器自动升级前，「检查更新」中的 Sleazy 来源显示未取得。
+- **Script name** defaults to English, and Sleazy shows the name in each page's language. / 默认脚本名改为英文，Sleazy 按页面语言显示对应名称。
+- **Sleazy** syncs the script from the latest GitHub Release. / Sleazy 改为从最新 GitHub Release 同步脚本。
 
 [Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/v0.6.2...v0.6.3)
 
@@ -196,7 +188,7 @@ Source only; release assets are not published yet. / 仅源码更新，尚未发
 
 ### Fixed / 修复
 
-- Provide a description for every localized script name, satisfying Sleazy's publication validation. / 为每个本地化脚本名称提供对应语言的简介，满足 Sleazy 发布校验。
+- **Sleazy** accepts the release now that every localized name has a description. / 每个本地化脚本名都有对应语言的简介，通过 Sleazy 发布校验。
 
 [Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/v0.6.1...v0.6.2)
 
@@ -206,14 +198,15 @@ Published on GitHub; not published on Sleazy because a localized description was
 
 ### Fixed / 修复
 
-- Compare Sleazy and the paired Peach bundle numerically, select the newer source, and prefer Sleazy on equal versions. One failed source does not discard a successful result. / 比较 Sleazy 与已配对 Peach 随附脚本的版本，采用较新来源；同版本优先 Sleazy，一端失败不丢弃另一端结果。
-- Declare Sleazy update and download URLs for scripts installed from Peach. / 从 Peach 安装的脚本也声明 Sleazy 自动更新与下载地址。
-- Exclude single-digit device labels such as PS4 and PS5 from page scans. Reuse Peach's resolved DMM identity, including when the initial detail query is pending. / 整页扫描排除 PS4、PS5 等单数字设备名；首次详情查询未完成时也先取得 Peach 解析的 DMM 规范番号。
+- **Check for updates** compares Sleazy with Peach's bundled script and offers the newer one. / 「检查更新」比较 Sleazy 与 Peach 随附脚本，采用较新的版本。
+- **Scripts installed from Peach** also update automatically from Sleazy. / 从 Peach 安装的脚本也从 Sleazy 自动更新。
+- **DMM** pages use the code Peach resolves, even before the first detail query finishes. / DMM 页面在首次详情查询完成前也使用 Peach 解析的规范番号。
+- **Page scans** skip device names such as PS4 and PS5. / 整页扫描不再把 PS4、PS5 等设备名当成番号。
 
 ### Changed / 变更
 
-- Publish separate English and Chinese descriptions and maintain a bilingual version history. / 发布独立的中英文说明，并维护双语版本历史。
-- Unify the public name as Peach Userscript / Peach 用户脚本 through localized metadata, retaining the original installation identity for existing update checks. / 通过本地化元数据将对外名称统一为 Peach 用户脚本 / Peach Userscript，保留旧安装身份以兼容既有更新检查。
+- **Name**: the script is called Peach Userscript everywhere, and existing installs keep updating. / 对外名称统一为 Peach 用户脚本，旧安装照常更新。
+- **Descriptions** are published separately in English and Chinese, with a bilingual version history. / 发布独立的中英文说明，并维护双语版本历史。
 
 [Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/v0.3.0...v0.6.1)
 
@@ -221,9 +214,9 @@ Published on GitHub; not published on Sleazy because a localized description was
 
 Not published separately on Sleazy; included in 0.6.1. / 未单独发布到 Sleazy，随 0.6.1 提供。
 
-- Add page-wide code selection, select-all and batch submission. / 支持整页番号识别、多选、全选与批量提交。
-- Sync Peach's theme and accent, remember the draggable launcher position, and offer always-visible, JAV-only and fully hidden modes. / 同步 Peach 深浅色与强调色，记住可拖动图标的位置，提供常驻、仅 JAV 站点和彻底关闭图标选项。
-- Align settings, table selection, avatars and progress-stage animations with Peach. / 对齐设置、表格选择、头像和各任务阶段动画。
+- **Page scans**: select codes across the page, select all and submit them in a batch. / 整页识别番号，可多选、全选并批量提交。
+- **Launcher** follows Peach's theme and accent, remembers where you drag it, and can show always, only on JAV sites or never. / 图标同步 Peach 深浅色与强调色，记住拖动位置，可常驻、仅在 JAV 站点显示或彻底关闭。
+- **Settings**, table selection, avatars and stage animations match Peach. / 设置、表格选择、头像和各阶段动画与 Peach 对齐。
 
 [Source changes / 源码变更](https://github.com/peach-mitao/peach-userscript/compare/74dd91b9e3e91b00bc4d75d1ad119fe3f7e95ba5...5aa16f5f706318892187f1324d30a7cc43201adc)
 
@@ -231,28 +224,28 @@ Not published separately on Sleazy; included in 0.6.1. / 未单独发布到 Slea
 
 Bundled with Peach 0.50.0; not published separately on Sleazy. / 随 Peach 0.50.0 分发，未单独发布到 Sleazy。
 
-- Add independent Sleazy release checks, Peach release checks, daily automatic checks and refresh prompts after installation. / 增加独立 Sleazy 发行检查、Peach 发行检查、每日自动检查与安装后的刷新提示。
-- Keep task-state announcements separate from update announcements. / 任务状态与更新提示分别播报。
+- **Update checks** look at Sleazy and Peach releases separately, run daily and prompt a refresh after installing. / 分别检查 Sleazy 与 Peach 发行版本，每日自动检查，安装后提示刷新。
+- **Announcements** for task status and updates are kept apart. / 任务状态与更新提示分别播报。
 
 ## 0.5.1 — 2026-10-25
 
-- Show queue, search, download, import and organization stages with available download progress. Stop polling after organization completes. / 显示排队、搜索、下载、入库和整理阶段及可取得的下载进度；整理完成后停止轮询。
-- Support compact, collapsed and minimized views, and send restricted error reports only to the user's Peach instance. / 支持紧凑、折叠和图标视图；受限错误报告仅发送到用户自己的 Peach。
-- The backend progress and timeout fixes are included in Peach 0.50.0. The original release's “package pending” notice described its publication-time status. / 后端进度与超时修复已包含在 Peach 0.50.0；原发布记录中的「安装包待发布」是当时的发布状态。
+- **Progress** shows the queue, search, download, import and organizing stages, with download progress when available. / 显示排队、搜索、下载、入库和整理各阶段，能取得时显示下载进度。
+- **Views**: the panel can be compact, collapsed or minimized. / 浮卡支持紧凑、折叠和图标三种视图。
+- **Error reports** are restricted and go only to your own Peach. / 受限的错误报告只发送到你自己的 Peach。
 
 ## 0.5.0 — 2026-10-25
 
-- Validate DMM / FANZA maker codes against product URLs, preserve MGS publisher prefixes and suffix letters, and recognize Kirari and date-based codes. / 联合校验 DMM／FANZA 厂家番号与商品地址，保留 MGS 发行前缀与尾字母，补齐 Kirari 和日期式番号。
-- Distinguish HTTP service failures, unsupported interfaces, rate limits and invalid identities. / 区分服务故障、接口不兼容、限流与身份无效。
+- **Code recognition** checks DMM and FANZA maker codes against product URLs, keeps MGS prefixes and suffixes, and adds Kirari and date codes. / 番号识别对照商品地址校验 DMM／FANZA 厂家番号，保留 MGS 前缀与尾字母，补上 Kirari 和日期式番号。
+- **Errors** tell service failures, unsupported interfaces, rate limits and invalid identities apart. / 区分服务故障、接口不兼容、限流与身份无效。
 
 ## 0.4.0 — 2026-10-20
 
-- Align the settings dialog and library controls with Peach; support pasted pairing information and installation detection. / 对齐 Peach 设置与馆藏控件，支持粘贴配对信息和安装检测。
-- Resolve DMM and MGS product identities through Peach and add reviewed mirror domains. / 通过 Peach 识别 DMM、MGS 商品身份，补充已复核镜像。
+- **Settings** and library controls match Peach, and pairing accepts pasted details and detects the installation. / 设置与馆藏控件与 Peach 对齐，配对支持粘贴信息并检测安装。
+- **DMM and MGS** products are identified through Peach, and reviewed mirror domains are added. / 通过 Peach 识别 DMM、MGS 商品身份，补充已复核的镜像站。
 
 ## 0.3.0 — 2026-10-18 — Initial release / 初始发布
 
-- Detect or submit selected video codes, query library status, and hand download/import tasks to Peach. / 识别或提交选中的影片编号，查询馆藏状态，并交给 Peach 下载入库。
-- Publish the site-rule manifest, deterministic build, candidate-review tooling and Peach export artifacts. / 提供站点规则清单、确定性构建、候选复核工具与 Peach 同步制品。
+- **Video codes** on the page or in a selection are detected, checked against the library and handed to Peach to download. / 识别页面或选中的影片编号，查询馆藏状态，交给 Peach 下载入库。
+- **Site rules** ship as a manifest with a reproducible build and Peach export files. / 提供站点规则清单、可复现构建与 Peach 同步制品。
 
 [Initial source history / 初始源码历史](https://github.com/peach-mitao/peach-userscript/commits/v0.3.0)
