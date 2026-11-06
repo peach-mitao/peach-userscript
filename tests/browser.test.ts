@@ -17,6 +17,7 @@ const BASE = 'https://peach.example.invalid';
 const ROOT = '#peach-jav-action';
 type State = 'idle' | 'queued' | 'searching' | 'submitted' | 'ingested' | 'owned' | 'failed' | 'no_match';
 type Body = { ok: boolean; code: string; state: State; message: string; stage?: string; ended_key?: string; dismissed?: boolean;
+  retry_at?: string; retry_attempt?: number; retry_limit?: number; retry_exhausted?: boolean;
   download?: { state: string; label: string; phase?: string; progress: number | null; postprocess_state?: string; postprocess_label?: string } };
 type Call = { method: string; url: string; headers: Record<string, string>; anonymous: boolean; data?: string };
 type MockRequest = Call & { onload(value: unknown): void; ontimeout(): void; onerror(): void; onabort?(): void };
@@ -1961,7 +1962,7 @@ describe('JAV 用户脚本', () => {
       await page.mouse.move(box.x+24,box.y+24);await page.mouse.down();
       await page.mouse.move(box.x-100,box.y-100,{steps:6});await page.mouse.up();
       const position=await page.evaluate(()=>JSON.parse(String(window.javMock.values['peach.jav.position'])));
-      assert.equal(position.version,1);
+      assert.equal(position.version,2);
       assert.ok(position.right>0 && position.bottom>0);
       const moved=await page.locator(ROOT).boundingBox();
       assert.ok(moved && moved.x<box.x-50 && moved.y<box.y-50);
@@ -1998,6 +1999,52 @@ describe('JAV 用户脚本', () => {
       await add.click();
       await page.waitForFunction(()=>window.javMock.calls.some(call=>call.method==='POST'));
     } finally {await opened.close();}
+  });
+
+  it('浮窗与图标跨窗口保留距右下角的距离，缩小窗口只限制显示位置而不覆盖记录', async () => {
+    const saved = JSON.stringify({ version: 2, right: 64, bottom: 72 });
+    const windows = await Promise.all([open(browser, { updateValues: { 'peach.jav.position': saved } }),
+      open(browser, { updateValues: { 'peach.jav.position': saved } })]);
+    try {
+      await windows[1]!.page.setViewportSize({ width: 900, height: 700 });
+      for (const { page } of windows) {
+        await ready(page);
+        const root = page.locator(ROOT);
+        const gap = () => root.evaluate(node => { const box = node.getBoundingClientRect();
+          return { right: document.documentElement.clientWidth - box.right, bottom: innerHeight - box.bottom }; });
+        const assertGap = async () => { const value = await gap(); assert.ok(Math.abs(value.right - 64) < 1); assert.ok(Math.abs(value.bottom - 72) < 1); };
+        await assertGap();
+        await root.getByRole('button', { name: '隐藏 Peach 面板' }).click();
+        await page.clock.fastForward(300);
+        await assertGap();
+        const updated = JSON.stringify({ version: 2, right: 28, bottom: 32 });
+        await page.evaluate(value => window.javMock.changed('peach.jav.position', value, true), updated);
+        const remoteGap = await gap();
+        assert.ok(Math.abs(remoteGap.right - 28) < 1 && Math.abs(remoteGap.bottom - 32) < 1);
+        await page.setViewportSize({ width: 390, height: 220 });
+        await page.clock.fastForward(300);
+        assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.position']), updated);
+        await page.setViewportSize({ width: 1280, height: 900 });
+        await page.clock.fastForward(300);
+        const restored = await gap();
+        assert.ok(Math.abs(restored.right - 28) < 1 && Math.abs(restored.bottom - 32) < 1);
+      }
+    } finally { for (const opened of windows) await opened.close(); }
+  });
+
+  it('原有比例位置按当前窗口转换一次，后续窗口缩放保持转换后的边距', async () => {
+    const opened = await open(browser, { updateValues: { 'peach.jav.position': JSON.stringify({ version: 1, right: .1, bottom: .1 }) } });
+    const { page } = opened;
+    try {
+      await ready(page);
+      const converted = await page.evaluate(() => JSON.parse(String(window.javMock.values['peach.jav.position'])));
+      assert.deepEqual(converted, { version: 2, right: 136, bottom: 88 });
+      await page.setViewportSize({ width: 1600, height: 1000 });
+      const gap = await page.locator(ROOT).evaluate(node => { const box = node.getBoundingClientRect();
+        return { right: document.documentElement.clientWidth - box.right, bottom: innerHeight - box.bottom }; });
+      assert.ok(Math.abs(gap.right - converted.right) < 1 && Math.abs(gap.bottom - converted.bottom) < 1);
+      assert.deepEqual(await page.evaluate(() => JSON.parse(String(window.javMock.values['peach.jav.position']))), converted);
+    } finally { await opened.close(); }
   });
 
   it('共享进度：持锁窗口查任务列表，本页番号按快照推进，其他番号列在浮卡里，完成只响一次', async () => {
@@ -2143,6 +2190,58 @@ describe('JAV 用户脚本', () => {
     } finally { await opened.close(); }
   });
 
+  it('自动重试计划显示等待与次数，重试耗尽后显示失败并保留手动入口', async () => {
+    const waiting: Body = { ...body('ingested', 'ABP-616'), retry_at:'2026-11-06T12:30:00Z', retry_attempt:1, retry_limit:3,
+      download:{state:'ingested', label:'已入库', progress:1, postprocess_state:'pending', postprocess_label:'等待自动重试（1/3）'} };
+    const opened = await open(browser, { initial:'owned', activeItems:[waiting] });
+    const { page } = opened;
+    try {
+      const root = page.locator(ROOT), row = root.locator('.shared-row[data-code="ABP-616"]');
+      await row.waitFor();
+      const heading = root.locator('.shared-heading');
+      if (await heading.getAttribute('aria-expanded') === 'false') await heading.click();
+      assert.equal(await row.locator('.chip').textContent(), '待自动重试');
+      assert.equal(await row.locator('.chip').getAttribute('data-chip'), 'blue');
+      assert.match(await row.locator('.chip').getAttribute('title') || '', /自动重试（1\/3）/);
+      await row.click();
+      assert.match(await root.locator('.task-page [role=status]').textContent() || '', /等待.*自动重试（1\/3）/);
+      assert.equal(await root.locator('.task-page').getByRole('button', { name:'重试整理' }).count(), 0);
+      await page.evaluate(value => { window.javMock.activeItems = [{...value, retry_at:undefined, retry_exhausted:true, retry_attempt:3,
+        download:{...value.download!, postprocess_state:'failed', postprocess_label:'整理失败'}}]; }, waiting);
+      await page.clock.fastForward(5000);
+      await root.locator('.task-page').getByRole('button', { name:'重试整理', exact:true }).waitFor();
+      assert.match(await root.locator('.task-page [role=status]').textContent() || '', /自动重试已用尽/);
+      await root.locator('.task-page').getByRole('button', { name:'返回 Peach 主页' }).click();
+      assert.equal(await row.locator('.chip').getAttribute('data-chip'), 'rose');
+      assert.equal(await row.locator('.chip').textContent(), '整理失败');
+    } finally { await opened.close(); }
+  });
+
+  it('列表页浮窗进入任务进度后，定时刷新与来回切换不重新显示主页正文', async () => {
+    const opened = await open(browser, { url:'https://javdb.com/', html:'<h1>作品列表</h1>', activeItems:[
+      { ...body('ingested', 'ABP-616'), download:{state:'ingested',label:'已入库',progress:1,postprocess_state:'failed',postprocess_label:'整理失败'} },
+      body('searching', 'IPX-001')] });
+    const { page } = opened;
+    try {
+      const root = page.locator('#peach-jav-updates');
+      await root.getByRole('button', { name:'Peach 设置与更新',exact:true }).click();
+      const panel = root.locator('.panel'), main = panel.locator(':scope > .body');
+      for (let index=0; index<3; index++) {
+        const heading=root.locator('.shared-heading');
+        if(await heading.getAttribute('aria-expanded')==='false')await heading.click();
+        await root.locator('.shared-row[data-code="ABP-616"]').click();
+        await page.clock.fastForward(5000);
+        assert.equal(await main.isHidden(), true);
+        assert.equal(await panel.locator(':scope > .task-page').isVisible(), true);
+        await panel.locator('.task-page').getByRole('button', {name:'返回 Peach 主页'}).click();
+        await page.clock.fastForward(5000);
+        assert.equal(await main.isVisible(), true);
+        assert.equal(await panel.locator(':scope > .task-page').count(), 0);
+      }
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
   it('共享进度：重试失败项按失败原因逐项重试，进度页的重试按钮随原因改字', async () => {
     const failed = (code: string, extra: Record<string, unknown>): Body => ({ ...body('failed', code), ended_key: `2${code.slice(-1)}@2026-11-04T08:00:00+00:00`, dismissed: false, ...extra });
     const opened = await open(browser, { initial: 'owned', activeItems: [
@@ -2157,6 +2256,11 @@ describe('JAV 用户脚本', () => {
       await page.waitForFunction(root => document.querySelector(root)?.shadowRoot?.querySelector('.shared-row'), ROOT);
       if (await shared.locator('.shared-heading').getAttribute('aria-expanded') === 'false') await shared.locator('.shared-heading').click();
       // 进度页：磁力失效的换一个磁力，网盘问题的重试加入，整理失败的重试整理。
+      const organizeRow = shared.locator('.shared-row[data-code="ABP-616"]');
+      assert.equal(await organizeRow.getAttribute('data-state'), 'failed');
+      assert.equal(await organizeRow.locator('.chip').textContent(), '整理失败');
+      assert.equal(await organizeRow.locator('.chip').getAttribute('data-chip'), 'rose');
+      assert.match(await organizeRow.locator('.chip').getAttribute('title') || '', /影片已入库.*整理失败.*重试整理/);
       for (const [code, label] of [['IPX-001', '换一个磁力'], ['JUR-112', '重试加入'], ['ABP-616', '重试整理']]) {
         await shared.locator(`.shared-row[data-code="${code}"]`).click();
         assert.equal(await root.locator('.task-page').getByRole('button', { name: label }).isVisible(), true);
@@ -2171,6 +2275,17 @@ describe('JAV 用户脚本', () => {
         ['/api/jav-browser', { code: 'ABW-123', manual: true }],
         ['/api/jav-browser/postprocess', { code: 'ABP-616' }],
         ['/api/jav-browser', { code: 'JUR-112', source_url: 'https://missav.ws/en/jur-112' }]]);
+      const organizeBody = { ...body('ingested', 'ABP-616'), download: { state: 'ingested', label: '已入库', progress: 1,
+        postprocess_state: 'pending', postprocess_label: '等待整理' } };
+      await page.evaluate(value => { window.javMock.activeItems = [value]; }, organizeBody);
+      await page.clock.fastForward(31_000);
+      await organizeRow.locator('.chip').filter({ hasText: '整理中' }).waitFor();
+      assert.equal(await organizeRow.locator('.chip').getAttribute('data-chip'), 'blue');
+      await page.evaluate(value => { window.javMock.activeItems = [{ ...value,
+        download: { ...value.download, postprocess_state: 'complete', postprocess_label: '整理完成' } }]; }, organizeBody);
+      await page.clock.fastForward(5_000);
+      await organizeRow.locator('.chip').filter({ hasText: '已入库' }).waitFor();
+      assert.equal(await organizeRow.locator('.chip').getAttribute('data-chip'), 'lime');
       assert.deepEqual(opened.problems, []);
     } finally { await opened.close(); }
   });
