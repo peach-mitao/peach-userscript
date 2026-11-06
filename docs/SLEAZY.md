@@ -9,9 +9,9 @@ Send video codes from supported pages to your self-hosted Peach instance.
 ## Features
 
 - **Recognize and add**: detect codes on supported detail pages, or scan the current page and add selected titles or all titles.
-- **Track status**: check your library, see performers, and follow queue, search, download and import progress as it refreshes. Peach continues after the source page closes.
-- **Recover from failures**: see whether the magnet or the cloud drive failed, and switch to another magnet when the magnet is at fault.
-- **Keep the page tidy**: move the Peach icon, choose where it appears, or hide it completely. Open settings and check updates from the userscript menu.
+- **Track status**: check your library, see performers, and follow queue, search, download, import and organization status. Peach continues after the source page closes.
+- **Recover from failures**: follow Peach's automatic retries for temporary errors, retry failed organization, or switch to another magnet when needed.
+- **Keep the page tidy**: remember the icon's position across windows, choose where it appears, or hide it completely. Open settings and check updates from the script menu.
 - **Match Peach**: sync light or dark mode and the accent color with your paired Peach instance.
 
 ## Setup
@@ -27,7 +27,7 @@ The browser must trust Peach's HTTPS certificate; HTTP is supported only on loop
 
 **Check for updates** compares the Sleazy release with the script bundled in your paired Peach instance and opens the newer source. Sleazy is preferred when versions match. Updates are installed through your userscript manager; open pages may need a refresh.
 
-Page-wide submission and local performer data require the corresponding Peach interfaces. An older packaged Peach build may need an update; installing the script does not upgrade Peach itself. See the [bilingual version history](https://github.com/peach-mitao/peach-userscript/blob/main/CHANGELOG.md), starting with **0.3.0 — Initial release**, for changes and compatibility notes.
+Automatic retries, page-wide submission and local performer data require the corresponding Peach interfaces. An older packaged Peach build may need an update; installing the script does not upgrade Peach itself. See the [bilingual version history](https://github.com/peach-mitao/peach-userscript/blob/main/CHANGELOG.md), starting with **0.3.0 — Initial release**, for changes and compatibility notes.
 
 ## Privacy
 
