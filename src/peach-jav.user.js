@@ -12,7 +12,7 @@
 // @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
 // @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.7.4
+// @version      0.7.5
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -592,12 +592,22 @@
   function savedPosition() {
     try {
       const value = JSON.parse(GM_getValue(STORAGE_POSITION, '{}'));
-      return value.version === 1 && ['right','bottom'].every(key => typeof value[key] === 'number'
-        && Number.isFinite(value[key]) && value[key] >= 0 && value[key] <= 1) ? value : null;
+      if (!['right','bottom'].every(key => typeof value[key] === 'number'
+        && Number.isFinite(value[key]) && value[key] >= 0)) return null;
+      if (value.version === 2) return value;
+      if (value.version === 1 && value.right <= 1 && value.bottom <= 1) {
+        const migrated = {version:2,
+          right:16 + value.right * Math.max(0, document.documentElement.clientWidth - 80),
+          bottom:16 + value.bottom * Math.max(0, innerHeight - 80)};
+        GM_setValue(STORAGE_POSITION, JSON.stringify(migrated));
+        return migrated;
+      }
+      return null;
     } catch { return null; }
   }
 
   function placeSurface(root) {
+    if (root.hasAttribute('data-dragging')) return;
     const value = savedPosition();
     if (!value) return;
     const viewportWidth=document.documentElement.clientWidth;
@@ -605,8 +615,8 @@
       : root.dataset.panelMode === 'minimized' ? 48 : Math.min(320, viewportWidth - 32);
     const dialog = (root.shadowRoot || root).querySelector('dialog[open]');
     const height = Math.min((dialog || root).getBoundingClientRect().height || 48, innerHeight - 32);
-    const right = Math.max(16, Math.min(16 + value.right * Math.max(0, viewportWidth - 80), viewportWidth - width - 16));
-    const bottom = Math.max(16, Math.min(16 + value.bottom * Math.max(0, innerHeight - 80), innerHeight - height - 16));
+    const right = Math.max(16, Math.min(value.right, viewportWidth - width - 16));
+    const bottom = Math.max(16, Math.min(value.bottom, innerHeight - height - 16));
     root.style.right = `${right}px`; root.style.bottom = `${bottom}px`;
     root.style.setProperty('--panel-right', `${right}px`); root.style.setProperty('--panel-bottom', `${bottom}px`);
   }
@@ -644,10 +654,8 @@
     const finish = event => {
       if (!drag || event.pointerId !== drag.id) return;
       if (drag.moved && event.type === 'pointerup') {
-        const box = root.getBoundingClientRect();
-        GM_setValue(STORAGE_POSITION, JSON.stringify({version:1,
-          right:Math.max(0, Math.min(1, (document.documentElement.clientWidth-box.right-16)/Math.max(1, document.documentElement.clientWidth-80))),
-          bottom:Math.max(0, Math.min(1, (innerHeight-box.bottom-16)/Math.max(1, innerHeight-80)))}));
+        GM_setValue(STORAGE_POSITION, JSON.stringify({version:2,
+          right:Number.parseFloat(root.style.right), bottom:Number.parseFloat(root.style.bottom)}));
         suppressClickUntil = performance.now()+250;
       }
       if (drag.handle.hasPointerCapture(event.pointerId)) drag.handle.releasePointerCapture(event.pointerId);
@@ -1273,7 +1281,7 @@
     paintPerformer(performer);
     const folded = expanded && entryCollapsed;
     updateEntry.root.dataset.panelMode = !expanded ? 'minimized' : folded ? 'collapsed' : 'expanded';
-    updateEntry.body.hidden = folded; updateEntry.body.inert = folded;
+    updateEntry.body.hidden = folded || Boolean(updateEntry.panel.taskPage); updateEntry.body.inert = folded;
     updateEntry.collapse.setAttribute('aria-expanded', String(!folded));
     updateEntry.collapse.setAttribute('aria-label', folded ? '展开 Peach 详情' : '折叠 Peach 详情');
     placeSurface(updateEntry.root);
@@ -1500,8 +1508,13 @@
   function rowState(body) {
     const download = body.download;
     if (body.state === 'idle') return ['pending'];
+    const retry = automaticRetryText(body);
+    if (retry) return [body.state === 'ingested' ? 'organizing' : 'queued', retry, '待自动重试'];
     if (body.state === 'failed') return ['failed', failureText(body), {magnet:'磁力失效', cloud:'网盘问题'}[body.cause] || '失败'];
     if (body.state === 'no_match') return ['no_match', failureText(body)];
+    if (organizeFailed(body)) return ['failed', body.retry_exhausted === true
+      ? '影片已入库，整理自动重试已用尽，可在任务进度页手动重试整理。'
+      : '影片已入库，后续整理失败，可在任务进度页重试整理。', '整理失败'];
     if (body.state === 'submitted' && ['remote_done', 'landed'].includes(download?.state)) return ['importing', download.label || '入库中'];
     if (body.state === 'submitted' && download?.state === 'submit_pending') return ['submitted', '等待自动重新提交', '待重新提交'];
     if (body.state === 'submitted' && download?.state === 'remote_running' && typeof download.progress === 'number' && Number.isFinite(download.progress)) {
@@ -2086,6 +2099,15 @@
   function tracking(body) {
     return ACTIVE.has(body.state) || (body.state === 'ingested'
       && ['pending', 'queued', 'running'].includes(body.download?.postprocess_state));
+  }
+
+  function automaticRetryText(body) {
+    if (body.state !== 'queued' && !(body.state === 'ingested' && body.download?.postprocess_state === 'pending')) return '';
+    if (typeof body.retry_at !== 'string' || !Number.isFinite(Date.parse(body.retry_at))
+        || !Number.isSafeInteger(body.retry_attempt) || !Number.isSafeInteger(body.retry_limit)
+        || body.retry_attempt < 1 || body.retry_limit < body.retry_attempt || body.retry_limit > 10) return '';
+    const time = new Date(body.retry_at).toLocaleString([], {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'});
+    return `${body.state === 'ingested' ? '影片已入库，整理暂时失败' : '搜索暂时不可用'}，等待 ${time} 自动重试（${body.retry_attempt}/${body.retry_limit}）`;
   }
 
   function organizeFailed(body) {
@@ -2676,6 +2698,8 @@
 
   // 状态说明：下载任务的具体阶段、整理状态与百分比，失败时给出原因；浮卡与其他任务的进度页共用。
   function statusLabel(body) {
+    const retry = automaticRetryText(body);
+    if (retry) return retry;
     const download = body.download;
     const known = download && ['submit_pending', 'submitted', 'remote_running', 'remote_done', 'landed', 'ingested', 'failed', 'cancelled', 'stalled'].includes(download.state);
     let label = body.stage === 'submitting' ? '正在提交网盘' : LABELS[body.state];
@@ -2689,7 +2713,7 @@
       }
     }
     if (['failed', 'no_match'].includes(body.state) && body.stage !== 'submitting') label = failureText(body);
-    return label;
+    return body.retry_exhausted === true ? `${label}；自动重试已用尽，请手动重试。` : label;
   }
 
   // 五段整体进度；结构与尺寸复用 Peach 生产 Progress 的 SVG 快照。

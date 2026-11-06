@@ -4,6 +4,19 @@ Notable changes are grouped by version. English and Chinese describe the same be
 
 Entries are written for users to scan: one sentence each, saying where something changed and what you now see. Reasons, implementation, compatibility conditions and edge cases stay in commits and PRs. Changes to one feature become one entry, and within each group the bigger changes come first. The English part before ` / ` stays within 160 characters including spaces, and the Chinese part after it within 80 characters including punctuation; bold and code marks and link addresses are not counted, only the text they display. / 条目给使用者扫读：每条一句话，只写在哪儿看到了什么变化；原因、实现、兼容条件和边界情况留在提交与 PR。同一功能的几处改动合成一条，每组里影响大的排前面。` / ` 之前的英文部分不超过 160 个字符（含空格），之后的中文部分不超过 80 字（含标点）；加粗、代码标记和链接地址不计，只计显示出来的文字。
 
+## 0.7.5 — 2026-11-06
+
+Includes the changes recorded below for source-only versions 0.7.2–0.7.4. / 包含下方仅源码版本 0.7.2–0.7.4 中记录的变更。
+
+### Fixed / 修复
+
+- **Temporary failures** show the next automatic retry and attempt count; exhausted retries keep their failure status and manual recovery. / 暂时故障显示自动重试时间与次数，次数用尽后保留失败状态和手动重试入口。
+- **Task lists** show a red **Organization failed** status when post-import processing fails, instead of showing the title as successfully imported. / 入库后整理失败时，任务列表直接显示红色「整理失败」。
+- **Panel positions** keep the same distance from the bottom-right corner across different window sizes, including when collapsed to an icon. / 浮窗与收起图标跨窗口记住距右下角的位置，不再随窗口大小漂移。
+- **Progress pages** stay separate from the task list when the panel refreshes or you switch back and forth. / 任务进度页刷新或来回切换时，不再和主页任务列表叠在一起。
+
+[Full Changelog / 完整变更](https://github.com/peach-mitao/peach-userscript/compare/v0.7.1...v0.7.5)
+
 ## 0.7.4 — 2026-11-05
 
 Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。

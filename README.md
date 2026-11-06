@@ -12,10 +12,10 @@ Send video codes from supported pages to your self-hosted Peach instance.
 ## Features
 
 - **Recognize and add**: detect a code on supported detail pages, or scan a page and add selected titles or all titles.
-- **Track status**: check whether a title is already in your library, see performers, and follow search, download and import progress as it refreshes.
-- **Recover from failures**: see whether the magnet or the cloud drive failed, and switch to another magnet when the magnet is at fault.
+- **Track status**: check your library, see performers, and follow search, download, import and organization progress, including failures.
+- **Recover from failures**: follow Peach's automatic retries for temporary errors, retry failed organization, or switch to another magnet when needed.
 - **Continue in Peach**: Peach saves the task and handles cloud download and library import after the source page closes.
-- **Match Peach**: sync the theme and accent, move the launcher and choose where it appears; settings and update checks remain available from the script menu.
+- **Match Peach**: sync the theme and accent, remember the launcher's position across windows, and choose where it appears; settings and updates stay in the script menu.
 
 ## Setup
 

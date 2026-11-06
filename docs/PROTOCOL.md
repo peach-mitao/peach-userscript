@@ -102,6 +102,8 @@ JavDB 演员页 `/actors/<id>`、DMM 女优片单 `/av/list/?actress=<编号>` �
 | `ingested`、`owned` | 显示完成状态；带正整数 `asset_id` 时主按钮显示「在 Peach 中打开」，在新标签页打开 `<Peach 地址>/assets/<asset_id>`，否则按钮禁用 |
 | `failed`、`no_match` | 允许用户主动重试 |
 
+Peach 后台可为暂时故障返回 `retry_at`（ISO-8601 UTC）、`retry_attempt` 和 `retry_limit`，等待期间仍为 `queued` 或 `ingested` 且整理 `pending`；脚本显示「待自动重试」和下一次时间。重试耗尽的响应可带 `retry_exhausted: true`，保留失败与手动重试入口。旧版 Peach 不返回这些字段，脚本不自行重复添加请求；自动重试由 Peach 持久调度，关闭网页后继续。
+
 队列状态每 2 秒查询一次，最多追加 30 次，轮询总预算 120 秒。达到上限后保留查询按钮。网络超时、401 / 403、非成功 HTTP、未知状态、无效 JSON 和番号不匹配都保留查询入口。请求结果不确定时不会自动重复 POST。
 
 页面跳转会隔离旧响应；重复执行脚本只注入一次。任务取消在 Peach 活动页执行。实际云下载和入库状态以 Peach 为准。
