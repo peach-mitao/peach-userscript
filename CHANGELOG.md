@@ -4,6 +4,18 @@ Notable changes are grouped by version. English and Chinese describe the same be
 
 Entries are written for users to scan: one sentence each, saying where something changed and what you now see. Reasons, implementation, compatibility conditions and edge cases stay in commits and PRs. Changes to one feature become one entry, and within each group the bigger changes come first. The English part before ` / ` stays within 160 characters including spaces, and the Chinese part after it within 80 characters including punctuation; bold and code marks and link addresses are not counted, only the text they display. / 条目给使用者扫读：每条一句话，只写在哪儿看到了什么变化；原因、实现、兼容条件和边界情况留在提交与 PR。同一功能的几处改动合成一条，每组里影响大的排前面。` / ` 之前的英文部分不超过 160 个字符（含空格），之后的中文部分不超过 80 字（含标点）；加粗、代码标记和链接地址不计，只计显示出来的文字。
 
+## 0.7.8 — 2026-11-09
+
+Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
+
+### Added / 新增
+
+- **Queued tasks** can be moved to the front of the search queue from their progress page or the panel, which also shows how many are ahead. / 排队中的任务可在进度页或浮卡上「提前处理」，并显示前面还有几项。
+
+### Changed / 变更
+
+- **Other tasks** count failures separately from completed ones, and the heading and collapsed icon badge turn red while any task has failed. / 其他任务把失败与已完成分开计数，有失败项时标题和收起图标的角标变红。
+
 ## 0.7.7 — 2026-11-09
 
 Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。

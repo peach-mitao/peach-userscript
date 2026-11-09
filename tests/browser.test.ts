@@ -2178,6 +2178,31 @@ describe('JAV 用户脚本', () => {
     } finally { await opened.close(); }
   });
 
+  it('排队中、前面还有别的番号时，进度页可以提前处理', async () => {
+    const opened = await open(browser, { initial: 'owned', automatic: false,
+      activeItems: [{ ...body('queued', 'JUL-500'), queue_position: 3 } as Body] });
+    const { page } = opened;
+    try {
+      await pending(page, 1);
+      await reply(page, 0, body('owned'));
+      const root = page.locator(ROOT), shared = root.locator('.shared-tasks');
+      await shared.locator('.shared-row[data-code="JUL-500"]').click();
+      const task = root.locator('.task-page');
+      await task.getByRole('status').filter({ hasText: '已排队 · 前面还有 2 项' }).waitFor();
+      await task.getByRole('button', { name: '提前处理' }).click();
+      await pending(page, 2);
+      const call = await page.evaluate(() => window.javMock.calls[1]!);
+      assert.equal(new URL(call.url).pathname, '/api/jav-browser/prioritize');
+      assert.deepEqual(JSON.parse(call.data!), { code: 'JUL-500' });
+      // 进度页读共享快照；提前后脚本立刻再取一次 Peach 的任务列表。
+      await page.evaluate(value => { window.javMock.activeItems = [value]; }, { ...body('queued', 'JUL-500'), queue_position: 1 } as Body);
+      await reply(page, 1, { ...body('queued', 'JUL-500'), queue_position: 1 } as Body);
+      await task.getByRole('status').filter({ hasText: /^已排队$/ }).waitFor();
+      assert.equal(await task.getByRole('button', { name: '提前处理' }).isHidden(), true);
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
   it('共享进度：别的番号结束后一直留在其他任务里，直到逐条或全部标为已读', async () => {
     const ended = (code: string, state: State, key: string, dismissed = false): Body => ({ ...body(state, code), ended_key: key, dismissed,
       ...(state === 'ingested' ? { download: { state: 'ingested', label: '已入库', progress: 1, postprocess_state: 'complete', postprocess_label: '已整理' } } : {}) });
@@ -2190,7 +2215,9 @@ describe('JAV 用户脚本', () => {
     try {
       const root = page.locator(ROOT), shared = root.locator('.shared-tasks'), heading = shared.locator('.shared-heading');
       await page.waitForFunction(root => root && document.querySelector(root)?.shadowRoot?.querySelector('.shared-row'), ROOT);
-      assert.equal(await heading.textContent(), '其他任务 · 进行中 1 项 · 已结束 2 项');
+      // 失败项从已完成里单独计数，有失败时标题变红。
+      assert.equal(await heading.textContent(), '其他任务 · 进行中 1 项 · 已完成 1 项 · 失败 1 项');
+      assert.equal(await heading.getAttribute('data-tone'), 'failed');
       // 确认过的 JUR-112 不再列出。
       assert.deepEqual(await shared.locator('.shared-code').allTextContents(), ['MIDV-339', 'ABP-616', 'IPX-001']);
       assert.equal(await shared.getByRole('button', { name: '将 MIDV-339 标为已读' }).count(), 0);
@@ -2206,14 +2233,15 @@ describe('JAV 用户脚本', () => {
       assert.deepEqual(await page.evaluate(() => window.javMock.dismissals.at(-1)), { keys: ['12@2026-11-04T08:01:00+00:00'] });
       assert.deepEqual(await shared.locator('.shared-code').allTextContents(), ['MIDV-339']);
       assert.equal(await shared.getByRole('button', { name: '全部标为已读' }).isHidden(), true);
-      // 都结束了还有没确认的：图标角标换成已结束的数量。
+      assert.equal(await heading.getAttribute('data-tone'), null);
+      // 都结束了还有没确认的：图标角标换成已结束的数量，有失败项时角标变红。
       await page.evaluate(() => { window.javMock.activeItems = [{ ok: true, code: 'MIDV-339', state: 'failed', message: 'failed',
         ended_key: '14@2026-11-04T08:02:00+00:00', dismissed: false } as never]; });
       await page.clock.fastForward(5_000);
-      await page.waitForFunction(root => document.querySelector(root)!.shadowRoot!.querySelector('.shared-heading')!.textContent === '其他任务 · 已结束 1 项', ROOT);
+      await page.waitForFunction(root => document.querySelector(root)!.shadowRoot!.querySelector('.shared-heading')!.textContent === '其他任务 · 失败 1 项', ROOT);
       await root.getByRole('button', { name: '隐藏 Peach 面板' }).click();
       const launcher = root.locator('.launcher');
-      assert.deepEqual(await launcher.evaluate(node => [node.dataset.count, node.dataset.countTone]), ['1', 'ended']);
+      assert.deepEqual(await launcher.evaluate(node => [node.dataset.count, node.dataset.countTone]), ['1', 'failed']);
       await launcher.press('Enter');
       await shared.getByRole('button', { name: '全部标为已读' }).click();
       assert.deepEqual(await page.evaluate(() => window.javMock.dismissals.at(-1)), { all: true });

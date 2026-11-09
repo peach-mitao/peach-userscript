@@ -12,7 +12,7 @@
 // @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
 // @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.7.7
+// @version      0.7.8
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -342,6 +342,7 @@
     .geist-button.launcher[data-count]::after{content:attr(data-count);position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:9px;
       display:grid;place-items:center;background:var(--color-status-blue-background);color:var(--color-status-blue-text);font:var(--board-caption-semibold);box-shadow:0 0 0 2px var(--ground);pointer-events:none}
     .geist-button.launcher[data-count-tone=ended]::after{background:var(--color-status-lime-background);color:var(--color-status-lime-text)}
+    .geist-button.launcher[data-count-tone=failed]::after{background:var(--color-status-rose-background);color:var(--color-status-rose-text)}
     .shared-note{margin:8px 0 0}.shared-foot{display:flex;justify-content:flex-end;gap:16px;margin-top:8px}.shared-foot:not(:has(>:not([hidden]))){display:none}
     .performer-follow{display:grid;gap:8px;min-width:0}.performer-head{display:flex;align-items:center;gap:8px;min-width:0}
     .performer-head strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:var(--board-body-medium)}
@@ -350,6 +351,7 @@
     .shared-heading:focus-visible,.shared-action:focus-visible{outline:2px solid var(--tungsten);outline-offset:2px;border-radius:4px}
     .shared-fold{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s ease}
     .shared-heading[aria-expanded=false] .shared-fold{transform:rotate(-90deg)}
+    .shared-heading[data-tone=failed],.shared-heading[data-tone=failed]:hover{color:var(--color-status-rose-text)}
     /* 折叠沿用 Peach Collapse（frontend/src/ui-kit/collapse.css）：过渡时裁边，展开停稳后摘掉，行的悬停底色才不被切。 */
     .shared-body{position:relative;display:flow-root;overflow:hidden;transition:height .2s ease-in-out}.shared-body.fold-settled{overflow:visible}
     .shared-list{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:4px;max-height:172px;overflow:auto;overscroll-behavior:contain;scrollbar-width:none}
@@ -2081,6 +2083,7 @@
     const choosing = Boolean(view.identity.edition) && !view.identity.conflict && configuration()
       && !view.busy && ['加入 Peach 馆藏', '重试加入 Peach 馆藏'].includes(view.button.textContent);
     view.alternate.hidden = !choosing;
+    view.ahead.hidden = !configuration() || !canPrioritize({ state: view.state, queue_position: view.queuePosition });
     if (choosing) {
       const retry = view.button.textContent.startsWith('重试') ? '重试' : '';
       const [own, other] = view.identity.edition === 'bonus' ? ['特典版', '通常版'] : ['通常版', '特典版'];
@@ -2121,17 +2124,28 @@
 
   // 重试入库后失败的整理，与 Peach 任务中心的「重试整理」同一入口；旧版 Peach 没有这个接口。
   function requestRetryOrganize(config, code) {
+    return requestTaskAction(config, 'postprocess', code,
+      'Peach 尚不支持在脚本里重试整理，请在 Peach 任务中心重试或更新 Peach。', '重试整理未成功，请在 Peach 任务中心查看。');
+  }
+
+  // 把排队中的番号挪到搜索队列最前面；旧版 Peach 没有这个接口。
+  function requestPrioritize(config, code) {
+    return requestTaskAction(config, 'prioritize', code, 'Peach 尚不支持提前处理，请更新 Peach。', '提前处理未成功，请查询状态。');
+  }
+
+  // 针对一个番号的任务操作：成功时返回该番号的新状态。
+  function requestTaskAction(config, path, code, unsupported, failed) {
     return new Promise((resolve, reject) => {
       try {
-        GM_xmlhttpRequest({ method: 'POST', url: `${config.base}/api/jav-browser/postprocess`, anonymous: true, timeout: 60_000,
+        GM_xmlhttpRequest({ method: 'POST', url: `${config.base}/api/jav-browser/${path}`, anonymous: true, timeout: 60_000,
           headers: { Authorization: `Bearer ${config.token}`, Accept: 'application/json', 'Content-Type': 'application/json' },
           data: JSON.stringify({ code }),
           onload(response) {
             let detail = '';
             try { const value = JSON.parse(response.responseText).detail; if (typeof value === 'string' && value.length <= 200) detail = value; } catch { /* 非 JSON 错误按状态提示。 */ }
-            if ([404, 405].includes(response.status)) { reject(new Error('Peach 尚不支持在脚本里重试整理，请在 Peach 任务中心重试或更新 Peach。')); return; }
+            if ([404, 405].includes(response.status)) { reject(new Error(unsupported)); return; }
             if (response.status === 401 || response.status === 403) { reject(new Error('令牌无效或无权限，请重新配置。')); return; }
-            if (response.status !== 200) { reject(new Error(detail || '重试整理未成功，请在 Peach 任务中心查看。')); return; }
+            if (response.status !== 200) { reject(new Error(detail || failed)); return; }
             try {
               const body = JSON.parse(response.responseText);
               if (body.ok !== true || !STATES.has(body.state) || typeof body.code !== 'string' || !samePeachCode(body.code, code)) throw new Error();
@@ -2314,15 +2328,17 @@
       if (!node.isConnected) { sharedLists.delete(node); continue; }
       paintSharedList(node); paintTaskPage(node.closest('.panel'));
     }
-    // 角标：有进行中的显示进行中数量；都结束了还有没确认的，换成已结束的数量。
+    // 角标：有进行中的显示进行中数量；都结束了还有没确认的，换成已结束的数量。有失败项时角标变红。
     const running = sharedMode() ? sharedSnapshot.items.filter(tracking).length : 0;
     const ended = running ? 0 : otherTasks().filter(awaitingAck).length;
+    const failed = otherTasks().filter(retryableTask).length;
     for (const launcher of [current?.launcher, updateEntry?.launcher]) {
       if (!launcher) continue;
       const count = running || ended;
       if (count) launcher.dataset.count = count > 99 ? '99+' : String(count); else delete launcher.dataset.count;
-      if (ended) launcher.dataset.countTone = 'ended'; else delete launcher.dataset.countTone;
-      launcher.title = running ? `Peach 有 ${running} 项任务进行中` : ended ? `Peach 有 ${ended} 项任务已结束，待确认` : '';
+      if (failed) launcher.dataset.countTone = 'failed'; else if (ended) launcher.dataset.countTone = 'ended'; else delete launcher.dataset.countTone;
+      launcher.title = [running ? `Peach 有 ${running} 项任务进行中` : ended ? `Peach 有 ${ended} 项任务已结束，待确认` : '',
+        failed ? `${failed} 项失败` : ''].filter(Boolean).join('，');
     }
     for (const root of surfaces) if (root.isConnected) placeSurface(root);
   }
@@ -2410,8 +2426,11 @@
       node.parts = { heading, label, retryAll, clear, note, body, list, open };
     }
     const { heading, label, retryAll, clear, body: fold, list } = node.parts;
-    label.textContent = ['其他任务', running.length ? `进行中 ${running.length} 项` : '', ended.length ? `已结束 ${ended.length} 项` : '']
-      .filter(Boolean).join(' · ');
+    // 失败（含未找到资源与整理失败）从已结束里单独计数，有失败项时整行标题变红。
+    const failed = ended.filter(retryableTask), done = ended.length - failed.length;
+    label.textContent = ['其他任务', running.length ? `进行中 ${running.length} 项` : '', done ? `已完成 ${done} 项` : '',
+      failed.length ? `失败 ${failed.length} 项` : ''].filter(Boolean).join(' · ');
+    if (failed.length) heading.dataset.tone = 'failed'; else delete heading.dataset.tone;
     clear.hidden = !ended.some(awaitingAck);
     retryAll.hidden = !ended.some(retryableTask);
     heading.setAttribute('aria-expanded', String(open));
@@ -2444,6 +2463,8 @@
 
   // 失败的其他任务可以重试：入库后整理失败的走「重试整理」，其余按原来源重新加入，磁力本身的问题换一个磁力。
   const retryableTask = body => !tracking(body) && (['failed', 'no_match'].includes(body.state) || organizeFailed(body));
+  // 排队搜索中、前面还有别的番号时可以提前；搜索、下载与整理阶段的先后不由 Peach 排。
+  const canPrioritize = body => body?.state === 'queued' && Number.isInteger(body.queue_position) && body.queue_position > 1;
   const switchesMagnet = body => body.state === 'failed' && body.cause === 'magnet';
   const retryLabel = body => organizeFailed(body) ? '重试整理' : switchesMagnet(body) ? '换一个磁力' : '重试加入';
   function retryTask(config, body) {
@@ -2563,6 +2584,21 @@
         if (panel.taskPage?.page === page) { note.textContent = error.message; note.dataset.variant = 'error'; }
       } finally { retry.disabled = false; }
     });
+    const ahead = control('提前处理');
+    ahead.dataset.action = 'prioritize';
+    ahead.hidden = true;
+    ahead.addEventListener('click', async () => {
+      const config = configuration(), body = panel.taskPage?.body;
+      if (!config || !body || ahead.disabled) return;
+      ahead.disabled = true;
+      try {
+        const result = await requestPrioritize(config, body.code);
+        if (panel.taskPage?.page === page) { panel.taskPage.body = result; paintTaskPage(panel); }
+        void sharedTick(true);
+      } catch (error) {
+        if (panel.taskPage?.page === page) { note.textContent = error.message; note.dataset.variant = 'error'; }
+      } finally { ahead.disabled = false; }
+    });
     // 已结束、等确认的番号：标为已读并回到主页。
     const ack = control('标为已读');
     ack.hidden = true;
@@ -2572,12 +2608,12 @@
       void acknowledgeEnded(panel.querySelector('.shared-tasks'), { keys: [key] });
       closeTaskPage(panel, true);
     });
-    body.append(note, parts.flow, retry, ack);
+    body.append(note, parts.flow, ahead, retry, ack);
     page.append(bar, body);
     switchPanel(panel, () => {
       for (const child of panel.children) if (!child.hidden) { child.hidden = true; child.dataset.taskHidden = ''; }
       panel.append(page);
-      panel.taskPage = { page, code, note, people, retry, ack, body: null, ...parts };
+      panel.taskPage = { page, code, note, people, ahead, retry, ack, body: null, ...parts };
       paintTaskPage(panel);
       return [page];
     });
@@ -2630,6 +2666,7 @@
     }
     open.note.textContent = statusLabel(open.body);
     open.note.dataset.variant = statusVariant(open.body);
+    open.ahead.hidden = !canPrioritize(open.body);
     open.retry.hidden = !retryableTask(open.body);
     open.retry.textContent = retryLabel(open.body);
     open.ack.hidden = !awaitingAck(open.body);
@@ -2683,6 +2720,7 @@
     // 整理期间 view.state 已是 ingested，前态按上一轮是否仍在跟踪判断。共享进度由写快照的窗口统一响。
     if (!sharedMode() && finished(body) && view.tracking) playSound('success');
     view.state = body.state;
+    view.queuePosition = body.queue_position;
     view.cause = body.state === 'failed' ? body.cause || '' : '';
     view.tracking = tracking(body);
     view.organizeFailed = organizeFailed(body);
@@ -2719,6 +2757,7 @@
       }
     }
     if (['failed', 'no_match'].includes(body.state) && body.stage !== 'submitting') label = failureText(body);
+    if (canPrioritize(body)) label += ` · 前面还有 ${body.queue_position - 1} 项`;
     return body.retry_exhausted === true ? `${label}；自动重试已用尽，请手动重试。` : label;
   }
 
@@ -2869,8 +2908,9 @@
     note.setAttribute('aria-live', 'polite');
     const { flow, progress, progressFill, steps } = buildFlow();
     const alternate = control('加入通常版'); alternate.dataset.action = 'add-alternate'; alternate.hidden = true;
+    const ahead = control('提前处理'); ahead.dataset.action = 'prioritize'; ahead.hidden = true;
     const scan = control('识别本页全部番号'); scan.addEventListener('click', openPageActions);
-    body.append(note, flow, button, alternate, scan, sharedSection(), updateSection({ availableOnly: true }));
+    body.append(note, flow, button, alternate, ahead, scan, sharedSection(), updateSection({ availableOnly: true }));
     panel.append(bar, body);
     const launcher = control('展开 Peach 面板');
     launcher.classList.add('launcher');
@@ -2886,7 +2926,7 @@
     wireDrag(root, launcher, panel);
     launcher.hidden = true;
     shadow.append(panel, launcher);
-    const view = { root, panel, body, launcher, collapse, summary, button, alternate, note, flow, steps, progress, progressFill, heading: label, loadPeople: loadTitlePeople, settings: settingsButton, identity: item, url: location.href, generation, state: 'idle', busy: false, tracking: false, queryOnly: attempts.has(comparisonKey(item.code)) };
+    const view = { root, panel, body, launcher, collapse, summary, button, alternate, ahead, note, flow, steps, progress, progressFill, heading: label, loadPeople: loadTitlePeople, settings: settingsButton, identity: item, url: location.href, generation, state: 'idle', busy: false, tracking: false, queryOnly: attempts.has(comparisonKey(item.code)) };
     current = view;
     refreshUpdateEntry();
     paintShared();
@@ -2910,6 +2950,18 @@
       const adding = !(view.queryOnly || ACTIVE.has(view.state));
       // 只有两个添加按钮同时显示时才指定版本；换磁力与重试沿用 Peach 记下的上一次选择。
       void query(view, adding ? 'POST' : 'GET', adding && !view.alternate.hidden ? view.identity.edition : '');
+    });
+    ahead.addEventListener('click', async () => {
+      const config = configuration();
+      if (!alive(view) || !config || ahead.disabled) return;
+      ahead.disabled = true;
+      try {
+        const result = await requestPrioritize(config, view.identity.code);
+        if (alive(view)) { applyState(view, result); render(view); }
+        void sharedTick(true);
+      } catch (error) {
+        if (alive(view)) { view.note.textContent = error.message; view.note.hidden = false; view.note.dataset.variant = 'error'; }
+      } finally { ahead.disabled = false; }
     });
     alternate.addEventListener('click', () => {
       if (!alive(view) || view.busy || view.alternate.hidden) return;
