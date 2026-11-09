@@ -12,7 +12,7 @@
 // @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
 // @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.7.5
+// @version      0.7.6
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -907,18 +907,13 @@
     if (site.mode !== 'automatic' || !site.detail_pattern) return null;
     const match = new RegExp(site.detail_pattern, 'i').exec(url.pathname);
     if (!match) return null;
-    // 发行平台的商品号交给 Peach 编目规则识别。
+    // 发行平台的地址已带商品号，只交给 Peach 编目规则换算，不再读页面字段。
     if (site.identity === 'peach') {
       if (!match[1] && site.query_keys?.some(key => url.searchParams.getAll(key).length !== 1
         || !/^[A-Za-z0-9_-]{1,100}$/.test(url.searchParams.get(key)))) return null;
-      const codes = new Map();
-      for (const selector of site.selectors || []) {
-        for (const field of [...document.querySelectorAll(selector)].slice(0, 40)) {
-          for (const code of candidates(fieldText(field))) codes.set(comparisonKey(code), code);
-        }
-      }
-      return { code: codes.size === 1 ? [...codes.values()][0] : '', conflict: codes.size > 1,
-        source: sourcePage(url, site), resolve: true };
+      // product 是地址里的商品号，本页列表据此折叠同一部作品的原写法。
+      return { code: '', conflict: false, source: sourcePage(url, site), resolve: true,
+        product: match[1] || url.searchParams.get(site.query_keys?.[0]) || '' };
     }
     if (site.query_keys?.length && !site.query_keys.every(key => url.searchParams.getAll(key).length === 1
       && /^[A-Za-z0-9_-]{1,100}$/.test(url.searchParams.get(key)))) return null;
@@ -1401,7 +1396,7 @@
     const codes = new Map();
     // 详情已取得的规范身份优先，避免 DMM 商品号的补零写法覆盖它。
     let detail = current?.url === location.href ? current.identity : identity();
-    const asked = detail?.pageCode || (detail?.resolve && !detail.conflict ? detail.code : '');
+    const asked = detail?.product || '';
     if (detail?.resolve && !detail.conflict && configuration()) {
       try {
         const result = await request(configuration(), detail.code, detail.source, 'GET', true);
@@ -1413,7 +1408,7 @@
     if (!view.root.isConnected) return;
     view.detailCode = detail?.code && !detail.resolve && !detail.conflict ? detail.code : '';
     if (view.detailCode) codes.set(comparisonKey(view.detailCode), view.detailCode);
-    // 页面商品号已由 Peach 归一成详情番号时，原写法不再单列一行。
+    // 地址里的商品号已由 Peach 归一成详情番号时，页面上的原写法不再单列一行。
     const folded = asked && view.detailCode ? comparisonKey(asked) : '';
     // 整页文本只收原文带分隔符的番号；PS4、TOP250、jay925 这类设备名、导航与用户名不作为候选。
     const add = text => { for (const code of candidates(text, text.length, true)) if (!codes.has(comparisonKey(code)) && comparisonKey(code) !== folded) codes.set(comparisonKey(code), code); };
@@ -1995,7 +1990,7 @@
       try {
         GM_xmlhttpRequest({
           method,
-          url: resolveIdentity ? `${config.base}/api/jav-browser/identify?source_url=${encodeURIComponent(source)}${code ? `&code=${encodeURIComponent(code)}` : ''}`
+          url: resolveIdentity ? `${config.base}/api/jav-browser/identify?source_url=${encodeURIComponent(source)}`
             : `${config.base}/api/jav-browser${method === 'GET' ? `?code=${encodeURIComponent(code)}` : ''}`,
           headers,
           ...(method === 'POST' ? { data: JSON.stringify({...(source ? {code, source_url:source} : {code, manual:true}), ...extra}) } : {}),
@@ -2017,7 +2012,7 @@
               const body = JSON.parse(response.responseText);
               if (body.ok !== true || !STATES.has(body.state) || typeof body.code !== 'string'
                 || candidates(body.code).size !== 1
-                || ((!resolveIdentity || code) && ![...candidates(body.code)].some(candidate => samePeachCode(candidate, code)))) throw new Error();
+                || (!resolveIdentity && ![...candidates(body.code)].some(candidate => samePeachCode(candidate, code)))) throw new Error();
               resolve(body);
               flushErrors(config);
             } catch { fail('invalid_response', 'Peach 返回的状态无效，请查询状态。', response.status); }
@@ -2668,7 +2663,6 @@
 
   function applyState(view, body) {
     if (view.identity.resolve) {
-      view.identity.pageCode = view.identity.code;
       view.identity.code = body.code;
       view.identity.resolve = false;
       view.heading.textContent = body.code;
