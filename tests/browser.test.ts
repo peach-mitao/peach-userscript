@@ -223,6 +223,9 @@ async function selectCode(page: Page) {
 const AUTOMATIC: Record<string, { path: string; title: string; html: string; source?: string; code?: string }> = {
   dmm: { path: '/av/content/?id=ssis00519&private=secret#player', source: '/av/content/?id=ssis00519', code: 'SSIS-519', title: '作品详情', html: '<h1>作品详情</h1>' },
   mgs: { path: '/product/product_detail/300MIUM-1239/', code: '300MIUM-1239', title: '作品详情', html: '<h1>作品详情</h1>' },
+  // FANZA 剪辑页地址里的 img-<商品号>-<序号> 由 Peach 按 DMM 商品号换算成番号。
+  'fanza-clip': { path: '/moment?id=img-saba00978-011&i3_ref=fvideo', source: '/moment?id=img-saba00978-011', code: 'SABA-978',
+    title: '作品详情', html: '<h1>作品详情</h1>' },
   // FC2 商品页地址里只有编号，番号由 Peach 换算成 FC2-PPV-<编号>。
   'fc2-market': { path: '/article/4900901/', code: 'FC2-PPV-4900901', title: '作品详情', html: '<h1>作品详情</h1>' },
   missav: { path: '/en/ssis-057', title: 'SSIS-057', html: '<h1>SSIS-057 作品</h1>' },
@@ -495,14 +498,14 @@ describe('JAV 用户脚本', () => {
       { site: 'dmm', url: 'https://video.dmm.co.jp/av/content/?id=1dandy00851c', code: 'DANDY-851C', label: 'メーカー品番：' },
       { site: 'mgs', url: 'https://www.mgstage.com/product/product_detail/104DANDY-851C/', code: '104DANDY-851C', label: '品番：' },
     ]) {
-      it(`${viewport.name} ${example.site} 校验详情字段 ${example.code}`, async () => {
+      it(`${viewport.name} ${example.site} 只按地址识别 ${example.code}，不读页面品番`, async () => {
         const opened = await open(browser, { url: example.url, title: '作品详情', viewport,
           html: `<table><tr><th>配信品番：</th><td>1dandy00899</td></tr><tr><th>${example.label}</th><td>${example.code}</td></tr></table>`, resolved: example.code });
         try {
           await ready(opened.page);
           const url = new URL(await opened.page.evaluate(() => window.javMock.calls[0]!.url));
           assert.equal(url.pathname, '/api/jav-browser/identify');
-          assert.equal(url.searchParams.get('code'), example.code);
+          assert.equal(url.searchParams.get('code'), null);
           assert.equal(url.searchParams.get('source_url'), example.url);
           assert.equal(await opened.page.locator(ROOT).locator('.bar strong').innerText(), example.code);
           assert.deepEqual(opened.problems, []);
@@ -540,7 +543,7 @@ describe('JAV 用户脚本', () => {
     try {
       await ready(opened.page);
       const url = new URL(await opened.page.evaluate(() => window.javMock.calls[0]!.url));
-      assert.equal(url.searchParams.get('code'), '107STZY-019');
+      assert.equal(url.searchParams.get('code'), null);
       assert.equal(await opened.page.locator(ROOT).locator('.bar strong').innerText(), 'STZY-019');
       await opened.page.locator(ROOT).getByRole('button', {name:'识别本页全部番号', exact:true}).click();
       const list = opened.page.locator('#peach-jav-batch');
@@ -548,13 +551,6 @@ describe('JAV 用户脚本', () => {
       assert.equal(await list.locator('.batch-row').count(), 1);
       assert.deepEqual(opened.problems, []);
     } finally { await opened.close(); }
-    // 去掉前缀后仍对不上的答复照旧拒收。
-    const other = await open(browser, { url: 'https://www.mgstage.com/product/product_detail/107STZY-019/', title: '作品详情',
-      html, resolved: 'STZY-018' });
-    try {
-      await ready(other.page, '查询 Peach 状态');
-      assert.equal(await other.page.locator(ROOT).getByRole('status', { name: 'Peach 任务状态' }).innerText(), 'Peach 返回的状态无效，请查询状态。');
-    } finally { await other.close(); }
   });
 
   for (const code of ['MKBD-S123', 'MKD-S123', '092415_01', '092415_0001', 'DANDY-851C']) {

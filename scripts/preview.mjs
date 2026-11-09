@@ -12,6 +12,7 @@ const server = createServer(async (request, response) => {
       const site = url.searchParams.get('site');
       const fixture = site === 'dmm' ? 'https://video.dmm.co.jp/av/content/?id=ssis00519'
         : site === 'mgs' ? 'https://www.mgstage.com/product/product_detail/300MIUM-1239/'
+        : site === 'fanza-clip' ? 'https://clip.fanza.jp/moment?id=img-saba00978-011'
           : site === 'list' ? 'https://javdb.com/'
             : site === 'actress' ? 'https://javdb.com/actors/bkxd'
               : site === 'missav-actress' ? 'https://missav.ws/dm127/cn/actresses/%E6%B6%BC%E6%A3%AE%E3%82%8C%E3%82%80'

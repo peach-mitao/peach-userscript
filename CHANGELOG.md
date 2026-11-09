@@ -4,6 +4,18 @@ Notable changes are grouped by version. English and Chinese describe the same be
 
 Entries are written for users to scan: one sentence each, saying where something changed and what you now see. Reasons, implementation, compatibility conditions and edge cases stay in commits and PRs. Changes to one feature become one entry, and within each group the bigger changes come first. The English part before ` / ` stays within 160 characters including spaces, and the Chinese part after it within 80 characters including punctuation; bold and code marks and link addresses are not counted, only the text they display. / 条目给使用者扫读：每条一句话，只写在哪儿看到了什么变化；原因、实现、兼容条件和边界情况留在提交与 PR。同一功能的几处改动合成一条，每组里影响大的排前面。` / ` 之前的英文部分不超过 160 个字符（含空格），之后的中文部分不超过 80 字（含标点）；加粗、代码标记和链接地址不计，只计显示出来的文字。
 
+## 0.7.6 — 2026-11-09
+
+Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
+
+### Added / 新增
+
+- **FANZA clip pages** (`clip.fanza.jp/moment`) recognize the title code from the address, for example SABA-978. / FANZA 剪辑页按地址识别番号，例如 SABA-978。
+
+### Fixed / 修复
+
+- **DMM and MGS pages** identify titles from the address alone, so other codes on the page no longer block the button as a conflict. / DMM、MGS 作品页只按地址识别番号，页面里的其他番号不再让按钮判成冲突。
+
 ## 0.7.5 — 2026-11-06
 
 Includes the changes recorded below for source-only versions 0.7.2–0.7.4. / 包含下方仅源码版本 0.7.2–0.7.4 中记录的变更。
