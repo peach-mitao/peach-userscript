@@ -23,7 +23,7 @@
       <button type="button" id="activate-script">开启</button>
       <button type="button" id="check-script-update">检测更新</button>
       <button type="button" id="copy-pairing">复制模拟配对信息</button>
-      <a href="?site=dmm&state=idle">DMM 商品号</a><a href="?site=mgs&state=idle">MGS 商品号</a><a href="?site=fanza-clip&state=idle">FANZA 剪辑页</a><a href="?state=idle&scan=javdb">JavDB 整页扫描</a><a href="?state=idle&scan=states">本页番号行状态</a><a href="?site=list&state=idle&scan=javdb">JavDB 首页</a><a href="?state=idle&tasks=1">共享进度</a><a href="?site=list&state=idle&tasks=1">共享进度（无本页番号）</a><a href="?site=actress&state=idle">JavDB 女优页</a><a href="?site=missav-actress&state=idle">MISSAV 女优页</a><a href="?site=missav-actress&state=idle&performer=ambiguous">MISSAV 同名多位</a>
+      <a href="?site=dmm&state=idle">DMM 商品号</a><a href="?site=mgs&state=idle">MGS 商品号</a><a href="?site=fanza-clip&state=idle">FANZA 剪辑页</a><a href="?site=dmm-bonus&state=idle">DMM 特典版</a><a href="?site=dmm-regular&state=idle">DMM 有特典版的通常版</a><a href="?state=idle&scan=javdb">JavDB 整页扫描</a><a href="?state=idle&scan=states">本页番号行状态</a><a href="?site=list&state=idle&scan=javdb">JavDB 首页</a><a href="?state=idle&tasks=1">共享进度</a><a href="?site=list&state=idle&tasks=1">共享进度（无本页番号）</a><a href="?site=actress&state=idle">JavDB 女优页</a><a href="?site=missav-actress&state=idle">MISSAV 女优页</a><a href="?site=missav-actress&state=idle&performer=ambiguous">MISSAV 同名多位</a>
     </nav>
     <h1>REAL-864 作品详情</h1>
     <p class="meta">来源页面示意</p>
@@ -150,7 +150,11 @@
         }
         const code = new URLSearchParams(location.search).get('site') === 'dmm' ? 'SSIS-519'
           : new URLSearchParams(location.search).get('site') === 'mgs' ? '300MIUM-1239'
-            : new URLSearchParams(location.search).get('site') === 'fanza-clip' ? 'SABA-978' : 'REAL-864';
+            : new URLSearchParams(location.search).get('site') === 'fanza-clip' ? 'SABA-978'
+              : ['dmm-bonus', 'dmm-regular'].includes(new URLSearchParams(location.search).get('site')) ? 'SDJS-304' : 'REAL-864';
+        // 有特典版的作品：识别应答带本页版本，浮卡出特典版与通常版两个添加按钮。
+        const previewEdition = {'dmm-bonus': 'bonus', 'dmm-regular': 'regular'}[new URLSearchParams(location.search).get('site')];
+        const edition = previewEdition && new URL(request.url).pathname.endsWith('/identify') ? {edition: previewEdition} : {};
         // organize：已入库但整理失败，点「重试整理」后回到等待整理。
         if (previewState === 'organize') {
           if (new URL(request.url).pathname.endsWith('/postprocess')) previewRetried = true;
@@ -164,7 +168,7 @@
         // 馆藏已有时 Peach 带回作品编号，主按钮直达 Peach 里的这部作品。
         const owned = request.method !== 'POST' && previewState === 'owned';
         request.onload({status:200,responseText:JSON.stringify({ok:true,code,state:request.method === 'POST' ? 'queued' : owned ? 'owned' : 'idle',
-          ...(owned ? {asset_id:4321} : {})})});
+          ...(owned ? {asset_id:4321} : {}), ...edition})});
       }, 650),
     });
     document.querySelector('#open-settings').addEventListener('click', () => previewMenus['设置']());
