@@ -514,6 +514,50 @@ describe('JAV 用户脚本', () => {
     }
   }
 
+  for (const example of [
+    { id: '1sdjs00304v', edition: 'bonus', own: '加入特典版', other: '加入通常版', otherEdition: 'regular' },
+    { id: '1sdjs00304', edition: 'regular', own: '加入通常版', other: '加入特典版', otherEdition: 'bonus' },
+  ]) {
+    it(`作品有特典版时${example.own}排在主按钮，另一版作副按钮，入库后两个按钮合成同一状态`, async () => {
+      const opened = await open(browser, { url: `https://video.dmm.co.jp/av/content/?id=${example.id}`,
+        title: '作品详情', html: '<h1>作品详情</h1>', automatic: false });
+      const { page } = opened;
+      try {
+        await pending(page, 1);
+        await reply(page, 0, { ok: true, code: 'SDJS-304', state: 'idle', message: 'idle', edition: example.edition } as Body);
+        await ready(page, example.own);
+        const alternate = page.locator(ROOT).locator('[data-action="add-alternate"]');
+        assert.equal(await alternate.innerText(), example.other);
+        await alternate.click();
+        await pending(page, 2);
+        const posted = await page.evaluate(() => window.javMock.calls[1]!);
+        assert.equal(posted.method, 'POST');
+        assert.deepEqual(JSON.parse(posted.data!), { code: 'SDJS-304', source_url: `https://video.dmm.co.jp/av/content/?id=${example.id}`,
+          edition: example.otherEdition });
+        await reply(page, 1, { ok: true, code: 'SDJS-304', state: 'queued', message: 'queued' });
+        await page.locator(ROOT).getByRole('status', { name: 'Peach 任务状态' }).filter({ hasText: '已排队' }).waitFor();
+        assert.equal(await alternate.isHidden(), true);
+        assert.deepEqual(opened.problems, []);
+      } finally { await opened.close(); }
+    });
+  }
+
+  it('没有特典版的作品只有一个添加按钮，提交不指定版本', async () => {
+    const opened = await open(browser, { url: 'https://video.dmm.co.jp/av/content/?id=ssis00519', title: '作品详情',
+      html: '<h1>作品详情</h1>', automatic: false });
+    const { page } = opened;
+    try {
+      await pending(page, 1);
+      await reply(page, 0, { ok: true, code: 'SSIS-519', state: 'idle', message: 'idle' });
+      await ready(page);
+      assert.equal(await page.locator(ROOT).locator('[data-action="add-alternate"]').isHidden(), true);
+      await button(page).click();
+      await pending(page, 2);
+      assert.equal(JSON.parse(await page.evaluate(() => window.javMock.calls[1]!.data!)).edition, undefined);
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
   it('DMM 素人作品页按商品号认出番号；馆藏已有时主按钮直达 Peach 里的这部作品', async () => {
     const opened = await open(browser, { url: 'https://video.dmm.co.jp/amateur/content/?id=mfc288&utm_medium=dmm_affiliate&utm_source=x',
       title: '作品详情', html: '<h1>作品详情</h1>', automatic: false });

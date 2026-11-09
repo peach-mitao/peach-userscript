@@ -11,6 +11,8 @@ const server = createServer(async (request, response) => {
       const files = await outputs();
       const site = url.searchParams.get('site');
       const fixture = site === 'dmm' ? 'https://video.dmm.co.jp/av/content/?id=ssis00519'
+        : site === 'dmm-bonus' ? 'https://video.dmm.co.jp/av/content/?id=1sdjs00304v'
+        : site === 'dmm-regular' ? 'https://video.dmm.co.jp/av/content/?id=1sdjs00304'
         : site === 'mgs' ? 'https://www.mgstage.com/product/product_detail/300MIUM-1239/'
         : site === 'fanza-clip' ? 'https://clip.fanza.jp/moment?id=img-saba00978-011'
           : site === 'list' ? 'https://javdb.com/'

@@ -12,7 +12,7 @@
 // @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
 // @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.7.6
+// @version      0.7.7
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -2077,6 +2077,16 @@
       : view.queryOnly || ACTIVE.has(view.state) ? '查询 Peach 状态'
       : view.state === 'failed' && view.cause === 'magnet' ? '换一个磁力'
       : ['failed', 'no_match'].includes(view.state) ? '重试加入 Peach 馆藏' : '加入 Peach 馆藏';
+    // 作品有特典版与通常版时：主按钮按本页的版本入库，副按钮改拿另一版；两版共用一个番号，入库一次后都回到同一状态。
+    const choosing = Boolean(view.identity.edition) && !view.identity.conflict && configuration()
+      && !view.busy && ['加入 Peach 馆藏', '重试加入 Peach 馆藏'].includes(view.button.textContent);
+    view.alternate.hidden = !choosing;
+    if (choosing) {
+      const retry = view.button.textContent.startsWith('重试') ? '重试' : '';
+      const [own, other] = view.identity.edition === 'bonus' ? ['特典版', '通常版'] : ['通常版', '特典版'];
+      view.button.textContent = `${retry}加入${own}`;
+      view.alternate.textContent = `${retry}加入${other}`;
+    }
     if (view.busy) {
       const spinner = element('span', 'ui-geist-spinner');
       spinner.setAttribute('aria-hidden', 'true');
@@ -2665,6 +2675,8 @@
     if (view.identity.resolve) {
       view.identity.code = body.code;
       view.identity.resolve = false;
+      // 作品同时有特典版与通常版时 Peach 带回本页是哪一版（bonus / regular），浮卡分出两个添加按钮。
+      view.identity.edition = ['bonus', 'regular'].includes(body.edition) ? body.edition : '';
       view.heading.textContent = body.code;
       view.loadPeople(body.code);
     }
@@ -2743,7 +2755,7 @@
     return body.state === 'failed' || body.download?.postprocess_state === 'failed' ? 'error' : 'secondary';
   }
 
-  async function query(view, method = 'GET') {
+  async function query(view, method = 'GET', edition = '') {
     if (!alive(view) || view.busy) return;
     const config = configuration();
     if (!config) { configure(); return; }
@@ -2762,7 +2774,7 @@
     const deadline = Date.now() + POLL_LIMIT;
     try {
       let body = await request(config, view.identity.code, view.identity.source, method, Boolean(view.identity.resolve),
-        method === 'POST' && view.cause === 'magnet' ? {switch:true} : {});
+        method === 'POST' ? {...(view.cause === 'magnet' ? {switch:true} : {}), ...(edition ? {edition} : {})} : {});
       if (!alive(view)) return;
       applyState(view, body);
       if (method === 'POST') void sharedTick(true);
@@ -2856,8 +2868,9 @@
     note.setAttribute('aria-label', 'Peach 任务状态');
     note.setAttribute('aria-live', 'polite');
     const { flow, progress, progressFill, steps } = buildFlow();
+    const alternate = control('加入通常版'); alternate.dataset.action = 'add-alternate'; alternate.hidden = true;
     const scan = control('识别本页全部番号'); scan.addEventListener('click', openPageActions);
-    body.append(note, flow, button, scan, sharedSection(), updateSection({ availableOnly: true }));
+    body.append(note, flow, button, alternate, scan, sharedSection(), updateSection({ availableOnly: true }));
     panel.append(bar, body);
     const launcher = control('展开 Peach 面板');
     launcher.classList.add('launcher');
@@ -2873,7 +2886,7 @@
     wireDrag(root, launcher, panel);
     launcher.hidden = true;
     shadow.append(panel, launcher);
-    const view = { root, panel, body, launcher, collapse, summary, button, note, flow, steps, progress, progressFill, heading: label, loadPeople: loadTitlePeople, settings: settingsButton, identity: item, url: location.href, generation, state: 'idle', busy: false, tracking: false, queryOnly: attempts.has(comparisonKey(item.code)) };
+    const view = { root, panel, body, launcher, collapse, summary, button, alternate, note, flow, steps, progress, progressFill, heading: label, loadPeople: loadTitlePeople, settings: settingsButton, identity: item, url: location.href, generation, state: 'idle', busy: false, tracking: false, queryOnly: attempts.has(comparisonKey(item.code)) };
     current = view;
     refreshUpdateEntry();
     paintShared();
@@ -2894,7 +2907,13 @@
       if (view.organizeFailed) { void retryOrganize(view); return; }
       const link = libraryLink(view);
       if (link && !view.tracking) { window.open(link, '_blank', 'noopener'); return; }
-      void query(view, view.queryOnly || ACTIVE.has(view.state) ? 'GET' : 'POST');
+      const adding = !(view.queryOnly || ACTIVE.has(view.state));
+      // 只有两个添加按钮同时显示时才指定版本；换磁力与重试沿用 Peach 记下的上一次选择。
+      void query(view, adding ? 'POST' : 'GET', adding && !view.alternate.hidden ? view.identity.edition : '');
+    });
+    alternate.addEventListener('click', () => {
+      if (!alive(view) || view.busy || view.alternate.hidden) return;
+      void query(view, 'POST', view.identity.edition === 'bonus' ? 'regular' : 'bonus');
     });
     render(view);
     present(view, panelMode);
