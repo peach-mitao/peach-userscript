@@ -36,7 +36,7 @@ npm run candidates -- --fetch
 
 结果在 `candidates/mirrors.json`，包含来源 URL、快照 SHA256、提取规则、已登记站点关联及未解析的模式。新站点的 `registered_site` 为 `null`。所有域名都标记为 `candidate`、`review: required`、`confidence: unverified`，包括已登记域名。`evidence/` 与 `candidates/` 默认不进入 Git；需要公开证据时，只提交复核所需的最小文本和公开 URL，并遵守来源许可。
 
-`scripts/record-review.mjs` 用于将本地 `sources.json`、`domain-probes.json` 和脚本归档整理为公开元数据快照及站点复核记录。它校验来源 hash，记录归档字节 hash；CRLF 归档只有在转为 LF 后与来源 hash 完全一致时才接受，并写明转换。它不复制脚本实现，也不修改站点清单。工具中的来源归属映射对应本次人工审阅范围，新的审阅范围需明确维护。
+`scripts/record-review.ts` 用于将本地 `sources.json`、`domain-probes.json` 和脚本归档整理为公开元数据快照及站点复核记录。它校验来源 hash，记录归档字节 hash；CRLF 归档只有在转为 LF 后与来源 hash 完全一致时才接受，并写明转换。它不复制脚本实现，也不修改站点清单。工具中的来源归属映射对应本次人工审阅范围，新的审阅范围需明确维护。
 
 ## 人工复核与发布
 

@@ -6,6 +6,8 @@
 
 使用 [Node.js 24 LTS](https://nodejs.org/en/about/previous-releases)。构建与基础单测仅使用 Node 内置模块，无运行依赖。浏览器回归的唯一开发依赖为 `playwright-core`。
 
+脚本与测试写成 `.ts`，由 Node 24 的类型擦除直接运行，不另加构建步骤；用户脚本源码 `src/peach-jav.user.js` 是浏览器里运行的 `.js`。不新建 `.mjs`、`.cjs`，`tests/build.test.ts` 会拦下。本地模块按完整文件名导入，例如 `'./build.ts'`。
+
 以下命令均在仓库根目录执行。生成确定性的安装脚本及站点快照：
 
 ```powershell
@@ -58,7 +60,7 @@ Peach 主仓库消费同一次发布的脚本与站点快照，服务端继续�
 
 需要交给其他项目时，可运行 `npm run export -- --output <制品目录>`，导出这四个文件。导出前会核对源与产物一致；相同内容可重复导出，已有不同内容会被拒绝，防止覆盖混合版本。
 
-同步到 Peach 隔离工作树时，使用 `node scripts/export-peach.mjs --target <Peach隔离工作树> --commit <本仓库40位提交SHA>`。默认仅预览，添加 `--apply` 才写入 `web/integrations/` 中的脚本、站点快照与 `jav-userscript-release.json` 来源记录。工具校验工作树注册关系、Peach 项目标识、发布清单与 hash，不访问网络、不执行 Git 或服务命令。
+同步到 Peach 隔离工作树时，使用 `node scripts/export-peach.ts --target <Peach隔离工作树> --commit <本仓库40位提交SHA>`。默认仅预览，添加 `--apply` 才写入 `web/integrations/` 中的脚本、站点快照与 `jav-userscript-release.json` 来源记录。工具校验工作树注册关系、Peach 项目标识、发布清单与 hash，不访问网络、不执行 Git 或服务命令。
 
 ## 站点与镜像候选
 

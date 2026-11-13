@@ -99,7 +99,7 @@ export async function build({ check = false, root = ROOT } = {}) {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
-  if (args.some(arg => arg !== '--check') || args.length > 1) throw new Error('用法：node scripts/build.mjs [--check]');
+  if (args.some(arg => arg !== '--check') || args.length > 1) throw new Error('用法：node scripts/build.ts [--check]');
   await build({ check: args.includes('--check') });
   console.log(args.includes('--check') ? '构建产物一致' : '构建完成：dist/peach-jav.user.js');
 }

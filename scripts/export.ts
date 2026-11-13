@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir, realpath } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { build, outputs, ROOT } from './build.mjs';
+import { build, outputs, ROOT } from './build.ts';
 
 export async function exportRelease(destination, root = ROOT) {
   if (!destination) throw new Error('请指定制品输出目录');
@@ -27,7 +27,7 @@ export async function exportRelease(destination, root = ROOT) {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
-  if (args.length !== 2 || args[0] !== '--output') throw new Error('用法：node scripts/export.mjs --output <目录>');
+  if (args.length !== 2 || args[0] !== '--output') throw new Error('用法：node scripts/export.ts --output <目录>');
   const names = await exportRelease(args[1]);
   console.log(`已导出 ${names.length} 个发布制品`);
 }

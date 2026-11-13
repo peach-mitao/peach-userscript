@@ -3,7 +3,7 @@ import { readFile, mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
-import { extractDomains, report, sha256, confined, validateSources, sync } from '../scripts/sync-candidates.mjs';
+import { extractDomains, report, sha256, confined, validateSources, sync } from '../scripts/sync-candidates.ts';
 
 const manifest = JSON.parse(await readFile(new URL('../jav-sites.json', import.meta.url), 'utf8'));
 const fixture = Buffer.from(`// ==UserScript==\n// @name fixture\n// @match https://*.missav.ws/*\n// @match https://mirror.example/*\n// @include https://mirror.example/video/*\n// @match *://*/*\n// @include /^https?:.*/\n// @match https://127.0.0.1/*\n// ==/UserScript==\nthrow new Error('远程代码不得执行');\n`);

@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { outputs } from './build.mjs';
+import { outputs } from './build.ts';
 
 // 预览只提供内存 GM 存储和模拟响应，不连接 Peach 或来源站点。
 const server = createServer(async (request, response) => {

@@ -12,14 +12,14 @@
     "node": ">=24 <25"
   },
   "scripts": {
-    "build": "node scripts/build.mjs",
-    "preview": "node scripts/preview.mjs",
-    "check": "node scripts/build.mjs --check",
-    "export": "node scripts/export.mjs",
-    "test": "node --test tests/build.test.mjs tests/candidates.test.mjs tests/export-peach.test.mjs tests/release-notes.test.ts tests/ci_plan.test.ts",
+    "build": "node scripts/build.ts",
+    "preview": "node scripts/preview.ts",
+    "check": "node scripts/build.ts --check",
+    "export": "node scripts/export.ts",
+    "test": "node --test tests/build.test.ts tests/candidates.test.ts tests/export-peach.test.ts tests/release-notes.test.ts tests/ci_plan.test.ts",
     "test:browser": "node --test tests/browser.test.ts",
     "verify": "npm run check && npm test && npm run test:browser",
-    "candidates": "node scripts/sync-candidates.mjs"
+    "candidates": "node scripts/sync-candidates.ts"
   },
   "devDependencies": {
     "playwright-core": "1.64.1"

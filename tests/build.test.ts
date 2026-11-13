@@ -1,12 +1,18 @@
 import assert from 'node:assert/strict';
 import { readFile, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { Script } from 'node:vm';
 import { test } from 'node:test';
-import { ROOT, render, outputs, build, validateManifest } from '../scripts/build.mjs';
-import { exportRelease } from '../scripts/export.mjs';
+import { ROOT, render, outputs, build, validateManifest } from '../scripts/build.ts';
+import { exportRelease } from '../scripts/export.ts';
+
+test('脚本与测试只用 .ts 或 .js，不新建 .mjs、.cjs', () => {
+  const tracked = execFileSync('git', ['ls-files', '*.mjs', '*.cjs'], { cwd: ROOT, encoding: 'utf8' }).trim();
+  assert.equal(tracked, '', `改成 .ts，由 Node 直接运行：\n${tracked}`);
+});
 
 const manifest = JSON.parse(await readFile(new URL('../jav-sites.json', import.meta.url), 'utf8'));
 const template = await readFile(new URL('../src/peach-jav.user.js', import.meta.url), 'utf8');
