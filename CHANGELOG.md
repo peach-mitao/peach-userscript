@@ -4,6 +4,21 @@ Notable changes are grouped by version. English and Chinese describe the same be
 
 Entries are written for users to scan: one sentence each, saying where something changed and what you now see. Reasons, implementation, compatibility conditions and edge cases stay in commits and PRs. Changes to one feature become one entry, and within each group the bigger changes come first. The English part before ` / ` stays within 160 characters including spaces, and the Chinese part after it within 80 characters including punctuation; bold and code marks and link addresses are not counted, only the text they display. / 条目给使用者扫读：每条一句话，只写在哪儿看到了什么变化；原因、实现、兼容条件和边界情况留在提交与 PR。同一功能的几处改动合成一条，每组里影响大的排前面。` / ` 之前的英文部分不超过 160 个字符（含空格），之后的中文部分不超过 80 字（含标点）；加粗、代码标记和链接地址不计，只计显示出来的文字。
 
+## 0.7.11 — 2026-11-14
+
+### Added / 新增
+
+- **Page codes** list sorts by code when you click the code column header, cycling A–Z, Z–A and back to page order, and remembers your choice. / 本页番号列表点「番号」表头可按字母升序、倒序排列，再点回到页面顺序，并记住选择。
+- **Task progress** for an imported title shows Open in library, which opens it in Peach and marks the task as read. / 已入库番号的进度页显示「打开馆藏」，在 Peach 中打开这部作品并标为已读。
+
+### Changed / 变更
+
+- **Task progress** shows its only button, such as Prioritize, as the primary button. / 进度页只有一个按钮时（如「提前处理」）显示为主按钮。
+
+### Fixed / 修复
+
+- **Script updates** no longer show the update and download addresses as changed each time; one last change appears when updating to this version. / 脚本更新时不再每次提示更新与下载地址被更换；更新到本版时还会最后提示一次。
+
 ## 0.7.10 — 2026-11-13
 
 ### Changed / 变更

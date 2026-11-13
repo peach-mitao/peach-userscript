@@ -45,9 +45,11 @@ test('构建不依赖时间，CRLF 模板得到同一份 LF 产物，工作区�
 
 test('本地安装制品声明固定的 Sleazy 自动更新渠道', async () => {
   const script = (await outputs(ROOT)).get('peach-jav.user.js');
-  const base = 'https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93';
+  const base = 'https://update.sleazyfork.org/scripts/600821/Peach%20%E7%94%A8%E6%88%B7%E8%84%9A%E6%9C%AC';
   assert.equal(script.match(/^\/\/ @updateURL\s+(.+)$/m)?.[1], `${base}.meta.js`);
   assert.equal(script.match(/^\/\/ @downloadURL\s+(.+)$/m)?.[1], `${base}.user.js`);
+  // Sleazy 下发时删掉这两行，再以下面的写法补在头部末尾；源码照抄，本地安装与 Sleazy 安装的头部才一致，更新时不提示地址被更换。
+  assert.ok(script.includes(`\n// @downloadURL ${base}.user.js\n// @updateURL ${base}.meta.js\n// ==/UserScript==\n`));
   assert.equal(script.match(/^\/\/ @name:zh-CN\s+(.+)$/m)?.[1], 'Peach 用户脚本');
   assert.equal(script.match(/^\/\/ @name:en\s+(.+)$/m)?.[1], 'Peach Userscript');
   assert.equal(script.match(/^\/\/ @name:zh-TW\s+(.+)$/m)?.[1], 'Peach 使用者腳本');

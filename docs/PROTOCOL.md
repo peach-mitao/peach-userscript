@@ -28,7 +28,7 @@ SOD 特典版的商品号在通常版后加 `v`（`1sdjs00304v`，官方番号 S
 
 `GET /api/jav-browser/updates` 使用同一 Bearer 专用令牌，无需番号或作品来源。返回 `{runtime:{version,build_id},release,userscript:{version,minimum_version,install_url,release_url}}`；`release` 沿用 Peach 的发行检查快照。服务端只读取本机状态，不联网检查发行版、不创建任务、不写 ledger。脚本只采纳合法脚本版本，安装入口固定为当前已配对 origin 的 `/integrations/peach-jav.user.js`，应用入口为该 origin 的 `/settings/maintenance#releaseUpdates`。
 
-独立检查固定请求 `https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js`，不带 Bearer、Cookie、来源站地址或影片身份。响应最大 128,000 字符，必须包含唯一默认 `@name`，值为 `Peach Userscript` 或 0.6.3 之前的 `Peach · JAV 入库`，以及`@namespace https://github.com/peach-mitao/peach-userscript` 与三段数字版本。只解析元数据区，不执行返回内容，也不采纳返回的安装地址；安装动作固定打开与 `@downloadURL` 相同的 Sleazy 安装文件 `https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js`，脚本管理器直接弹出更新确认。跨域响应与重定向均拒绝。
+独立检查固定请求 `https://update.sleazyfork.org/scripts/600821/Peach%20%E7%94%A8%E6%88%B7%E8%84%9A%E6%9C%AC.meta.js`，不带 Bearer、Cookie、来源站地址或影片身份。响应最大 128,000 字符，必须包含唯一默认 `@name`，值为 `Peach Userscript` 或 0.6.3 之前的 `Peach · JAV 入库`，以及`@namespace https://github.com/peach-mitao/peach-userscript` 与三段数字版本。只解析元数据区，不执行返回内容，也不采纳返回的安装地址；安装动作固定打开与 `@downloadURL` 相同的 Sleazy 安装文件 `https://update.sleazyfork.org/scripts/600821/Peach%20%E7%94%A8%E6%88%B7%E8%84%9A%E6%9C%AC.user.js`，脚本管理器直接弹出更新确认。跨域响应与重定向均拒绝。
 
 更新请求通过 `GM_xmlhttpRequest` 的 `anonymous` 模式发送；15 秒看门狗到期后调用 `abort()`。自动检查尝试时间与成功结果分别保存在 `peach.jav.update-attempted-at` 和 `peach.jav.updates`，自动尝试间隔至少 24 小时。页面隐藏或退出中止未完成请求；恢复可见时读取已保存结果，并在间隔到期时检查。手动检查独立于此间隔，失败保留明确错误与重试入口。
 
@@ -93,7 +93,7 @@ JavDB 演员页 `/actors/<id>`、DMM 女优片单 `/av/list/?actress=<编号>` �
 
 浮卡把本页番号以外的任务全部列在「其他任务」下，失败项最前，其次进行中，已完成的最后，每个番号一行，列表超出高度时自己滚动，带 `/api/jav-browser/people` 取得的人物头像（按番号与状态缓存，状态变化时重取）；点开进入该番号的进度页，显示同样的五段整体进度和状态说明，返回键回到浮卡主页。超过 3 项，或本页番号还在抓取时，列表自动折叠；点标题手动展开或折叠，手动的选择保持到自动条件变化为止。收成图标时角标显示进行中的数量。本页番号仍显示五段整体进度，并按快照推进。成功提示音只由写快照的页面在任务由进行中走到整理完成时响一次，已响过的任务记在 `peach.jav.chimed`，保留一天。
 
-浏览器添加的任务结束后，Peach 在列表里一直保留到确认为止，这类项带 `ended_key`（任务编号@结束时间；没有下载任务的未找到资源与搜索失败用番号@结束时间）与 `dismissed`。`dismissed` 为 `true` 的项不进「其他任务」，本页番号仍按它显示状态。未确认的已完成项排在进行中的之后，标题写出进行中、已完成与失败的项数（失败含未找到资源与整理失败），有失败项时标题与收起图标的角标变红；行尾的关闭键与进度页的「标为已读」逐条确认，展开后列表底部的「全部标为已读」确认全部。确认请求是 `POST /api/jav-browser/dismiss`，正文为 `{"keys": [...]}` 或 `{"all": true}`，返回与任务列表同一结构，脚本以它作为新快照；发请求前先在快照里标为已确认，各页面立刻收起。确认接口返回 404 或 405 时提示更新 Peach，重新取列表后任务照旧列出。没有进行中任务、仍有未确认的已结束任务时，收成图标的角标改为已结束的数量。
+浏览器添加的任务结束后，Peach 在列表里一直保留到确认为止，这类项带 `ended_key`（任务编号@结束时间；没有下载任务的未找到资源与搜索失败用番号@结束时间）与 `dismissed`。`dismissed` 为 `true` 的项不进「其他任务」，本页番号仍按它显示状态。未确认的已完成项排在进行中的之后，标题写出进行中、已完成与失败的项数（失败含未找到资源与整理失败），有失败项时标题与收起图标的角标变红；行尾的关闭键与进度页的「标为已读」逐条确认；已入库且带正整数 `asset_id` 的项，进度页改为「打开馆藏」，在新标签页打开 `<Peach 地址>/assets/<asset_id>` 并同时确认，展开后列表底部的「全部标为已读」确认全部。确认请求是 `POST /api/jav-browser/dismiss`，正文为 `{"keys": [...]}` 或 `{"all": true}`，返回与任务列表同一结构，脚本以它作为新快照；发请求前先在快照里标为已确认，各页面立刻收起。确认接口返回 404 或 405 时提示更新 Peach，重新取列表后任务照旧列出。没有进行中任务、仍有未确认的已结束任务时，收成图标的角标改为已结束的数量。
 
 排队中的任务带 `queue_position`（在搜索队列里排第几位）。排在第 2 位及以后时，进度页与本页浮卡显示「提前处理」，状态写出前面还有几项；按钮发 `POST /api/jav-browser/prioritize`，正文 `{"code": "SSIS-057"}`，Peach 把它挪到搜索队列最前面并返回状态查询同一结构。搜索、下载与整理阶段的先后不受影响；不在排队中的番号返回 400。接口返回 404 或 405 的旧版 Peach 提示更新。
 

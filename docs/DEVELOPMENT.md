@@ -42,7 +42,7 @@ npm run verify
 
 ## 发布与 Peach 同步
 
-已配对时，更新检查比较 Sleazy 与 Peach 随附脚本，入口指向较新版本的来源，同版本优先 Sleazy。任一来源失败仍显示另一来源已取得的更新。固定的 `@updateURL` 和 `@downloadURL` 让从 Peach 本地安装的脚本也使用 Sleazy 自动更新渠道。Sleazy 说明分别维护在 `SLEAZY.md`（英文）和 `SLEAZY.zh-CN.md`（中文），发布时填写对应语言的附加信息。
+已配对时，更新检查比较 Sleazy 与 Peach 随附脚本，入口指向较新版本的来源，同版本优先 Sleazy。任一来源失败仍显示另一来源已取得的更新。固定的 `@updateURL` 和 `@downloadURL` 让从 Peach 本地安装的脚本也使用 Sleazy 自动更新渠道。Sleazy 下发时会删掉这两行，按「先 `@downloadURL` 后 `@updateURL`、键后一个空格、地址用 Sleazy 页面上的脚本名」补在头部末尾；源码照这个写法，脚本管理器更新时才不会提示地址被更换。Sleazy 上的脚本改名后要同步改这两行。Sleazy 说明分别维护在 `SLEAZY.md`（英文）和 `SLEAZY.zh-CN.md`（中文），发布时填写对应语言的附加信息。
 
 发行说明按 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 区分新增、变更和修复；中英文描述同一事实，条目写法与长度上限见 [CHANGELOG](../CHANGELOG.md) 开头。兼容条件和尚未验证的范围写进 PR 与提交；Release 正文需要提醒时放在开头一段，两种语言都写。每项可追溯到实际 PR、issue 或提交，不虚构编号；尚需用户验证的 issue 使用普通引用或 `Refs`，不使用自动关闭关键词。末尾提供上一发行标签到当前标签的 `Full Changelog` 比较链接；首发使用 `Initial release / 初始发布` 和该标签的提交历史链接。GitHub Release 与 Sleazy 更新日志从同一份版本记录整理，不能把源码版本写成已经在该平台发布；旧平台日志无法编辑时在当前说明链接 [完整版本历史](../CHANGELOG.md)。
 

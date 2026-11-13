@@ -315,7 +315,7 @@ describe('JAV 用户脚本', () => {
         await answerMetadata(page, '9.1.0');
         await page.waitForFunction(() => document.querySelector('#peach-jav-updates')?.shadowRoot?.textContent?.includes('v9.1.0 可更新'));
         assert.equal(await updatePanel(page).getByRole('link', { name: '更新用户脚本' }).getAttribute('href'),
-          'https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js');
+          'https://update.sleazyfork.org/scripts/600821/Peach%20%E7%94%A8%E6%88%B7%E8%84%9A%E6%9C%AC.user.js');
         assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.installed-version']), VERSION);
         await page.evaluate(() => window.javMock.menus['检测更新']!());
         await waitUpdates(page, 2);
@@ -397,7 +397,7 @@ describe('JAV 用户脚本', () => {
         assert.equal(requests[1]!.url,`${BASE}/api/jav-browser/updates`);
         const install = updatePanel(page).getByRole('link',{name:'更新用户脚本',exact:true});
         await install.waitFor();
-        assert.equal(await install.getAttribute('href'),example.source==='peach'?`${BASE}/integrations/peach-jav.user.js`:'https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js');
+        assert.equal(await install.getAttribute('href'),example.source==='peach'?`${BASE}/integrations/peach-jav.user.js`:'https://update.sleazyfork.org/scripts/600821/Peach%20%E7%94%A8%E6%88%B7%E8%84%9A%E6%9C%AC.user.js');
         assert.ok((await updatePanel(page).getByLabel('用户脚本更新状态').innerText()).includes(`v${example.version}`));
       } finally { await close(); }
     });
@@ -422,7 +422,7 @@ describe('JAV 用户脚本', () => {
         const waiting=page.waitForEvent('popup');
         await panel.getByRole('link',{name:'更新用户脚本',exact:true}).click();
         const installer=await waiting;
-        assert.equal(await installer.url(),'https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js');
+        assert.equal(await installer.url(),'https://update.sleazyfork.org/scripts/600821/Peach%20%E7%94%A8%E6%88%B7%E8%84%9A%E6%9C%AC.user.js');
         await installer.close();await page.clock.runFor(20);
         await panel.getByRole('button',{name:'刷新本页',exact:true}).waitFor();
         assert.equal(await panel.getByLabel('用户脚本更新状态').innerText(),'在脚本管理器完成更新后，刷新本页即可使用。');
@@ -1617,6 +1617,49 @@ describe('JAV 用户脚本', () => {
     } finally {await opened.close();}
   });
 
+  it('番号列默认按页面顺序，点表头依次切到字母升序、倒序再回页面顺序，记住选择，勾选随行移动', async () => {
+    const opened = await open(browser, {url:'https://javdb.com/', html:'<p>SSIS-057 IPX-100 ABP-616 IPX-99</p>'});
+    const {page} = opened;
+    try {
+      await page.evaluate(() => window.javMock.menus['开启']!());
+      const list = page.locator('#peach-jav-batch');
+      const codes = () => list.locator('.batch-row-code').allTextContents();
+      const header = list.getByRole('columnheader', {name:'番号', exact:true});
+      await list.getByRole('checkbox',{name:'选择 IPX-99',exact:true}).waitFor();
+      assert.deepEqual(await codes(), ['SSIS-057','IPX-100','ABP-616','IPX-99']);
+      assert.equal(await header.getAttribute('aria-sort'), 'none');
+      await list.getByRole('checkbox',{name:'选择 ABP-616',exact:true}).check();
+      await list.getByRole('button',{name:'番号',exact:true}).click();
+      assert.deepEqual(await codes(), ['ABP-616','IPX-99','IPX-100','SSIS-057']);
+      assert.equal(await header.getAttribute('aria-sort'), 'ascending');
+      assert.equal(await list.locator('.batch-row').first().locator('input').isChecked(), true);
+      assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.batch-order']), 'ascending');
+      await list.getByRole('button',{name:'番号',exact:true}).click();
+      assert.deepEqual(await codes(), ['SSIS-057','IPX-100','IPX-99','ABP-616']);
+      assert.equal(await header.getAttribute('aria-sort'), 'descending');
+      assert.equal(await list.locator('.batch-row').last().locator('input').isChecked(), true);
+      assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.batch-order']), 'descending');
+      await list.getByRole('button',{name:'番号',exact:true}).click();
+      assert.deepEqual(await codes(), ['SSIS-057','IPX-100','ABP-616','IPX-99']);
+      assert.equal(await header.getAttribute('aria-sort'), 'none');
+      assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.batch-order']), 'page');
+      assert.deepEqual(opened.problems,[]);
+    } finally {await opened.close();}
+  });
+
+  it('上次选了字母倒序时，打开列表直接按倒序排列', async () => {
+    const opened = await open(browser, {url:'https://javdb.com/', html:'<p>ABP-616 SSIS-057 IPX-001</p>', updateValues:{'peach.jav.batch-order':'descending'}});
+    const {page} = opened;
+    try {
+      await page.evaluate(() => window.javMock.menus['开启']!());
+      const list = page.locator('#peach-jav-batch');
+      await list.getByRole('checkbox',{name:'选择 SSIS-057',exact:true}).waitFor();
+      assert.deepEqual(await list.locator('.batch-row-code').allTextContents(), ['SSIS-057','IPX-001','ABP-616']);
+      assert.equal(await list.getByRole('columnheader', {name:'番号', exact:true}).getAttribute('aria-sort'), 'descending');
+      assert.deepEqual(opened.problems,[]);
+    } finally {await opened.close();}
+  });
+
   it('整页扫描只收带分隔符的番号，不把用户名、评论署名、导航和域名补成番号', async () => {
     const opened = await open(browser, {url:'https://javdb.com/', html:'<nav>TOP250</nav><p>hhd800.com@FC2-PPV-4302474.mp4</p>'
       + '<p>Exclusive50%OFF!</p><p>jay925 hush666 lexburner69 guangdao19450806</p><p>FC2-4091275 SSIS-057 ssis058</p>'
@@ -2305,6 +2348,42 @@ describe('JAV 用户脚本', () => {
       await shared.getByRole('button', { name: '将 ABW-123 标为已读' }).click();
       await shared.getByRole('alert').filter({ hasText: 'Peach 尚不支持确认已结束的任务，请更新 Peach。' }).waitFor();
       await shared.locator('.shared-row[data-code="ABW-123"]').waitFor();
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
+  it('进度页只剩一个按钮时用主按钮；在这页入库完成后「提前处理」换成「打开馆藏」，点了打开这部作品并标为已读', async () => {
+    const done = { state: 'ingested', label: '已入库', progress: 1, postprocess_state: 'complete', postprocess_label: '已整理' };
+    const plain = { ...body('ingested', 'ABP-616'), ended_key: '22@2026-11-14T08:01:00+00:00', dismissed: false, download: done } as Body;
+    const opened = await open(browser, { initial: 'owned', activeItems: [{ ...body('queued', 'STAR-628'), queue_position: 2 } as Body, plain] });
+    const { page } = opened;
+    try {
+      const root = page.locator(ROOT), shared = root.locator('.shared-tasks'), task = root.locator('.task-page');
+      const primary = (name: string) => task.getByRole('button', { name, exact: true }).evaluate(node => node.classList.contains('primary'));
+      await page.waitForFunction(root => document.querySelector(root)?.shadowRoot?.querySelector('.shared-row'), ROOT);
+      await page.evaluate(() => { Object.assign(window, { opened: [] as unknown[] });
+        window.open = (...args: unknown[]) => { (window as unknown as { opened: unknown[] }).opened.push(args); return null; }; });
+      // Peach 没带回作品编号时仍是「标为已读」，作为唯一的按钮用主按钮。
+      await shared.locator('.shared-row[data-code="ABP-616"]').click();
+      assert.equal(await task.getByRole('button', { name: '打开馆藏' }).isHidden(), true);
+      assert.equal(await primary('标为已读'), true);
+      await task.getByRole('button', { name: '返回 Peach 主页', exact: true }).click();
+      await task.waitFor({ state: 'detached' });
+      await shared.locator('.shared-row[data-code="STAR-628"]').click();
+      assert.equal(await primary('提前处理'), true);
+      // 停在进度页时入库完成：快照更新后「提前处理」消失，「打开馆藏」接替为主按钮。
+      await page.evaluate(items => { window.javMock.activeItems = items; }, [{ ...body('ingested', 'STAR-628'), asset_id: 4321,
+        ended_key: '21@2026-11-14T08:00:00+00:00', dismissed: false, download: done } as Body, plain]);
+      await page.clock.fastForward(5_000);
+      await task.getByRole('button', { name: '打开馆藏', exact: true }).waitFor();
+      assert.equal(await task.getByRole('button', { name: '提前处理' }).isHidden(), true);
+      assert.equal(await task.getByRole('button', { name: '标为已读' }).isHidden(), true);
+      assert.equal(await primary('打开馆藏'), true);
+      await task.getByRole('button', { name: '打开馆藏' }).click();
+      assert.deepEqual(await page.evaluate(() => (window as unknown as { opened: unknown[] }).opened), [[`${BASE}/assets/4321`, '_blank', 'noopener']]);
+      assert.deepEqual(await page.evaluate(() => window.javMock.dismissals.at(-1)), { keys: ['21@2026-11-14T08:00:00+00:00'] });
+      assert.equal(await task.count(), 0);
+      assert.deepEqual(await shared.locator('.shared-code').allTextContents(), ['ABP-616']);
       assert.deepEqual(opened.problems, []);
     } finally { await opened.close(); }
   });
