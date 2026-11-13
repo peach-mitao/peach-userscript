@@ -6,7 +6,7 @@ Entries are written for users to scan: one sentence each, saying where something
 
 ## 0.7.9 — 2026-11-13
 
-Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
+Includes the changes recorded below for source-only versions 0.7.6–0.7.8. / 包含下方仅源码版本 0.7.6–0.7.8 中记录的变更。
 
 ### Changed / 变更
 
