@@ -12,6 +12,7 @@ Entries are written for users to scan: one sentence each, saying where something
 
 ### Changed / 变更
 
+- **Panels** keep every button at the bottom below Other tasks, and a subscribed actress shows a pressed Subscribed button that offers Unsubscribe on hover. / 浮卡按钮统一排在「其他任务」下方；已订阅的女优显示按下态的「已订阅新作」，悬停可取消。
 - **Buttons** highlight the main action on task progress, such as Retry, and Settings hide Check for updates while an update is shown. / 进度页把重试等主要动作设为主按钮；设置页已提示可更新时不再显示「检查更新」。
 
 ## 0.7.11 — 2026-11-14

@@ -2378,7 +2378,9 @@ describe('JAV 用户脚本', () => {
       // 旧版 Peach 没有确认接口：提示更新，任务照旧留在列表里。
       await page.evaluate(() => { window.javMock.dismissStatus = 404; window.javMock.activeItems = [{ ok: true, code: 'ABW-123', state: 'failed',
         message: 'failed', ended_key: '15@2026-11-04T08:03:00+00:00', dismissed: false } as never]; });
+      // 没有进行中的任务时不定时查询；页面回到前台、快照超过 30 秒时补查一次，取到新的失败项。
       await page.clock.fastForward(31_000);
+      await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
       await shared.locator('.shared-row[data-code="ABW-123"]').waitFor();
       await shared.getByRole('button', { name: '将 ABW-123 标为已读' }).click();
       await shared.getByRole('alert').filter({ hasText: 'Peach 尚不支持确认已结束的任务，请更新 Peach。' }).waitFor();
@@ -2636,31 +2638,49 @@ describe('JAV 用户脚本', () => {
     } finally { await opened.close(); }
   });
 
-  it('JavDB 女优页带上标题栏的名字向 Peach 认人，订阅新作后可以取消', async () => {
+  it('JavDB 女优页带上标题栏的名字向 Peach 认人，订阅新作后是按下态、可以取消，按钮统一在其他任务下方', async () => {
     const opened = await open(browser, { url: 'https://javdb.com/actors/bkxd?page=2', title: '森日向子 | JavDB',
       html: '<h2><span class="actor-section-name">森日向子, 白石アイリ</span></h2>',
       performer: { name: '森日向子', entity_id: 8112, following: false } });
     const { page } = opened;
     try {
       const panel = page.locator('#peach-jav-updates'), section = panel.locator('.performer-follow');
-      await section.getByRole('button', { name: '订阅新作' }).waitFor();
+      const feed = panel.locator('.feed-toggle'), scan = panel.getByRole('button', { name: '识别本页全部番号' });
+      const primary = (node: typeof feed) => node.evaluate(button => button.classList.contains('primary'));
+      await panel.getByRole('button', { name: '订阅新作', exact: true }).waitFor();
       assert.equal(await section.locator('strong').textContent(), '森日向子');
       assert.equal(await section.getByRole('status').textContent(), '订阅后，Peach 会定期查她的新作。');
-      // 识别本页番号退成次要按钮，订阅是这张面板的主操作。
-      assert.equal(await panel.getByRole('button', { name: '识别本页全部番号' }).evaluate(node => node.classList.contains('primary')), false);
+      // 先女优信息，再其他任务，订阅与识别两枚按钮排在最下面。
+      assert.deepEqual(await panel.locator('.body').first().evaluate(body => [...body.children].map(node =>
+        node.classList.contains('performer-follow') ? 'performer' : node.classList.contains('shared-tasks') ? 'shared'
+          : node.classList.contains('feed-toggle') ? 'feed' : node.textContent === '识别本页全部番号' ? 'scan' : '').filter(Boolean)),
+        ['performer', 'shared', 'feed', 'scan']);
+      // 未订阅时订阅是这张面板的主操作，识别本页番号退成次要按钮。
+      assert.equal(await primary(feed), true);
+      assert.equal(await primary(scan), false);
+      assert.equal(await feed.getAttribute('aria-pressed'), 'false');
       const [lookup] = await page.evaluate(() => window.javMock.performerCalls);
       const asked = new URL(lookup!.url);
       assert.deepEqual([lookup!.method, asked.searchParams.get('source_url'), asked.searchParams.getAll('names')],
         ['GET', 'https://javdb.com/actors/bkxd', ['森日向子, 白石アイリ']]);
       assert.equal(lookup!.headers.Authorization, `Bearer ${TOKEN}`);
-      await section.getByRole('button', { name: '订阅新作' }).click();
-      await section.getByRole('button', { name: '取消订阅新作' }).waitFor();
-      assert.equal(await section.getByRole('status').textContent(), '已订阅新作，Peach 会定期查她的新作。');
+      await feed.click();
+      // 已订阅：按下态，带订阅橙的 RSS 图标，不再是主按钮；主按钮回到识别本页番号。
+      await panel.getByRole('button', { name: '已订阅新作', exact: true, pressed: true }).waitFor();
+      assert.equal(await section.getByRole('status').textContent(), 'Peach 会定期查她的新作。');
+      assert.equal(await feed.locator('.feed-mark').count(), 1);
+      assert.equal(await primary(feed), false);
+      assert.equal(await primary(scan), true);
       const posted = await page.evaluate(() => window.javMock.performerCalls.at(-1)!);
       assert.deepEqual([posted.method, JSON.parse(posted.data!)],
         ['POST', { source_url: 'https://javdb.com/actors/bkxd', names: ['森日向子, 白石アイリ'], enabled: true }]);
-      await section.getByRole('button', { name: '取消订阅新作' }).click();
-      await section.getByRole('button', { name: '订阅新作' }).waitFor();
+      // 刚点完指针还在按钮上，仍写「已订阅新作」；移开再悬停时字换成「取消订阅新作」，点了取消，回到未订阅的主按钮。
+      await page.mouse.move(0, 0);
+      await feed.hover();
+      await panel.getByRole('button', { name: '取消订阅新作', exact: true }).click();
+      await panel.getByRole('button', { name: '订阅新作', exact: true, pressed: false }).waitFor();
+      assert.equal(await primary(feed), true);
+      assert.equal(await primary(scan), false);
       assert.deepEqual(opened.problems, []);
     } finally { await opened.close(); }
   });
@@ -2674,15 +2694,15 @@ describe('JAV 用户脚本', () => {
         performer: { name: '涼森れむ', entity_id: null, following: false } });
       const { page } = opened;
       try {
-        const section = page.locator('#peach-jav-updates .performer-follow');
-        await section.getByRole('button', { name: '订阅新作' }).waitFor();
+        const section = page.locator('#peach-jav-updates .performer-follow'), panel = page.locator('#peach-jav-updates');
+        await panel.getByRole('button', { name: '订阅新作', exact: true }).waitFor();
         assert.equal(new URL((await page.evaluate(() => window.javMock.performerCalls[0]!)).url).searchParams.get('source_url'), source);
         assert.match(await section.getByRole('status').textContent() || '',
           url.includes('dmm') ? /订阅时会新建她/ : /订阅时会到 JavDB 确认是同一个人/);
         await page.evaluate(() => { window.javMock.performerError = 'JavDB 上按「涼森れむ」没能确认是同一位女优，请到她的 JavDB 演员页订阅'; });
-        await section.getByRole('button', { name: '订阅新作' }).click();
+        await panel.getByRole('button', { name: '订阅新作', exact: true }).click();
         await page.waitForFunction(() => /没能确认是同一位女优/.test(document.querySelector('#peach-jav-updates')!.shadowRoot!.querySelector('.performer-follow [role=status]')!.textContent!));
-        assert.equal(await section.getByRole('button', { name: '订阅新作' }).isEnabled(), true);
+        assert.equal(await panel.getByRole('button', { name: '订阅新作', exact: true }).isEnabled(), true);
       } finally { await opened.close(); }
     }
     const old = await open(browser, { url: 'https://javdb.com/actors/bkxd', html: '<h2><span class="actor-section-name">森日向子</span></h2>' });
@@ -2693,6 +2713,7 @@ describe('JAV 用户脚本', () => {
       // 旧版 Peach 认不了人：这一块不显示，入口面板也不为它自动展开。
       assert.equal(await old.page.locator('#peach-jav-updates').getAttribute('data-panel-mode'), 'minimized');
       assert.equal(await old.page.locator('#peach-jav-updates .performer-follow').evaluate(node => (node as HTMLElement).hidden), true);
+      assert.equal(await old.page.locator('#peach-jav-updates .feed-toggle').evaluate(node => (node as HTMLElement).hidden), true);
     } finally { await old.close(); }
   });
 

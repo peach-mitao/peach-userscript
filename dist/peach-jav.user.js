@@ -592,6 +592,8 @@
     .geist-button.primary::before{content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;background:var(--board-blue-hover);opacity:0;transition:opacity .15s ease}
     .geist-button.icon{padding:0;width:var(--control-h);flex:none;border:0;background:transparent;box-shadow:none}
     .geist-button svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .feed-toggle{gap:6px}.feed-toggle .feed-mark{color:var(--feed-mark,#F78422)}.feed-toggle .feed-mark circle{fill:currentColor;stroke:none}
+    .feed-toggle .feed-off,.feed-toggle[aria-pressed=true]:not([data-fresh]):is(:hover,:focus-visible) .feed-on{display:none}.feed-toggle[aria-pressed=true]:not([data-fresh]):is(:hover,:focus-visible) .feed-off{display:inline}
     .geist-button:focus-visible{outline:2px solid var(--tungsten);outline-offset:2px}
     @media(hover:hover) and (pointer:fine){.geist-button:not(:disabled,[aria-disabled=true]):hover{background-color:var(--color-background-primary-hover);border-color:var(--color-border-button-hover)}
       .geist-button.primary:not(:disabled,[aria-disabled=true]):hover::before{opacity:1}}
@@ -1469,18 +1471,48 @@
     head.append(people, label);
     const note = element('p', 'geist-note');
     note.setAttribute('role', 'status'); note.setAttribute('aria-live', 'polite');
+    // 按钮不放在这一节里：面板的按钮统一排在最下面，「其他任务」在按钮上方。
+    // 与 Peach 实体页的「订阅新作」开关同一语义：未订阅时是主按钮；已订阅时是按下态，带订阅橙的 RSS 图标，
+    // 悬停或聚焦时字换成「取消订阅新作」，点了取消。
     const button = control('订阅新作', { primary: true });
-    button.addEventListener('click', () => void togglePerformer());
-    node.append(head, note, button);
+    button.classList.add('feed-toggle');
+    button.setAttribute('aria-pressed', 'false');
+    // 刚点完时指针还停在按钮上：等指针离开或焦点移走一次，悬停才换成「取消订阅新作」，免得一订上就写着取消。
+    button.addEventListener('click', () => { button.dataset.fresh = ''; void togglePerformer(); });
+    // 请求进行中按钮被禁用，焦点随之离开：这次失焦不算移走。
+    button.addEventListener('pointerleave', () => { delete button.dataset.fresh; });
+    button.addEventListener('blur', () => { if (!button.disabled) delete button.dataset.fresh; });
+    node.append(head, note);
     performerView = { node, people, label, note, button, key: '', page: null, body: null, busy: false, error: '', unsupported: false };
     return node;
+  }
+
+  // Peach 页面里的 RSS 图标（index.html 的 i-rss）。
+  function feedGlyph() {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true'); svg.classList.add('feed-mark');
+    for (const d of ['M4 11a9 9 0 0 1 9 9', 'M4 4a16 16 0 0 1 16 16']) {
+      const path = document.createElementNS(svg.namespaceURI, 'path'); path.setAttribute('d', d); svg.append(path);
+    }
+    const dot = document.createElementNS(svg.namespaceURI, 'circle');
+    for (const [name, value] of Object.entries({ cx: '5', cy: '19', r: '1' })) dot.setAttribute(name, value);
+    svg.append(dot);
+    return svg;
   }
 
   function paintPerformer(page) {
     const view = performerView;
     if (!view?.node.isConnected) return;
+    paintPerformerSection(view, page);
+    // 女优页上未订阅时「订阅新作」是这张面板的主操作，识别本页番号退成次要按钮；
+    // 已订阅后订阅键是按下态，主按钮回到识别本页番号。
+    updateEntry?.scan.classList.toggle('primary', view.button.hidden || !view.button.classList.contains('primary'));
+  }
+
+  function paintPerformerSection(view, page) {
     const config = configuration();
     view.node.hidden = !page || !config || view.unsupported;
+    view.button.hidden = view.node.hidden;
     if (view.node.hidden) return;
     const key = `${config.base}|${page.source}|${page.names.join(',')}`;
     if (key !== view.key) {
@@ -1496,12 +1528,17 @@
     try { if (body?.name) renderPeople(view.people, [{ name: body.name, ...(body.avatar ? { avatar: body.avatar } : {}) }]); } catch { /* 保留默认人像。 */ }
     view.note.dataset.variant = view.error ? 'error' : 'secondary';
     view.note.textContent = view.error || (!body ? '正在向 Peach 查询这位女优'
-      : body.following ? '已订阅新作，Peach 会定期查她的新作。'
+      : body.following ? 'Peach 会定期查她的新作。'
       : body.entity_id !== null ? '订阅后，Peach 会定期查她的新作。'
       : page.byId ? 'Peach 里还没有这位女优，订阅时会新建她。'
       : 'Peach 里还没有这位女优，订阅时会到 JavDB 确认是同一个人。');
-    view.button.textContent = view.busy ? '正在处理' : body?.following ? '取消订阅新作' : '订阅新作';
-    view.button.classList.toggle('primary', !body?.following);
+    const following = Boolean(body?.following);
+    if (view.busy) view.button.textContent = '正在处理';
+    else if (following) view.button.replaceChildren(feedGlyph(), element('span', 'feed-on', '已订阅新作'), element('span', 'feed-off', '取消订阅新作'));
+    else view.button.textContent = '订阅新作';
+    view.button.setAttribute('aria-pressed', String(following));
+    view.button.title = following && !view.busy ? '已订阅新作，点击取消订阅' : '';
+    view.button.classList.toggle('primary', !following);
     view.button.disabled = view.busy || (!body && !view.error);
     view.button.setAttribute('aria-busy', String(view.busy));
   }
@@ -1553,13 +1590,13 @@
       actions.append(settings, collapse, later);
       bar.append(element('strong', '', 'Peach'), actions);
       const scan = control('识别本页全部番号', { primary: true }); scan.addEventListener('click', openPageActions);
-      const body = element('div', 'body'); body.append(performerSection(), updateSection({ availableOnly: true }), sharedSection(), scan);
+      // 先信息（女优、更新提示），再「其他任务」，按钮统一排在最下面。
+      const body = element('div', 'body');
+      body.append(performerSection(), updateSection({ availableOnly: true }), sharedSection(), performerView.button, scan);
       launcher.addEventListener('click', () => { entryOpen = true; entryCollapsed = false; refreshUpdateEntry(); later.focus(); });
       panel.append(bar, body); entry.shadow.append(panel, launcher);
       updateEntry = { ...entry, launcher, panel, body, collapse, scan };
     }
-    // 女优页上「订阅新作」是这张面板的主操作，识别本页番号退成次要按钮。
-    updateEntry.scan.classList.toggle('primary', !performer);
     paintPerformer(performer);
     const folded = expanded && entryCollapsed;
     updateEntry.root.dataset.panelMode = !expanded ? 'minimized' : folded ? 'collapsed' : 'expanded';
@@ -3338,7 +3375,8 @@
     const alternate = control('加入通常版'); alternate.dataset.action = 'add-alternate'; alternate.hidden = true;
     const ahead = control('提前处理'); ahead.dataset.action = 'prioritize'; ahead.hidden = true;
     const scan = control('识别本页全部番号'); scan.addEventListener('click', openPageActions);
-    body.append(note, flow, button, alternate, ahead, scan, sharedSection(), updateSection({ availableOnly: true }));
+    // 先状态与进度、更新提示，再「其他任务」，按钮统一排在最下面；与入口面板同一顺序。
+    body.append(note, flow, updateSection({ availableOnly: true }), sharedSection(), button, alternate, ahead, scan);
     panel.append(bar, body);
     const launcher = control('展开 Peach 面板');
     launcher.classList.add('launcher');
