@@ -2,7 +2,7 @@ import { readFile, writeFile, stat, lstat, realpath, rename, rm } from 'node:fs/
 import { createHash, randomUUID } from 'node:crypto';
 import { resolve, dirname, relative, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { build, ROOT } from './build.mjs';
+import { build, ROOT } from './build.ts';
 
 const repository = 'https://github.com/peach-mitao/peach-userscript';
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -80,7 +80,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const name = args[index];
     if (name === '--apply' && !options.apply) options.apply = true;
     else if (['--target', '--commit'].includes(name) && !options[name.slice(2)] && args[index + 1] && !args[index + 1].startsWith('--')) options[name.slice(2)] = args[++index];
-    else throw new Error('用法：node scripts/export-peach.mjs --target <Peach隔离工作树> --commit <40位提交SHA> [--apply]');
+    else throw new Error('用法：node scripts/export-peach.ts --target <Peach隔离工作树> --commit <40位提交SHA> [--apply]');
   }
   console.log(JSON.stringify(await exportPeach(options), null, 2));
 }

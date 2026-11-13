@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { exportPeach } from '../scripts/export-peach.mjs';
+import { exportPeach } from '../scripts/export-peach.ts';
 
 test('Peach 导出预览不改文件，apply 只同步指定制品并记录上游提交', async () => {
   const fixture = resolve(await mkdtemp(join(tmpdir(), 'peach-consumer-')));

@@ -1,8 +1,8 @@
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ROOT } from './build.mjs';
-import { sha256 } from './sync-candidates.mjs';
+import { ROOT } from './build.ts';
+import { sha256 } from './sync-candidates.ts';
 
 const sourceIds = {
   missav: [576375, 529125], javlibrary: [576375, 449158], javbus: [576375], javmost: [429173],
@@ -73,7 +73,7 @@ export async function recordReview(sourceDir, baselineFile, root = ROOT) {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
-  if (args.length !== 4 || args[0] !== '--source-dir' || args[2] !== '--baseline') throw new Error('用法：node scripts/record-review.mjs --source-dir <本地取证目录> --baseline <导入前站点清单>');
+  if (args.length !== 4 || args[0] !== '--source-dir' || args[2] !== '--baseline') throw new Error('用法：node scripts/record-review.ts --source-dir <本地取证目录> --baseline <导入前站点清单>');
   const result = await recordReview(args[1], args[3]);
   console.log(`记录 ${result.registered.length} 项域名登记和 ${result.pending.length} 项待核验记录`);
 }

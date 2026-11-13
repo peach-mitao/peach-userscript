@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, resolve, relative, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ROOT, validateManifest, validDomain } from './build.mjs';
+import { ROOT, validateManifest, validDomain } from './build.ts';
 
 const MAX_BYTES = 2_000_000;
 export const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -142,7 +142,7 @@ export async function sync({ root = ROOT, fetchMissing = false, output = 'candid
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
-  if (args.some(arg => arg !== '--fetch') || args.length > 1) throw new Error('用法：node scripts/sync-candidates.mjs [--fetch]');
+  if (args.some(arg => arg !== '--fetch') || args.length > 1) throw new Error('用法：node scripts/sync-candidates.ts [--fetch]');
   const result = await sync({ fetchMissing: args.includes('--fetch') });
   console.log(`生成 ${result.candidates.length} 条待复核候选：candidates/mirrors.json`);
 }
