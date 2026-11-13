@@ -2187,6 +2187,48 @@ describe('JAV 用户脚本', () => {
     } finally { await opened.close(); }
   });
 
+  it('共享进度：没有进行中的任务时不定时请求，页面隐藏时交出锁并停下，查不到时放慢', async () => {
+    const opened = await open(browser, { activeItems: [] });
+    const { page } = opened;
+    const requests = () => page.evaluate(() => window.javMock.activeRequests);
+    const show = (state: 'hidden' | 'visible') => page.evaluate(value => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value });
+      document.dispatchEvent(new Event('visibilitychange'));
+    }, state);
+    try {
+      await ready(page);
+      // 载入时没有快照，补查一次；没有进行中的任务就不再定时查。
+      await page.waitForFunction(() => window.javMock.activeRequests === 1);
+      await page.clock.fastForward(120_000);
+      assert.equal(await requests(), 1);
+      // 别的窗口写进来一项进行中的任务：本窗口持锁，每 4 秒查一次。
+      await page.evaluate(base => {
+        window.javMock.activeItems = [{ ok: true, code: 'ABP-616', state: 'searching', message: 'searching' }];
+        window.javMock.changed('peach.jav.tasks', JSON.stringify({ version: 1, base, at: Date.now(), available: true,
+          items: window.javMock.activeItems }), true);
+      }, BASE);
+      await page.clock.fastForward(4_100);
+      await page.waitForFunction(() => window.javMock.activeRequests === 2);
+      // 页面隐藏：交出锁，任务还在进行也不再请求。
+      await show('hidden');
+      assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.poller']), 'null');
+      await page.clock.fastForward(60_000);
+      assert.equal(await requests(), 2);
+      // 回到前台立刻补查；Peach 回的列表无效时，间隔从 4 秒放慢到 8 秒、再到 16 秒。
+      await page.evaluate(() => { window.javMock.activeItems = 'broken' as never; });
+      await show('visible');
+      await page.waitForFunction(() => window.javMock.activeRequests === 3);
+      await page.clock.fastForward(4_100);
+      assert.equal(await requests(), 3);
+      await page.clock.fastForward(4_000);
+      await page.waitForFunction(() => window.javMock.activeRequests === 4);
+      await page.clock.fastForward(12_000);
+      assert.equal(await requests(), 4);
+      await page.clock.fastForward(4_000);
+      await page.waitForFunction(() => window.javMock.activeRequests === 5);
+    } finally { await opened.close(); }
+  });
+
   it('排队中、前面还有别的番号时，进度页可以提前处理', async () => {
     const opened = await open(browser, { initial: 'owned', automatic: false,
       activeItems: [{ ...body('queued', 'JUL-500'), queue_position: 3 } as Body] });
