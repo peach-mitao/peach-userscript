@@ -10,7 +10,7 @@
 // @supportURL   https://github.com/peach-mitao/peach-userscript/issues
 // @homepageURL  https://github.com/peach-mitao/peach-userscript
 // @license      AGPL-3.0-or-later
-// @version      0.7.11
+// @version      0.7.12
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -26,6 +26,7 @@
 // @grant        GM_registerMenuCommand
 // @grant        GM_xmlhttpRequest
 // @grant        GM_info
+// @grant        GM_setClipboard
 // @grant        GM_addValueChangeListener
 // @grant        GM_removeValueChangeListener
 // @grant        window.onurlchange
@@ -193,6 +194,8 @@
   let updateCache = readUpdateCache();
   let updateError = '';
   let updateChecking = false;
+  // 这台 Peach 能不能从脚本登记想要：undefined 还不知道，由任一单条状态响应里有没有 want 键决定。
+  let wantSupport;
   let updateInstallVersion = '';
   let updateDismissed = '';
   // 没有单部作品浮卡的页面，图标展开的是入口面板；本页番号返回时回到这里。
@@ -332,6 +335,8 @@
     .bar{min-height:var(--fieldset-bar-h);padding:8px 16px 8px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
     .bar.subpage-bar{justify-content:flex-start;gap:8px}.task-page .bar-title{flex:1}
     .bar strong{font-weight:500;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+    .copy-code{cursor:copy;border-radius:4px}.copy-code[data-code=""]{cursor:auto}.copy-code:focus-visible{outline:2px solid var(--tungsten);outline-offset:2px}
+    .bar-title{position:relative}.copy-feedback{position:absolute;top:calc(100% + 4px);z-index:2;padding:2px 8px;border-radius:6px;font:var(--board-caption);color:var(--ground);background:var(--ink);white-space:nowrap;pointer-events:none}.copy-feedback[data-variant=error]{background:var(--drop)}
     .bar-heading{display:grid;min-width:0;gap:2px}.bar-title{display:flex;align-items:center;gap:8px;min-width:0}.bar-summary{font:var(--board-caption);color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .bar-actions{display:flex;gap:4px;flex:none}
     .bar-actions [data-collapse-chevron]{transition:transform .2s ease-in-out}
@@ -376,6 +381,9 @@
     .geist-button.primary::before{content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;background:var(--board-blue-hover);opacity:0;transition:opacity .15s ease}
     .geist-button.icon{padding:0;width:var(--control-h);flex:none;border:0;background:transparent;box-shadow:none}
     .geist-button svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .feed-toggle{gap:6px}.feed-toggle .feed-mark{color:var(--feed-mark,#F78422)}.feed-toggle .feed-mark circle{fill:currentColor;stroke:none}
+    .feed-toggle .feed-off,.feed-toggle[aria-pressed=true]:not([data-fresh]):is(:hover,:focus-visible) .feed-on{display:none}.feed-toggle[aria-pressed=true]:not([data-fresh]):is(:hover,:focus-visible) .feed-off{display:inline}
+    .want-toggle{gap:6px}.want-toggle svg{fill:currentColor;stroke:none}.want-toggle[data-added]{cursor:default;color:var(--ink-2)}.want-toggle[data-added]:hover{background:var(--color-background-primary-default)}
     .geist-button:focus-visible{outline:2px solid var(--tungsten);outline-offset:2px}
     @media(hover:hover) and (pointer:fine){.geist-button:not(:disabled,[aria-disabled=true]):hover{background-color:var(--color-background-primary-hover);border-color:var(--color-border-button-hover)}
       .geist-button.primary:not(:disabled,[aria-disabled=true]):hover::before{opacity:1}}
@@ -571,6 +579,40 @@
       }
       node.append(svg);
     }
+    return node;
+  }
+
+  // 标题栏的番号点一下复制；鼠标、Enter 与空格都能触发，复制后在番号后面短暂显示结果。
+  // code 返回当前可复制的番号，没有确定的番号时返回空串，此时不响应。
+  function copyableCode(node, code) {
+    node.classList.add('copy-code');
+    node.tabIndex = 0;
+    node.setAttribute('role', 'button');
+    node.title = '复制番号';
+    let timer = 0;
+    const copy = async () => {
+      const value = code();
+      if (!value) return;
+      let done = true;
+      try {
+        if (typeof GM_setClipboard === 'function') GM_setClipboard(value, 'text');
+        else await navigator.clipboard.writeText(value);
+      } catch { done = false; }
+      const feedback = node.parentElement?.querySelector(':scope > .copy-feedback') || element('span', 'copy-feedback');
+      feedback.setAttribute('role', 'status');
+      feedback.textContent = done ? '已复制' : '复制失败';
+      feedback.dataset.variant = done ? '' : 'error';
+      // 浮在番号下方，不占标题行宽度，番号不会被挤成省略号。
+      feedback.style.left = `${node.offsetLeft}px`;
+      if (!feedback.isConnected) node.after(feedback);
+      clearTimeout(timer);
+      timer = setTimeout(() => feedback.remove(), 1500);
+    };
+    node.addEventListener('click', () => { void copy(); });
+    node.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault(); void copy();
+    });
     return node;
   }
 
@@ -1116,7 +1158,11 @@
     check.disabled = updateChecking;
     check.addEventListener('click', () => { if (!updateChecking) void checkUpdates(true); });
     const tools = element('div', 'update-actions');
-    if (!availableOnly) (available ? tools : actions).append(check);
+    const config = configuration();
+    const peach = config && updateCache.peach?.base === config.base ? updateCache.peach : null;
+    const peachAvailable = model.kind !== 'peach' && peach?.release?.state === 'available' && typeof peach.release.latest_version === 'string';
+    // 已经显示了可装的更新或待刷新时不再给「检查更新」；有来源没查通时保留，方便重试。
+    if (!availableOnly && (!(available || peachAvailable) || (updateError && !updateChecking))) (available ? tools : actions).append(check);
     if (available) {
       // 标题沿用带编辑键与读屏名的那一行，动作放进框内。
       const box = notice({ tone: 'info', title: '' });
@@ -1130,11 +1176,9 @@
       error.dataset.copyKey = 'userscript.updates.error.message';
       node.append(error);
     }
-    node.append(available ? tools : actions);
-    if (!tools.childElementCount) tools.remove();
-    const config = configuration();
-    const peach = config && updateCache.peach?.base === config.base ? updateCache.peach : null;
-    if (model.kind !== 'peach' && peach?.release?.state === 'available' && typeof peach.release.latest_version === 'string') {
+    if (!available && actions.childElementCount) node.append(actions);
+    if (tools.childElementCount) node.append(tools);
+    if (peachAvailable) {
       const open = element('a', 'geist-button', '查看 Peach 更新');
       open.dataset.updateKind = 'peach';
       Object.assign(open, { href: `${config.base}/settings/maintenance#releaseUpdates`, target: '_blank', rel: 'noopener noreferrer' });
@@ -1217,18 +1261,48 @@
     head.append(people, label);
     const note = element('p', 'geist-note');
     note.setAttribute('role', 'status'); note.setAttribute('aria-live', 'polite');
+    // 按钮不放在这一节里：面板的按钮统一排在最下面，「其他任务」在按钮上方。
+    // 与 Peach 实体页的「订阅新作」开关同一语义：未订阅时是主按钮；已订阅时是按下态，带订阅橙的 RSS 图标，
+    // 悬停或聚焦时字换成「取消订阅新作」，点了取消。
     const button = control('订阅新作', { primary: true });
-    button.addEventListener('click', () => void togglePerformer());
-    node.append(head, note, button);
+    button.classList.add('feed-toggle');
+    button.setAttribute('aria-pressed', 'false');
+    // 刚点完时指针还停在按钮上：等指针离开或焦点移走一次，悬停才换成「取消订阅新作」，免得一订上就写着取消。
+    button.addEventListener('click', () => { button.dataset.fresh = ''; void togglePerformer(); });
+    // 请求进行中按钮被禁用，焦点随之离开：这次失焦不算移走。
+    button.addEventListener('pointerleave', () => { delete button.dataset.fresh; });
+    button.addEventListener('blur', () => { if (!button.disabled) delete button.dataset.fresh; });
+    node.append(head, note);
     performerView = { node, people, label, note, button, key: '', page: null, body: null, busy: false, error: '', unsupported: false };
     return node;
+  }
+
+  // Peach 页面里的 RSS 图标（index.html 的 i-rss）。
+  function feedGlyph() {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true'); svg.classList.add('feed-mark');
+    for (const d of ['M4 11a9 9 0 0 1 9 9', 'M4 4a16 16 0 0 1 16 16']) {
+      const path = document.createElementNS(svg.namespaceURI, 'path'); path.setAttribute('d', d); svg.append(path);
+    }
+    const dot = document.createElementNS(svg.namespaceURI, 'circle');
+    for (const [name, value] of Object.entries({ cx: '5', cy: '19', r: '1' })) dot.setAttribute(name, value);
+    svg.append(dot);
+    return svg;
   }
 
   function paintPerformer(page) {
     const view = performerView;
     if (!view?.node.isConnected) return;
+    paintPerformerSection(view, page);
+    // 女优页上未订阅时「订阅新作」是这张面板的主操作，识别本页番号退成次要按钮；
+    // 已订阅后订阅键是按下态，主按钮回到识别本页番号。
+    updateEntry?.scan.classList.toggle('primary', view.button.hidden || !view.button.classList.contains('primary'));
+  }
+
+  function paintPerformerSection(view, page) {
     const config = configuration();
     view.node.hidden = !page || !config || view.unsupported;
+    view.button.hidden = view.node.hidden;
     if (view.node.hidden) return;
     const key = `${config.base}|${page.source}|${page.names.join(',')}`;
     if (key !== view.key) {
@@ -1244,12 +1318,17 @@
     try { if (body?.name) renderPeople(view.people, [{ name: body.name, ...(body.avatar ? { avatar: body.avatar } : {}) }]); } catch { /* 保留默认人像。 */ }
     view.note.dataset.variant = view.error ? 'error' : 'secondary';
     view.note.textContent = view.error || (!body ? '正在向 Peach 查询这位女优'
-      : body.following ? '已订阅新作，Peach 会定期查她的新作。'
+      : body.following ? 'Peach 会定期查她的新作。'
       : body.entity_id !== null ? '订阅后，Peach 会定期查她的新作。'
       : page.byId ? 'Peach 里还没有这位女优，订阅时会新建她。'
       : 'Peach 里还没有这位女优，订阅时会到 JavDB 确认是同一个人。');
-    view.button.textContent = view.busy ? '正在处理' : body?.following ? '取消订阅新作' : '订阅新作';
-    view.button.classList.toggle('primary', !body?.following);
+    const following = Boolean(body?.following);
+    if (view.busy) view.button.textContent = '正在处理';
+    else if (following) view.button.replaceChildren(feedGlyph(), element('span', 'feed-on', '已订阅新作'), element('span', 'feed-off', '取消订阅新作'));
+    else view.button.textContent = '订阅新作';
+    view.button.setAttribute('aria-pressed', String(following));
+    view.button.title = following && !view.busy ? '已订阅新作，点击取消订阅' : '';
+    view.button.classList.toggle('primary', !following);
     view.button.disabled = view.busy || (!body && !view.error);
     view.button.setAttribute('aria-busy', String(view.busy));
   }
@@ -1301,13 +1380,13 @@
       actions.append(settings, collapse, later);
       bar.append(element('strong', '', 'Peach'), actions);
       const scan = control('识别本页全部番号', { primary: true }); scan.addEventListener('click', openPageActions);
-      const body = element('div', 'body'); body.append(performerSection(), updateSection({ availableOnly: true }), sharedSection(), scan);
+      // 先信息（女优、更新提示），再「其他任务」，按钮统一排在最下面。
+      const body = element('div', 'body');
+      body.append(performerSection(), updateSection({ availableOnly: true }), sharedSection(), performerView.button, scan);
       launcher.addEventListener('click', () => { entryOpen = true; entryCollapsed = false; refreshUpdateEntry(); later.focus(); });
       panel.append(bar, body); entry.shadow.append(panel, launcher);
       updateEntry = { ...entry, launcher, panel, body, collapse, scan };
     }
-    // 女优页上「订阅新作」是这张面板的主操作，识别本页番号退成次要按钮。
-    updateEntry.scan.classList.toggle('primary', !performer);
     paintPerformer(performer);
     const folded = expanded && entryCollapsed;
     updateEntry.root.dataset.panelMode = !expanded ? 'minimized' : folded ? 'collapsed' : 'expanded';
@@ -2076,6 +2155,8 @@
               if (body.ok !== true || !STATES.has(body.state) || typeof body.code !== 'string'
                 || candidates(body.code).size !== 1
                 || (!resolveIdentity && ![...candidates(body.code)].some(candidate => samePeachCode(candidate, code)))) throw new Error();
+              // 单条状态与 identify 带不带 want 键，说明这台 Peach 能不能从脚本登记想要。
+              if (method !== 'POST') wantSupport = Object.hasOwn(body, 'want');
               resolve(body);
               flushErrors(config);
             } catch { fail('invalid_response', 'Peach 返回的状态无效，请查询状态。', response.status); }
@@ -2128,6 +2209,44 @@
       ? `${config.base}/assets/${assetId}` : '';
   }
 
+  // 「想要」：Peach 的单条状态与 identify 带 want 键（ADR-0161）。没有这个键是旧版 Peach，不显示按钮；
+  // null 是还没登记，对象是已在想要清单上。加入番号的 POST 响应不带这个键，此时沿用之前的值。
+  const WANT_PHASES = new Set(['searching', 'unreleased', 'given_up', 'acquired']);
+  function wantOf(body, previous) {
+    if (!body || !Object.hasOwn(body, 'want')) return previous;
+    const want = body.want;
+    return want && typeof want === 'object' ? { phase: WANT_PHASES.has(want.phase) ? want.phase : '' } : null;
+  }
+
+  function wantButton(onClick) {
+    const button = control('加入想要');
+    button.classList.add('want-toggle');
+    button.hidden = true;
+    button.addEventListener('click', () => { if (button.getAttribute('aria-disabled') !== 'true') onClick(); });
+    return button;
+  }
+
+  // 与 Peach 作品详情页的「想要」同一语义（secondary 按钮加 aria-pressed）；脚本不能移出想要，已加入时是不可点的按下态。
+  function paintWant(button, want, state, busy) {
+    button.hidden = want === undefined || !configuration() || ['owned', 'ingested'].includes(state);
+    if (button.hidden) return;
+    const added = Boolean(want);
+    button.setAttribute('aria-pressed', String(added));
+    button.setAttribute('aria-disabled', String(added || busy));
+    button.setAttribute('aria-busy', String(busy));
+    button.toggleAttribute('data-added', added);
+    if (added) {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true');
+      const path = document.createElementNS(svg.namespaceURI, 'path'); path.setAttribute('d', STEP_ICON_PATHS.check);
+      svg.append(path); button.replaceChildren(svg, document.createTextNode('已加入想要'));
+    } else button.textContent = busy ? '正在加入想要' : '加入想要';
+  }
+
+  function requestWant(config, code) {
+    return requestTaskAction(config, 'want', code, 'Peach 尚不支持加入想要，请更新 Peach。', '加入想要未成功，请稍后重试。');
+  }
+
   function render(view) {
     if (!alive(view)) return;
     view.summary.textContent = panelMode === 'collapsed' ? view.note.textContent : '';
@@ -2150,6 +2269,7 @@
       && !view.busy && ['加入 Peach 馆藏', '重试加入 Peach 馆藏'].includes(view.button.textContent);
     view.alternate.hidden = !choosing;
     view.ahead.hidden = !configuration() || !canPrioritize({ state: view.state, queue_position: view.queuePosition });
+    paintWant(view.want, view.identity.conflict || view.identity.resolve ? undefined : view.wantState, view.state, view.wantBusy);
     if (choosing) {
       const retry = view.button.textContent.startsWith('重试') ? '重试' : '';
       const [own, other] = view.identity.edition === 'bonus' ? ['特典版', '通常版'] : ['通常版', '特典版'];
@@ -2223,6 +2343,22 @@
         });
       } catch { reject(new Error('无法连接 Peach，请稍后重试。')); }
     });
+  }
+
+  // 作品浮卡的「加入想要」：成功后按钮切到已加入态；失败时原因写在状态行。
+  async function addMainWant(view) {
+    const config = configuration();
+    if (!alive(view) || !config || view.wantBusy || view.wantState !== null) return;
+    view.wantBusy = true; render(view);
+    try {
+      const body = await requestWant(config, view.identity.code);
+      if (!alive(view)) return;
+      view.wantState = wantOf(body, view.wantState) || { phase: 'searching' };
+    } catch (error) {
+      if (alive(view)) { view.note.textContent = error.message; view.note.hidden = false; view.note.dataset.variant = 'error'; }
+    } finally {
+      if (alive(view)) { view.wantBusy = false; render(view); placeSurface(view.root); }
+    }
   }
 
   async function retryOrganize(view) {
@@ -2711,7 +2847,7 @@
     const back = control('返回 Peach 主页', { icon: 'back' });
     const title = element('div', 'bar-title'), people = element('span', 'batch-people');
     people.append(defaultPersonAvatar());
-    title.append(people, element('strong', '', code));
+    title.append(people, copyableCode(element('strong', '', code), () => code));
     // 右上角与主页同一组：设置、折叠、隐藏，点了交给主页标题栏上的那一枚。
     const actions = element('div', 'bar-actions');
     for (const [label, icon] of [['Peach 设置', 'settings'], ['折叠 Peach 详情', 'collapse'], ['隐藏 Peach 面板', 'close']]) {
@@ -2775,15 +2911,36 @@
       void acknowledgeEnded(panel.querySelector('.shared-tasks'), { keys: [current.ended_key] });
       closeTaskPage(panel, true);
     });
-    body.append(note, parts.flow, ahead, retry, library, ack);
+    // 没找到资源等还没入库的番号可以直接记进想要。共享快照不带 want，进页时单独查一次这个番号的状态，不轮询。
+    const want = wantButton(async () => {
+      const open = panel.taskPage, config = configuration();
+      if (!open || open.page !== page || !config || open.wantBusy || open.wantState !== null) return;
+      open.wantBusy = true; open.wantError = ''; paintTaskPage(panel);
+      try {
+        const result = await requestWant(config, code);
+        if (panel.taskPage === open) open.wantState = wantOf(result, open.wantState) || { phase: 'searching' };
+      } catch (error) {
+        if (panel.taskPage === open) open.wantError = error.message;
+      } finally {
+        if (panel.taskPage === open) { open.wantBusy = false; paintTaskPage(panel); }
+      }
+    });
+    body.append(note, parts.flow, ahead, retry, library, want, ack);
     page.append(bar, body);
     switchPanel(panel, () => {
       for (const child of panel.children) if (!child.hidden) { child.hidden = true; child.dataset.taskHidden = ''; }
       panel.append(page);
-      panel.taskPage = { page, code, note, people, ahead, retry, library, ack, body: null, ...parts };
+      panel.taskPage = { page, code, note, people, ahead, retry, library, want, ack, wantState: undefined, wantBusy: false, body: null, ...parts };
       paintTaskPage(panel);
       return [page];
     });
+    // 已知旧版 Peach 不查；作品浮卡还在问自己的状态时等它的答案，免得多发一次。
+    const config = configuration();
+    if (config && (wantSupport || (wantSupport === undefined && !current))) request(config, code, '', 'GET').then(result => {
+      const open = panel.taskPage;
+      if (open?.page !== page) return;
+      open.wantState = wantOf(result, open.wantState); paintTaskPage(panel);
+    }).catch(() => { /* 查不到就不显示加入想要，进度照常。 */ });
     back.addEventListener('click', () => closeTaskPage(panel, true));
     back.focus();
   }
@@ -2831,16 +2988,20 @@
       const people = sharedAvatars(open.body);
       open.people.replaceWith(people); open.people = people;
     }
-    open.note.textContent = statusLabel(open.body);
-    open.note.dataset.variant = statusVariant(open.body);
+    // 加入想要失败时原因留在状态行，直到下一次点击。
+    open.note.textContent = open.wantError || statusLabel(open.body);
+    open.note.dataset.variant = open.wantError ? 'error' : statusVariant(open.body);
     open.ahead.hidden = !canPrioritize(open.body);
     open.retry.hidden = !retryableTask(open.body);
     open.retry.textContent = retryLabel(open.body);
     open.library.hidden = tracking(open.body) || !assetLink(open.body.state, open.body.asset_id);
     open.ack.hidden = !awaitingAck(open.body) || !open.library.hidden;
-    // 进度页只剩一个按钮时用主按钮；状态随快照变化时跟着换，例如排队时的「提前处理」入库后换成「打开馆藏」。
-    const actions = [open.ahead, open.retry, open.library, open.ack], shown = actions.filter(button => !button.hidden);
-    for (const button of actions) button.classList.toggle('primary', shown.length === 1 && button === shown[0]);
+    paintWant(open.want, open.wantState, open.body.state, open.wantBusy);
+    // 进度页总有一个主按钮，按这一页的主要动作挑：重试 > 打开馆藏 > 提前处理 > 加入想要 > 标为已读；已加入想要的按下态不算。
+    // 状态随快照变化时跟着换，例如排队时的「提前处理」入库后换成「打开馆藏」。
+    const actions = [open.retry, open.library, open.ahead, open.want, open.ack];
+    const main = actions.find(button => !button.hidden && !button.hasAttribute('data-added'));
+    for (const button of actions) button.classList.toggle('primary', button === main);
     for (const root of surfaces) if (root.isConnected) placeSurface(root);
   }
 
@@ -2886,12 +3047,14 @@
       // 作品同时有特典版与通常版时 Peach 带回本页是哪一版（bonus / regular），浮卡分出两个添加按钮。
       view.identity.edition = ['bonus', 'regular'].includes(body.edition) ? body.edition : '';
       view.heading.textContent = body.code;
+      view.heading.dataset.code = body.code;
       view.loadPeople(body.code);
     }
     // 整理期间 view.state 已是 ingested，前态按上一轮是否仍在跟踪判断。共享进度由写快照的窗口统一响。
     if (!sharedMode() && finished(body) && view.tracking) playSound('success');
     view.state = body.state;
     view.queuePosition = body.queue_position;
+    view.wantState = wantOf(body, view.wantState);
     view.cause = body.state === 'failed' ? body.cause || '' : '';
     view.tracking = tracking(body);
     view.organizeFailed = organizeFailed(body);
@@ -3041,6 +3204,9 @@
     panel.id = `${ROOT_ID}-panel`;
     const bar = element('header', 'bar');
     const label = element('strong', '', item.conflict ? '番号待核对' : item.code || '作品番号');
+    // 只有确定的番号可复制；冲突待核对、商品号待 Peach 解析时不响应，解析出番号后由 query 补上。
+    label.dataset.code = !item.conflict && !item.resolve ? item.code || '' : '';
+    copyableCode(label, () => label.dataset.code);
     const summary = element('span', 'bar-summary');
     summary.hidden = true;
     const heading = element('div', 'bar-heading');
@@ -3081,7 +3247,10 @@
     const alternate = control('加入通常版'); alternate.dataset.action = 'add-alternate'; alternate.hidden = true;
     const ahead = control('提前处理'); ahead.dataset.action = 'prioritize'; ahead.hidden = true;
     const scan = control('识别本页全部番号'); scan.addEventListener('click', openPageActions);
-    body.append(note, flow, button, alternate, ahead, scan, sharedSection(), updateSection({ availableOnly: true }));
+    // 没发行或没资源的作品可以直接记进想要；次要按钮，不抢主按钮。
+    const want = wantButton(() => void addMainWant(current));
+    // 先状态与进度、更新提示，再「其他任务」，按钮统一排在最下面；与入口面板同一顺序。
+    body.append(note, flow, updateSection({ availableOnly: true }), sharedSection(), button, alternate, ahead, want, scan);
     panel.append(bar, body);
     const launcher = control('展开 Peach 面板');
     launcher.classList.add('launcher');
@@ -3097,7 +3266,7 @@
     wireDrag(root, launcher, panel);
     launcher.hidden = true;
     shadow.append(panel, launcher);
-    const view = { root, panel, body, launcher, collapse, summary, button, alternate, ahead, note, flow, steps, progress, progressFill, heading: label, loadPeople: loadTitlePeople, settings: settingsButton, identity: item, url: location.href, generation, state: 'idle', busy: false, tracking: false, queryOnly: attempts.has(comparisonKey(item.code)) };
+    const view = { root, panel, body, launcher, collapse, summary, button, alternate, ahead, want, wantState: undefined, wantBusy: false, note, flow, steps, progress, progressFill, heading: label, loadPeople: loadTitlePeople, settings: settingsButton, identity: item, url: location.href, generation, state: 'idle', busy: false, tracking: false, queryOnly: attempts.has(comparisonKey(item.code)) };
     current = view;
     refreshUpdateEntry();
     paintShared();

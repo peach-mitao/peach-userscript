@@ -79,7 +79,11 @@ SOD 特典版的商品号在通常版后加 `v`（`1sdjs00304v`，官方番号 S
 
 ## 女优页订阅新作
 
-JavDB 演员页 `/actors/<id>`、DMM 女优片单 `/av/list/?actress=<编号>` 与旧版 `article=actress/id=<编号>`、MISSAV 女优页 `/actresses/<名字>` 上，入口面板顶部显示这位女优与「订阅新作」。脚本发 `GET /api/jav-browser/performer?source_url=<女优页>&names=<名字>`，`source_url` 去掉查询参数（DMM 只留 `actress`），`names` 只在 JavDB 页带上标题栏 `.actor-section-name` 的原文；返回 `{"ok": true, "name": "…", "entity_id": 8112, "following": false, "avatar": "data:image/jpeg;base64,…"}`，`entity_id` 为 `null` 表示 Peach 里还没有她。按钮发 `POST /api/jav-browser/performer`，正文 `{"source_url": "…", "names": [...], "enabled": true}`，返回同一结构。认人与新建的规则由 Peach 决定（Peach ADR-0143）：JavDB 与 DMM 页按站内编号，MISSAV 页只有名字时由 JavDB 确认是同一个人；订阅被拒时返回 400 与原因，脚本把原因写在面板上。Peach 认出这一页后入口面板自动展开，用户收起后这一页不再自动展开。接口返回 404 或 405 的旧版 Peach 不显示这一块，面板也不自动展开。
+JavDB 演员页 `/actors/<id>`、DMM 女优片单 `/av/list/?actress=<编号>` 与旧版 `article=actress/id=<编号>`、MISSAV 女优页 `/actresses/<名字>` 上，入口面板顶部显示这位女优与「订阅新作」。脚本发 `GET /api/jav-browser/performer?source_url=<女优页>&names=<名字>`，`source_url` 去掉查询参数（DMM 只留 `actress`），`names` 只在 JavDB 页带上标题栏 `.actor-section-name` 的原文；返回 `{"ok": true, "name": "…", "entity_id": 8112, "following": false, "avatar": "data:image/jpeg;base64,…"}`，`entity_id` 为 `null` 表示 Peach 里还没有她。按钮发 `POST /api/jav-browser/performer`，正文 `{"source_url": "…", "names": [...], "enabled": true}`，返回同一结构。认人与新建的规则由 Peach 决定（Peach ADR-0143）：JavDB 与 DMM 页按站内编号，MISSAV 页只有名字时由 JavDB 确认是同一个人；订阅被拒时返回 400 与原因，脚本把原因写在面板上。Peach 认出这一页后入口面板自动展开，用户收起后这一页不再自动展开。接口返回 404 或 405 的旧版 Peach 不显示这一块，面板也不自动展开。 未订阅时「订阅新作」是这张面板的主按钮；已订阅后是按下态（`aria-pressed="true"`），写「已订阅新作」并带订阅橙的 RSS 图标，悬停或聚焦时写「取消订阅新作」，主按钮回到「识别本页全部番号」。
+
+## 加入想要
+
+单条状态 `GET /api/jav-browser?code=` 与 `GET /api/jav-browser/identify` 带 `want`：`null` 表示还没登记，`{"phase": "searching" | "unreleased" | "given_up" | "acquired"}` 表示已在想要清单上（Peach ADR-0161）。响应里没有 `want` 键的是旧版 Peach，脚本不显示「加入想要」；加入番号的 `POST /api/jav-browser` 响应不带这个键，脚本沿用之前的值。作品未在库（不是 `owned`、`ingested`）时，作品浮卡在主按钮之后显示次要按钮「加入想要」，按钮发 `POST /api/jav-browser/want`，正文 `{"code": "SSIS-057"}`，返回状态查询同一结构并带 `want: {phase, created}`；成功后按钮切到不可点的按下态「已加入想要」，失败时原因写在状态行。其他任务的进度页按同一规则显示：共享快照不带 `want`，进页时单独查一次该番号的状态，不轮询；已从其他状态响应得知是旧版 Peach 时不查；按钮排在重试、打开馆藏、提前处理之后，这些都不在时才是主按钮。
 
 ## 共享进度
 

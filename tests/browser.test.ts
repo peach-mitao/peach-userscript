@@ -24,6 +24,7 @@ type MockRequest = Call & { onload(value: unknown): void; ontimeout(): void; one
 type Mock = {
   peopleItems: Record<string, {name:string;avatar?:string}[]>;
   peopleRequests: string[];
+  clipboard: string[];
   calls: Call[];
   reports: MockRequest[];
   updates: MockRequest[];
@@ -44,6 +45,11 @@ type Mock = {
   performer: { name: string; entity_id: number | null; following: boolean } | null;
   performerCalls: Call[];
   performerError: string;
+  // 想要：hasWant 为 false 是旧版 Peach（状态里没有 want 键、登记接口 404）；want 为 null 是还没登记。
+  hasWant: boolean;
+  want: { phase: string } | null;
+  wantCalls: string[];
+  wantError: string;
 };
 declare global { interface Window { javMock: Mock } }
 
@@ -55,6 +61,7 @@ async function open(browser: Browser, options: {
   url?: string; title?: string; html?: string; quirks?: boolean; configured?: boolean; viewport?: typeof VIEWPORTS[number]; initial?: State; postState?: State; peopleItems?: Mock['peopleItems']; script?: string; resolved?: string; automatic?: boolean; updateAutomatic?: boolean; updateValues?: Record<string, string | boolean>;
   activeItems?: Body[];
   performer?: Mock['performer'];
+  want?: Mock['want'];
 } = {}) {
   const viewport = options.viewport || VIEWPORTS[0]!;
   const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
@@ -66,11 +73,11 @@ async function open(browser: Browser, options: {
     // FANZA 等来源页没有 doctype，按怪异模式渲染。
     contentType: 'text/html; charset=utf-8', body: `${options.quirks ? '' : '<!doctype html>'}<html><head><meta charset="utf-8"><title>${options.title || 'SSIS-057 作品详情'}</title></head><body>${options.html ?? '<h1>SSIS-057 作品详情</h1>'}</body></html>`,
   }));
-  await page.addInitScript(({ configured, token, base, initial, postState, peopleItems, resolved, automatic, version, updateAutomatic, updateValues, activeItems, performer }) => {
+  await page.addInitScript(({ configured, token, base, initial, postState, peopleItems, resolved, automatic, version, updateAutomatic, updateValues, activeItems, performer, hasWant, want }) => {
     const listeners = new Map<number, { key: string; callback: (key: string, oldValue: string | boolean, newValue: string | boolean, remote: boolean) => void }>();
     let nextListener = 0;
     const mock: Mock = {
-      calls: [], reports: [], pending: [], updates: [], automatic, updateAutomatic, menus: {}, peopleItems, peopleRequests:[], activeItems, activeRequests: 0, dismissals: [], dismissStatus: 200, performer, performerCalls: [], performerError: '',
+      calls: [], reports: [], pending: [], updates: [], automatic, updateAutomatic, menus: {}, peopleItems, peopleRequests:[], clipboard: [], activeItems, activeRequests: 0, dismissals: [], dismissStatus: 200, performer, performerCalls: [], performerError: '', hasWant, want, wantCalls: [], wantError: '',
       values: { ...(configured ? { 'peach.jav.base': base, 'peach.jav.token': token } : {}), ...updateValues },
       changed(key, value, remote = false) {
         const previous = mock.values[key] ?? '';
@@ -86,6 +93,7 @@ async function open(browser: Browser, options: {
       GM_getValue: (key: string, fallback: string | boolean) => mock.values[key] ?? fallback,
       GM_setValue: (key: string, value: string | boolean) => { mock.changed(key, value); },
       GM_info: { script: { version } },
+      GM_setClipboard: (text: string) => { mock.clipboard.push(text); },
       GM_addValueChangeListener: (key: string, callback: (key: string, oldValue: string | boolean, newValue: string | boolean, remote: boolean) => void) => {
         const id = ++nextListener; listeners.set(id, { key, callback }); return id;
       },
@@ -142,6 +150,19 @@ async function open(browser: Browser, options: {
             : { status: mock.dismissStatus, responseText: '{"detail":"Not Found"}' }), 0);
           return { abort: () => request.onabort?.() };
         }
+        // 登记想要：旧版 Peach 回 404；wantError 模拟登记失败；成功后单条状态带上 want。
+        if (request.url.endsWith('/api/jav-browser/want')) {
+          const code = JSON.parse(request.data!).code as string;
+          mock.wantCalls.push(code);
+          setTimeout(() => {
+            if (!mock.hasWant) { request.onload({ status: 404, responseText: '{"detail":"Not Found"}' }); return; }
+            if (mock.wantError) { request.onload({ status: 400, responseText: JSON.stringify({ detail: mock.wantError }) }); return; }
+            mock.want = { phase: 'searching' };
+            request.onload({ status: 200, responseText: JSON.stringify({ ok: true, code, state: initial, message: initial,
+              want: { phase: 'searching', created: true } }) });
+          }, 0);
+          return { abort: () => request.onabort?.() };
+        }
         mock.calls.push({ method: request.method, url: request.url, headers: request.headers,
           anonymous: request.anonymous, ...(request.data ? { data: request.data } : {}) });
         mock.pending.push(request);
@@ -150,13 +171,16 @@ async function open(browser: Browser, options: {
           const identify = new URL(request.url).pathname.endsWith('/identify');
           const code = (identify && resolved) || (request.data ? JSON.parse(request.data).code : new URL(request.url).searchParams.get('code')) || resolved || 'SSIS-057';
           const state = request.method === 'POST' ? postState || initial : initial;
-          request.onload({ status: 200, responseText: JSON.stringify({ ok: true, code, state, message: state }) });
+          // 单条状态与 identify 带 want（新版 Peach）；加入番号的 POST 响应不带。
+          const want = mock.hasWant && request.method !== 'POST' ? { want: mock.want } : {};
+          request.onload({ status: 200, responseText: JSON.stringify({ ok: true, code, state, message: state, ...want }) });
         }, 0);
       },
     });
   }, { configured: options.configured !== false, token: TOKEN, base: BASE, initial: options.initial || 'idle', postState: options.postState, peopleItems: options.peopleItems || {}, resolved: options.resolved,
     automatic: options.automatic !== false, version: VERSION, updateAutomatic: options.updateAutomatic !== false, updateValues: options.updateValues || {},
-    activeItems: options.activeItems || null, performer: options.performer || null });
+    activeItems: options.activeItems || null, performer: options.performer || null,
+    hasWant: Object.hasOwn(options, 'want'), want: options.want ?? null });
   await page.goto(options.url || 'https://missav.ws/en/ssis-057?private=value#player');
   await page.clock.install();
   await page.addScriptTag({ content: options.script ?? SCRIPT });
@@ -298,6 +322,38 @@ describe('JAV 用户脚本', () => {
       } finally { await close(); }
     });
 
+    for (const example of [
+      { name: '脚本可更新', script: 'ok', peach: false, check: 0 },
+      { name: 'Peach 可更新', script: 'current', peach: true, check: 0 },
+      { name: '手动检查时脚本来源没查通、Peach 可更新', script: 'error', peach: true, check: 1 },
+    ] as const) it(`设置页已提示更新时不再显示「检查更新」，手动检查有来源没查通时保留：${example.name}`, async () => {
+      const { page, close } = await open(browser, { updateAutomatic: false });
+      try {
+        await waitUpdates(page, 2);
+        // 只有手动检查会记下没查通的来源；这一组先答完自动检查，再从菜单手动查一次。
+        const manual = example.script === 'error';
+        if (manual) {
+          await page.evaluate(() => { window.javMock.updates[0]!.onerror(); window.javMock.updates[1]!.onerror(); });
+          await page.evaluate(() => window.javMock.menus['检测更新']!());
+          await waitUpdates(page, 4);
+        }
+        await page.evaluate(({ script, peach, current, offset }) => {
+          const remote = window.javMock.updates[offset]!;
+          if (script === 'error') remote.onerror();
+          else remote.onload({status:200,responseText:`// ==UserScript==\n// @name Peach Userscript\n// @namespace https://github.com/peach-mitao/peach-userscript\n// @version ${script === 'ok' ? '9.2.0' : current}\n// ==/UserScript==`});
+          window.javMock.updates[offset + 1]!.onload({status:200,responseText:JSON.stringify({
+            runtime:{version:'1.0.0',build_id:'fixture'},release:peach ? {state:'available',latest_version:'1.1.0'} : {state:'current'},
+            userscript:{version:current,minimum_version:'0.5.1',install_url:'/integrations/peach-jav.user.js'},
+          })});
+        }, { ...example, current: VERSION, offset: manual ? 2 : 0 });
+        if (!manual) await page.locator(ROOT).getByRole('button',{name:'Peach 设置',exact:true}).click();
+        const dialog = settingsDialog(page);
+        if (manual) await dialog.getByRole('alert').waitFor();
+        await dialog.locator('.notice[data-tone=info]').first().waitFor();
+        assert.equal(await dialog.getByRole('button',{name:'检查更新',exact:true}).count(), example.check);
+      } finally { await close(); }
+    });
+
     it('未配对且没有影片身份的匹配页仍提供设置和独立菜单，元数据请求不带令牌', async () => {
       const { page, close, problems } = await open(browser, { url: 'https://missav.ws/', title: '首页', html: '<h1>首页</h1>',
         configured: false, updateAutomatic: false });
@@ -319,7 +375,8 @@ describe('JAV 用户脚本', () => {
         assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.installed-version']), VERSION);
         await page.evaluate(() => window.javMock.menus['检测更新']!());
         await waitUpdates(page, 2);
-        assert.equal(await settingsDialog(page).getByRole('button', { name: '检查更新', exact: true }).count(), 1);
+        // 已经提示了可更新，设置页不再给「检查更新」。
+        assert.equal(await settingsDialog(page).getByRole('button', { name: '检查更新', exact: true }).count(), 0);
         await answerMetadata(page, '9.2.0', undefined, 'Peach · JAV 入库');
         await page.waitForFunction(() => document.querySelector('#peach-jav-updates')?.shadowRoot?.textContent?.includes('v9.2.0 可更新'));
         assert.deepEqual(problems, []);
@@ -2343,7 +2400,9 @@ describe('JAV 用户脚本', () => {
       // 旧版 Peach 没有确认接口：提示更新，任务照旧留在列表里。
       await page.evaluate(() => { window.javMock.dismissStatus = 404; window.javMock.activeItems = [{ ok: true, code: 'ABW-123', state: 'failed',
         message: 'failed', ended_key: '15@2026-11-04T08:03:00+00:00', dismissed: false } as never]; });
+      // 没有进行中的任务时不定时查询；页面回到前台、快照超过 30 秒时补查一次，取到新的失败项。
       await page.clock.fastForward(31_000);
+      await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
       await shared.locator('.shared-row[data-code="ABW-123"]').waitFor();
       await shared.getByRole('button', { name: '将 ABW-123 标为已读' }).click();
       await shared.getByRole('alert').filter({ hasText: 'Peach 尚不支持确认已结束的任务，请更新 Peach。' }).waitFor();
@@ -2352,28 +2411,38 @@ describe('JAV 用户脚本', () => {
     } finally { await opened.close(); }
   });
 
-  it('进度页只剩一个按钮时用主按钮；在这页入库完成后「提前处理」换成「打开馆藏」，点了打开这部作品并标为已读', async () => {
+  it('进度页总有一个主按钮：重试优先于标为已读；在这页入库完成后「提前处理」换成「打开馆藏」，点了打开这部作品并标为已读', async () => {
     const done = { state: 'ingested', label: '已入库', progress: 1, postprocess_state: 'complete', postprocess_label: '已整理' };
     const plain = { ...body('ingested', 'ABP-616'), ended_key: '22@2026-11-14T08:01:00+00:00', dismissed: false, download: done } as Body;
-    const opened = await open(browser, { initial: 'owned', activeItems: [{ ...body('queued', 'STAR-628'), queue_position: 2 } as Body, plain] });
+    const missing = { ...body('no_match', 'OFJE-489'), ended_key: 'OFJE-489@2026-11-14T08:02:00+00:00', dismissed: false } as Body;
+    const opened = await open(browser, { initial: 'owned', activeItems: [{ ...body('queued', 'STAR-628'), queue_position: 2 } as Body, plain, missing] });
     const { page } = opened;
     try {
       const root = page.locator(ROOT), shared = root.locator('.shared-tasks'), task = root.locator('.task-page');
       const primary = (name: string) => task.getByRole('button', { name, exact: true }).evaluate(node => node.classList.contains('primary'));
+      const back = async () => {
+        await task.getByRole('button', { name: '返回 Peach 主页', exact: true }).click();
+        await task.waitFor({ state: 'detached' });
+      };
       await page.waitForFunction(root => document.querySelector(root)?.shadowRoot?.querySelector('.shared-row'), ROOT);
+      if (!(await shared.locator('.shared-row[data-code="ABP-616"]').isVisible())) await shared.locator('.shared-heading').click();
       await page.evaluate(() => { Object.assign(window, { opened: [] as unknown[] });
         window.open = (...args: unknown[]) => { (window as unknown as { opened: unknown[] }).opened.push(args); return null; }; });
+      // 未找到资源：「重试加入」与「标为已读」同时出现，重试是主按钮。
+      await shared.locator('.shared-row[data-code="OFJE-489"]').click();
+      assert.equal(await primary('重试加入'), true);
+      assert.equal(await primary('标为已读'), false);
+      await back();
       // Peach 没带回作品编号时仍是「标为已读」，作为唯一的按钮用主按钮。
       await shared.locator('.shared-row[data-code="ABP-616"]').click();
       assert.equal(await task.getByRole('button', { name: '打开馆藏' }).isHidden(), true);
       assert.equal(await primary('标为已读'), true);
-      await task.getByRole('button', { name: '返回 Peach 主页', exact: true }).click();
-      await task.waitFor({ state: 'detached' });
+      await back();
       await shared.locator('.shared-row[data-code="STAR-628"]').click();
       assert.equal(await primary('提前处理'), true);
       // 停在进度页时入库完成：快照更新后「提前处理」消失，「打开馆藏」接替为主按钮。
       await page.evaluate(items => { window.javMock.activeItems = items; }, [{ ...body('ingested', 'STAR-628'), asset_id: 4321,
-        ended_key: '21@2026-11-14T08:00:00+00:00', dismissed: false, download: done } as Body, plain]);
+        ended_key: '21@2026-11-14T08:00:00+00:00', dismissed: false, download: done } as Body, plain, missing]);
       await page.clock.fastForward(5_000);
       await task.getByRole('button', { name: '打开馆藏', exact: true }).waitFor();
       assert.equal(await task.getByRole('button', { name: '提前处理' }).isHidden(), true);
@@ -2383,9 +2452,102 @@ describe('JAV 用户脚本', () => {
       assert.deepEqual(await page.evaluate(() => (window as unknown as { opened: unknown[] }).opened), [[`${BASE}/assets/4321`, '_blank', 'noopener']]);
       assert.deepEqual(await page.evaluate(() => window.javMock.dismissals.at(-1)), { keys: ['21@2026-11-14T08:00:00+00:00'] });
       assert.equal(await task.count(), 0);
-      assert.deepEqual(await shared.locator('.shared-code').allTextContents(), ['ABP-616']);
+      assert.deepEqual((await shared.locator('.shared-code').allTextContents()).sort(), ['ABP-616', 'OFJE-489']);
       assert.deepEqual(opened.problems, []);
     } finally { await opened.close(); }
+  });
+
+  it('点标题栏的番号复制番号，鼠标与键盘都能触发，复制后短暂显示「已复制」', async () => {
+    const opened = await open(browser, { initial: 'owned', activeItems: [{ ...body('queued', 'STAR-628'), queue_position: 2 } as Body] });
+    const { page } = opened;
+    try {
+      const root = page.locator(ROOT), task = root.locator('.task-page');
+      // 主页标题：确定的番号可复制。
+      const heading = root.locator('.panel > .bar .bar-title > strong');
+      await heading.click();
+      assert.deepEqual(await page.evaluate(() => window.javMock.clipboard), ['SSIS-057']);
+      await root.locator('.copy-feedback', { hasText: '已复制' }).waitFor();
+      // 进度页标题：键盘 Enter 也能复制。
+      await page.waitForFunction(root => document.querySelector(root)?.shadowRoot?.querySelector('.shared-row'), ROOT);
+      await root.locator('.shared-row[data-code="STAR-628"]').click();
+      const code = task.getByRole('button', { name: 'STAR-628', exact: true });
+      await code.focus();
+      await code.press('Enter');
+      assert.deepEqual(await page.evaluate(() => window.javMock.clipboard), ['SSIS-057', 'STAR-628']);
+      await task.locator('.copy-feedback', { hasText: '已复制' }).waitFor();
+      await page.clock.fastForward(2_000);
+      await task.locator('.copy-feedback').waitFor({ state: 'detached' });
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
+  it('作品浮卡可以加入想要：未入库时显示次要按钮，点了切到已加入态；已在想要、已在库、旧版 Peach 时各自处理', async () => {
+    const wantButton = (page: Page) => page.locator(ROOT).locator('.want-toggle');
+    // 没发行或没资源：按钮在主按钮之后，不是主按钮。
+    let opened = await open(browser, { want: null });
+    try {
+      const { page } = opened;
+      await page.locator(ROOT).getByRole('button', { name: '加入想要', exact: true }).waitFor();
+      assert.equal(await wantButton(page).evaluate(node => node.classList.contains('primary')), false);
+      assert.equal(await button(page).evaluate(node => node.classList.contains('primary')), true);
+      await wantButton(page).click();
+      await page.locator(ROOT).getByRole('button', { name: '已加入想要', exact: true, pressed: true }).waitFor();
+      assert.equal(await wantButton(page).getAttribute('aria-disabled'), 'true');
+      assert.deepEqual(await page.evaluate(() => window.javMock.wantCalls), ['SSIS-057']);
+      // 已加入态不可再点：强行点也不会再发登记请求。
+      await wantButton(page).click({ force: true });
+      assert.deepEqual(await page.evaluate(() => window.javMock.wantCalls), ['SSIS-057']);
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+    // 登记失败：原因写在状态行，按钮仍可再点。
+    opened = await open(browser, { want: null });
+    try {
+      const { page } = opened;
+      await page.evaluate(() => { window.javMock.wantError = '想要清单暂时不可写'; });
+      await wantButton(page).click();
+      await page.locator(ROOT).getByRole('status').filter({ hasText: '想要清单暂时不可写' }).waitFor();
+      assert.equal(await wantButton(page).getAttribute('aria-disabled'), 'false');
+    } finally { await opened.close(); }
+    // 已在想要：直接显示已加入态。
+    opened = await open(browser, { want: { phase: 'unreleased' } });
+    try {
+      await opened.page.locator(ROOT).getByRole('button', { name: '已加入想要', exact: true, pressed: true }).waitFor();
+    } finally { await opened.close(); }
+    // 已在库或旧版 Peach（状态里没有 want 键）：不显示。
+    for (const options of [{ initial: 'owned' as State, want: null }, {}]) {
+      opened = await open(browser, options);
+      try {
+        await ready(opened.page, options.initial === 'owned' ? '已有该影片' : '加入 Peach 馆藏');
+        assert.equal(await wantButton(opened.page).isHidden(), true);
+      } finally { await opened.close(); }
+    }
+  });
+
+  it('没找到资源的进度页可以加入想要，重试仍是主按钮；已在想要时显示已加入态', async () => {
+    const missing = { ...body('no_match', 'OFJE-489'), ended_key: 'OFJE-489@2026-11-14T08:02:00+00:00', dismissed: false } as Body;
+    for (const preset of [null, { phase: 'searching' }]) {
+      const opened = await open(browser, { initial: 'owned', activeItems: [missing], want: preset });
+      const { page } = opened;
+      try {
+        const root = page.locator(ROOT), task = root.locator('.task-page');
+        await page.waitForFunction(root => document.querySelector(root)?.shadowRoot?.querySelector('.shared-row'), ROOT);
+        await root.locator('.shared-row[data-code="OFJE-489"]').click();
+        // 进页时单独查一次这个番号的状态取 want。
+        await page.waitForFunction(() => window.javMock.calls.some(call => call.method === 'GET' && call.url.includes('code=OFJE-489')));
+        const want = task.locator('.want-toggle');
+        if (preset) {
+          await task.getByRole('button', { name: '已加入想要', exact: true, pressed: true }).waitFor();
+        } else {
+          await task.getByRole('button', { name: '加入想要', exact: true }).waitFor();
+          await want.click();
+          await task.getByRole('button', { name: '已加入想要', exact: true, pressed: true }).waitFor();
+          assert.deepEqual(await page.evaluate(() => window.javMock.wantCalls), ['OFJE-489']);
+        }
+        assert.equal(await want.evaluate(node => node.classList.contains('primary')), false);
+        assert.equal(await task.getByRole('button', { name: '重试加入', exact: true }).evaluate(node => node.classList.contains('primary')), true);
+        assert.deepEqual(opened.problems, []);
+      } finally { await opened.close(); }
+    }
   });
 
   it('自动重试计划显示等待与次数，重试耗尽后显示失败并保留手动入口', async () => {
@@ -2567,31 +2729,49 @@ describe('JAV 用户脚本', () => {
     } finally { await opened.close(); }
   });
 
-  it('JavDB 女优页带上标题栏的名字向 Peach 认人，订阅新作后可以取消', async () => {
+  it('JavDB 女优页带上标题栏的名字向 Peach 认人，订阅新作后是按下态、可以取消，按钮统一在其他任务下方', async () => {
     const opened = await open(browser, { url: 'https://javdb.com/actors/bkxd?page=2', title: '森日向子 | JavDB',
       html: '<h2><span class="actor-section-name">森日向子, 白石アイリ</span></h2>',
       performer: { name: '森日向子', entity_id: 8112, following: false } });
     const { page } = opened;
     try {
       const panel = page.locator('#peach-jav-updates'), section = panel.locator('.performer-follow');
-      await section.getByRole('button', { name: '订阅新作' }).waitFor();
+      const feed = panel.locator('.feed-toggle'), scan = panel.getByRole('button', { name: '识别本页全部番号' });
+      const primary = (node: typeof feed) => node.evaluate(button => button.classList.contains('primary'));
+      await panel.getByRole('button', { name: '订阅新作', exact: true }).waitFor();
       assert.equal(await section.locator('strong').textContent(), '森日向子');
       assert.equal(await section.getByRole('status').textContent(), '订阅后，Peach 会定期查她的新作。');
-      // 识别本页番号退成次要按钮，订阅是这张面板的主操作。
-      assert.equal(await panel.getByRole('button', { name: '识别本页全部番号' }).evaluate(node => node.classList.contains('primary')), false);
+      // 先女优信息，再其他任务，订阅与识别两枚按钮排在最下面。
+      assert.deepEqual(await panel.locator('.body').first().evaluate(body => [...body.children].map(node =>
+        node.classList.contains('performer-follow') ? 'performer' : node.classList.contains('shared-tasks') ? 'shared'
+          : node.classList.contains('feed-toggle') ? 'feed' : node.textContent === '识别本页全部番号' ? 'scan' : '').filter(Boolean)),
+        ['performer', 'shared', 'feed', 'scan']);
+      // 未订阅时订阅是这张面板的主操作，识别本页番号退成次要按钮。
+      assert.equal(await primary(feed), true);
+      assert.equal(await primary(scan), false);
+      assert.equal(await feed.getAttribute('aria-pressed'), 'false');
       const [lookup] = await page.evaluate(() => window.javMock.performerCalls);
       const asked = new URL(lookup!.url);
       assert.deepEqual([lookup!.method, asked.searchParams.get('source_url'), asked.searchParams.getAll('names')],
         ['GET', 'https://javdb.com/actors/bkxd', ['森日向子, 白石アイリ']]);
       assert.equal(lookup!.headers.Authorization, `Bearer ${TOKEN}`);
-      await section.getByRole('button', { name: '订阅新作' }).click();
-      await section.getByRole('button', { name: '取消订阅新作' }).waitFor();
-      assert.equal(await section.getByRole('status').textContent(), '已订阅新作，Peach 会定期查她的新作。');
+      await feed.click();
+      // 已订阅：按下态，带订阅橙的 RSS 图标，不再是主按钮；主按钮回到识别本页番号。
+      await panel.getByRole('button', { name: '已订阅新作', exact: true, pressed: true }).waitFor();
+      assert.equal(await section.getByRole('status').textContent(), 'Peach 会定期查她的新作。');
+      assert.equal(await feed.locator('.feed-mark').count(), 1);
+      assert.equal(await primary(feed), false);
+      assert.equal(await primary(scan), true);
       const posted = await page.evaluate(() => window.javMock.performerCalls.at(-1)!);
       assert.deepEqual([posted.method, JSON.parse(posted.data!)],
         ['POST', { source_url: 'https://javdb.com/actors/bkxd', names: ['森日向子, 白石アイリ'], enabled: true }]);
-      await section.getByRole('button', { name: '取消订阅新作' }).click();
-      await section.getByRole('button', { name: '订阅新作' }).waitFor();
+      // 刚点完指针还在按钮上，仍写「已订阅新作」；移开再悬停时字换成「取消订阅新作」，点了取消，回到未订阅的主按钮。
+      await page.mouse.move(0, 0);
+      await feed.hover();
+      await panel.getByRole('button', { name: '取消订阅新作', exact: true }).click();
+      await panel.getByRole('button', { name: '订阅新作', exact: true, pressed: false }).waitFor();
+      assert.equal(await primary(feed), true);
+      assert.equal(await primary(scan), false);
       assert.deepEqual(opened.problems, []);
     } finally { await opened.close(); }
   });
@@ -2605,15 +2785,15 @@ describe('JAV 用户脚本', () => {
         performer: { name: '涼森れむ', entity_id: null, following: false } });
       const { page } = opened;
       try {
-        const section = page.locator('#peach-jav-updates .performer-follow');
-        await section.getByRole('button', { name: '订阅新作' }).waitFor();
+        const section = page.locator('#peach-jav-updates .performer-follow'), panel = page.locator('#peach-jav-updates');
+        await panel.getByRole('button', { name: '订阅新作', exact: true }).waitFor();
         assert.equal(new URL((await page.evaluate(() => window.javMock.performerCalls[0]!)).url).searchParams.get('source_url'), source);
         assert.match(await section.getByRole('status').textContent() || '',
           url.includes('dmm') ? /订阅时会新建她/ : /订阅时会到 JavDB 确认是同一个人/);
         await page.evaluate(() => { window.javMock.performerError = 'JavDB 上按「涼森れむ」没能确认是同一位女优，请到她的 JavDB 演员页订阅'; });
-        await section.getByRole('button', { name: '订阅新作' }).click();
+        await panel.getByRole('button', { name: '订阅新作', exact: true }).click();
         await page.waitForFunction(() => /没能确认是同一位女优/.test(document.querySelector('#peach-jav-updates')!.shadowRoot!.querySelector('.performer-follow [role=status]')!.textContent!));
-        assert.equal(await section.getByRole('button', { name: '订阅新作' }).isEnabled(), true);
+        assert.equal(await panel.getByRole('button', { name: '订阅新作', exact: true }).isEnabled(), true);
       } finally { await opened.close(); }
     }
     const old = await open(browser, { url: 'https://javdb.com/actors/bkxd', html: '<h2><span class="actor-section-name">森日向子</span></h2>' });
@@ -2624,6 +2804,7 @@ describe('JAV 用户脚本', () => {
       // 旧版 Peach 认不了人：这一块不显示，入口面板也不为它自动展开。
       assert.equal(await old.page.locator('#peach-jav-updates').getAttribute('data-panel-mode'), 'minimized');
       assert.equal(await old.page.locator('#peach-jav-updates .performer-follow').evaluate(node => (node as HTMLElement).hidden), true);
+      assert.equal(await old.page.locator('#peach-jav-updates .feed-toggle').evaluate(node => (node as HTMLElement).hidden), true);
     } finally { await old.close(); }
   });
 
