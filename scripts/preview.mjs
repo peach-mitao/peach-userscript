@@ -36,4 +36,6 @@ const server = createServer(async (request, response) => {
     response.end('预览构建失败，请查看源文件。');
   }
 });
-server.listen(8799, '127.0.0.1', () => console.log('Peach userscript 预览：http://127.0.0.1:8799/en/real-864'));
+// 几个工作树同时预览时用 PEACH_PREVIEW_PORT 换端口。
+const port = Number(process.env.PEACH_PREVIEW_PORT) || 8799;
+server.listen(port, '127.0.0.1', () => console.log(`Peach userscript 预览：http://127.0.0.1:${port}/en/real-864`));
