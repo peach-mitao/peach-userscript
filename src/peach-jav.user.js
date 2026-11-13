@@ -10,7 +10,7 @@
 // @supportURL   https://github.com/peach-mitao/peach-userscript/issues
 // @homepageURL  https://github.com/peach-mitao/peach-userscript
 // @license      AGPL-3.0-or-later
-// @version      0.7.11
+// @version      0.7.12
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -26,6 +26,7 @@
 // @grant        GM_registerMenuCommand
 // @grant        GM_xmlhttpRequest
 // @grant        GM_info
+// @grant        GM_setClipboard
 // @grant        GM_addValueChangeListener
 // @grant        GM_removeValueChangeListener
 // @grant        window.onurlchange
@@ -332,6 +333,8 @@
     .bar{min-height:var(--fieldset-bar-h);padding:8px 16px 8px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
     .bar.subpage-bar{justify-content:flex-start;gap:8px}.task-page .bar-title{flex:1}
     .bar strong{font-weight:500;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+    .copy-code{cursor:copy;border-radius:4px}.copy-code[data-code=""]{cursor:auto}.copy-code:focus-visible{outline:2px solid var(--tungsten);outline-offset:2px}
+    .bar-title{position:relative}.copy-feedback{position:absolute;top:calc(100% + 4px);z-index:2;padding:2px 8px;border-radius:6px;font:var(--board-caption);color:var(--ground);background:var(--ink);white-space:nowrap;pointer-events:none}.copy-feedback[data-variant=error]{background:var(--drop)}
     .bar-heading{display:grid;min-width:0;gap:2px}.bar-title{display:flex;align-items:center;gap:8px;min-width:0}.bar-summary{font:var(--board-caption);color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .bar-actions{display:flex;gap:4px;flex:none}
     .bar-actions [data-collapse-chevron]{transition:transform .2s ease-in-out}
@@ -571,6 +574,40 @@
       }
       node.append(svg);
     }
+    return node;
+  }
+
+  // 标题栏的番号点一下复制；鼠标、Enter 与空格都能触发，复制后在番号后面短暂显示结果。
+  // code 返回当前可复制的番号，没有确定的番号时返回空串，此时不响应。
+  function copyableCode(node, code) {
+    node.classList.add('copy-code');
+    node.tabIndex = 0;
+    node.setAttribute('role', 'button');
+    node.title = '复制番号';
+    let timer = 0;
+    const copy = async () => {
+      const value = code();
+      if (!value) return;
+      let done = true;
+      try {
+        if (typeof GM_setClipboard === 'function') GM_setClipboard(value, 'text');
+        else await navigator.clipboard.writeText(value);
+      } catch { done = false; }
+      const feedback = node.parentElement?.querySelector(':scope > .copy-feedback') || element('span', 'copy-feedback');
+      feedback.setAttribute('role', 'status');
+      feedback.textContent = done ? '已复制' : '复制失败';
+      feedback.dataset.variant = done ? '' : 'error';
+      // 浮在番号下方，不占标题行宽度，番号不会被挤成省略号。
+      feedback.style.left = `${node.offsetLeft}px`;
+      if (!feedback.isConnected) node.after(feedback);
+      clearTimeout(timer);
+      timer = setTimeout(() => feedback.remove(), 1500);
+    };
+    node.addEventListener('click', () => { void copy(); });
+    node.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault(); void copy();
+    });
     return node;
   }
 
@@ -1116,7 +1153,11 @@
     check.disabled = updateChecking;
     check.addEventListener('click', () => { if (!updateChecking) void checkUpdates(true); });
     const tools = element('div', 'update-actions');
-    if (!availableOnly) (available ? tools : actions).append(check);
+    const config = configuration();
+    const peach = config && updateCache.peach?.base === config.base ? updateCache.peach : null;
+    const peachAvailable = model.kind !== 'peach' && peach?.release?.state === 'available' && typeof peach.release.latest_version === 'string';
+    // 已经显示了可装的更新或待刷新时不再给「检查更新」；有来源没查通时保留，方便重试。
+    if (!availableOnly && (!(available || peachAvailable) || (updateError && !updateChecking))) (available ? tools : actions).append(check);
     if (available) {
       // 标题沿用带编辑键与读屏名的那一行，动作放进框内。
       const box = notice({ tone: 'info', title: '' });
@@ -1130,11 +1171,9 @@
       error.dataset.copyKey = 'userscript.updates.error.message';
       node.append(error);
     }
-    node.append(available ? tools : actions);
-    if (!tools.childElementCount) tools.remove();
-    const config = configuration();
-    const peach = config && updateCache.peach?.base === config.base ? updateCache.peach : null;
-    if (model.kind !== 'peach' && peach?.release?.state === 'available' && typeof peach.release.latest_version === 'string') {
+    if (!available && actions.childElementCount) node.append(actions);
+    if (tools.childElementCount) node.append(tools);
+    if (peachAvailable) {
       const open = element('a', 'geist-button', '查看 Peach 更新');
       open.dataset.updateKind = 'peach';
       Object.assign(open, { href: `${config.base}/settings/maintenance#releaseUpdates`, target: '_blank', rel: 'noopener noreferrer' });
@@ -2711,7 +2750,7 @@
     const back = control('返回 Peach 主页', { icon: 'back' });
     const title = element('div', 'bar-title'), people = element('span', 'batch-people');
     people.append(defaultPersonAvatar());
-    title.append(people, element('strong', '', code));
+    title.append(people, copyableCode(element('strong', '', code), () => code));
     // 右上角与主页同一组：设置、折叠、隐藏，点了交给主页标题栏上的那一枚。
     const actions = element('div', 'bar-actions');
     for (const [label, icon] of [['Peach 设置', 'settings'], ['折叠 Peach 详情', 'collapse'], ['隐藏 Peach 面板', 'close']]) {
@@ -2838,9 +2877,10 @@
     open.retry.textContent = retryLabel(open.body);
     open.library.hidden = tracking(open.body) || !assetLink(open.body.state, open.body.asset_id);
     open.ack.hidden = !awaitingAck(open.body) || !open.library.hidden;
-    // 进度页只剩一个按钮时用主按钮；状态随快照变化时跟着换，例如排队时的「提前处理」入库后换成「打开馆藏」。
-    const actions = [open.ahead, open.retry, open.library, open.ack], shown = actions.filter(button => !button.hidden);
-    for (const button of actions) button.classList.toggle('primary', shown.length === 1 && button === shown[0]);
+    // 进度页总有一个主按钮，按这一页的主要动作挑：重试 > 打开馆藏 > 提前处理 > 标为已读。
+    // 状态随快照变化时跟着换，例如排队时的「提前处理」入库后换成「打开馆藏」。
+    const actions = [open.retry, open.library, open.ahead, open.ack], main = actions.find(button => !button.hidden);
+    for (const button of actions) button.classList.toggle('primary', button === main);
     for (const root of surfaces) if (root.isConnected) placeSurface(root);
   }
 
@@ -2886,6 +2926,7 @@
       // 作品同时有特典版与通常版时 Peach 带回本页是哪一版（bonus / regular），浮卡分出两个添加按钮。
       view.identity.edition = ['bonus', 'regular'].includes(body.edition) ? body.edition : '';
       view.heading.textContent = body.code;
+      view.heading.dataset.code = body.code;
       view.loadPeople(body.code);
     }
     // 整理期间 view.state 已是 ingested，前态按上一轮是否仍在跟踪判断。共享进度由写快照的窗口统一响。
@@ -3041,6 +3082,9 @@
     panel.id = `${ROOT_ID}-panel`;
     const bar = element('header', 'bar');
     const label = element('strong', '', item.conflict ? '番号待核对' : item.code || '作品番号');
+    // 只有确定的番号可复制；冲突待核对、商品号待 Peach 解析时不响应，解析出番号后由 query 补上。
+    label.dataset.code = !item.conflict && !item.resolve ? item.code || '' : '';
+    copyableCode(label, () => label.dataset.code);
     const summary = element('span', 'bar-summary');
     summary.hidden = true;
     const heading = element('div', 'bar-heading');

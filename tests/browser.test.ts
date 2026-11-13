@@ -24,6 +24,7 @@ type MockRequest = Call & { onload(value: unknown): void; ontimeout(): void; one
 type Mock = {
   peopleItems: Record<string, {name:string;avatar?:string}[]>;
   peopleRequests: string[];
+  clipboard: string[];
   calls: Call[];
   reports: MockRequest[];
   updates: MockRequest[];
@@ -70,7 +71,7 @@ async function open(browser: Browser, options: {
     const listeners = new Map<number, { key: string; callback: (key: string, oldValue: string | boolean, newValue: string | boolean, remote: boolean) => void }>();
     let nextListener = 0;
     const mock: Mock = {
-      calls: [], reports: [], pending: [], updates: [], automatic, updateAutomatic, menus: {}, peopleItems, peopleRequests:[], activeItems, activeRequests: 0, dismissals: [], dismissStatus: 200, performer, performerCalls: [], performerError: '',
+      calls: [], reports: [], pending: [], updates: [], automatic, updateAutomatic, menus: {}, peopleItems, peopleRequests:[], clipboard: [], activeItems, activeRequests: 0, dismissals: [], dismissStatus: 200, performer, performerCalls: [], performerError: '',
       values: { ...(configured ? { 'peach.jav.base': base, 'peach.jav.token': token } : {}), ...updateValues },
       changed(key, value, remote = false) {
         const previous = mock.values[key] ?? '';
@@ -86,6 +87,7 @@ async function open(browser: Browser, options: {
       GM_getValue: (key: string, fallback: string | boolean) => mock.values[key] ?? fallback,
       GM_setValue: (key: string, value: string | boolean) => { mock.changed(key, value); },
       GM_info: { script: { version } },
+      GM_setClipboard: (text: string) => { mock.clipboard.push(text); },
       GM_addValueChangeListener: (key: string, callback: (key: string, oldValue: string | boolean, newValue: string | boolean, remote: boolean) => void) => {
         const id = ++nextListener; listeners.set(id, { key, callback }); return id;
       },
@@ -298,6 +300,38 @@ describe('JAV 用户脚本', () => {
       } finally { await close(); }
     });
 
+    for (const example of [
+      { name: '脚本可更新', script: 'ok', peach: false, check: 0 },
+      { name: 'Peach 可更新', script: 'current', peach: true, check: 0 },
+      { name: '手动检查时脚本来源没查通、Peach 可更新', script: 'error', peach: true, check: 1 },
+    ] as const) it(`设置页已提示更新时不再显示「检查更新」，手动检查有来源没查通时保留：${example.name}`, async () => {
+      const { page, close } = await open(browser, { updateAutomatic: false });
+      try {
+        await waitUpdates(page, 2);
+        // 只有手动检查会记下没查通的来源；这一组先答完自动检查，再从菜单手动查一次。
+        const manual = example.script === 'error';
+        if (manual) {
+          await page.evaluate(() => { window.javMock.updates[0]!.onerror(); window.javMock.updates[1]!.onerror(); });
+          await page.evaluate(() => window.javMock.menus['检测更新']!());
+          await waitUpdates(page, 4);
+        }
+        await page.evaluate(({ script, peach, current, offset }) => {
+          const remote = window.javMock.updates[offset]!;
+          if (script === 'error') remote.onerror();
+          else remote.onload({status:200,responseText:`// ==UserScript==\n// @name Peach Userscript\n// @namespace https://github.com/peach-mitao/peach-userscript\n// @version ${script === 'ok' ? '9.2.0' : current}\n// ==/UserScript==`});
+          window.javMock.updates[offset + 1]!.onload({status:200,responseText:JSON.stringify({
+            runtime:{version:'1.0.0',build_id:'fixture'},release:peach ? {state:'available',latest_version:'1.1.0'} : {state:'current'},
+            userscript:{version:current,minimum_version:'0.5.1',install_url:'/integrations/peach-jav.user.js'},
+          })});
+        }, { ...example, current: VERSION, offset: manual ? 2 : 0 });
+        if (!manual) await page.locator(ROOT).getByRole('button',{name:'Peach 设置',exact:true}).click();
+        const dialog = settingsDialog(page);
+        if (manual) await dialog.getByRole('alert').waitFor();
+        await dialog.locator('.notice[data-tone=info]').first().waitFor();
+        assert.equal(await dialog.getByRole('button',{name:'检查更新',exact:true}).count(), example.check);
+      } finally { await close(); }
+    });
+
     it('未配对且没有影片身份的匹配页仍提供设置和独立菜单，元数据请求不带令牌', async () => {
       const { page, close, problems } = await open(browser, { url: 'https://missav.ws/', title: '首页', html: '<h1>首页</h1>',
         configured: false, updateAutomatic: false });
@@ -319,7 +353,8 @@ describe('JAV 用户脚本', () => {
         assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.installed-version']), VERSION);
         await page.evaluate(() => window.javMock.menus['检测更新']!());
         await waitUpdates(page, 2);
-        assert.equal(await settingsDialog(page).getByRole('button', { name: '检查更新', exact: true }).count(), 1);
+        // 已经提示了可更新，设置页不再给「检查更新」。
+        assert.equal(await settingsDialog(page).getByRole('button', { name: '检查更新', exact: true }).count(), 0);
         await answerMetadata(page, '9.2.0', undefined, 'Peach · JAV 入库');
         await page.waitForFunction(() => document.querySelector('#peach-jav-updates')?.shadowRoot?.textContent?.includes('v9.2.0 可更新'));
         assert.deepEqual(problems, []);
@@ -2352,28 +2387,38 @@ describe('JAV 用户脚本', () => {
     } finally { await opened.close(); }
   });
 
-  it('进度页只剩一个按钮时用主按钮；在这页入库完成后「提前处理」换成「打开馆藏」，点了打开这部作品并标为已读', async () => {
+  it('进度页总有一个主按钮：重试优先于标为已读；在这页入库完成后「提前处理」换成「打开馆藏」，点了打开这部作品并标为已读', async () => {
     const done = { state: 'ingested', label: '已入库', progress: 1, postprocess_state: 'complete', postprocess_label: '已整理' };
     const plain = { ...body('ingested', 'ABP-616'), ended_key: '22@2026-11-14T08:01:00+00:00', dismissed: false, download: done } as Body;
-    const opened = await open(browser, { initial: 'owned', activeItems: [{ ...body('queued', 'STAR-628'), queue_position: 2 } as Body, plain] });
+    const missing = { ...body('no_match', 'OFJE-489'), ended_key: 'OFJE-489@2026-11-14T08:02:00+00:00', dismissed: false } as Body;
+    const opened = await open(browser, { initial: 'owned', activeItems: [{ ...body('queued', 'STAR-628'), queue_position: 2 } as Body, plain, missing] });
     const { page } = opened;
     try {
       const root = page.locator(ROOT), shared = root.locator('.shared-tasks'), task = root.locator('.task-page');
       const primary = (name: string) => task.getByRole('button', { name, exact: true }).evaluate(node => node.classList.contains('primary'));
+      const back = async () => {
+        await task.getByRole('button', { name: '返回 Peach 主页', exact: true }).click();
+        await task.waitFor({ state: 'detached' });
+      };
       await page.waitForFunction(root => document.querySelector(root)?.shadowRoot?.querySelector('.shared-row'), ROOT);
+      if (!(await shared.locator('.shared-row[data-code="ABP-616"]').isVisible())) await shared.locator('.shared-heading').click();
       await page.evaluate(() => { Object.assign(window, { opened: [] as unknown[] });
         window.open = (...args: unknown[]) => { (window as unknown as { opened: unknown[] }).opened.push(args); return null; }; });
+      // 未找到资源：「重试加入」与「标为已读」同时出现，重试是主按钮。
+      await shared.locator('.shared-row[data-code="OFJE-489"]').click();
+      assert.equal(await primary('重试加入'), true);
+      assert.equal(await primary('标为已读'), false);
+      await back();
       // Peach 没带回作品编号时仍是「标为已读」，作为唯一的按钮用主按钮。
       await shared.locator('.shared-row[data-code="ABP-616"]').click();
       assert.equal(await task.getByRole('button', { name: '打开馆藏' }).isHidden(), true);
       assert.equal(await primary('标为已读'), true);
-      await task.getByRole('button', { name: '返回 Peach 主页', exact: true }).click();
-      await task.waitFor({ state: 'detached' });
+      await back();
       await shared.locator('.shared-row[data-code="STAR-628"]').click();
       assert.equal(await primary('提前处理'), true);
       // 停在进度页时入库完成：快照更新后「提前处理」消失，「打开馆藏」接替为主按钮。
       await page.evaluate(items => { window.javMock.activeItems = items; }, [{ ...body('ingested', 'STAR-628'), asset_id: 4321,
-        ended_key: '21@2026-11-14T08:00:00+00:00', dismissed: false, download: done } as Body, plain]);
+        ended_key: '21@2026-11-14T08:00:00+00:00', dismissed: false, download: done } as Body, plain, missing]);
       await page.clock.fastForward(5_000);
       await task.getByRole('button', { name: '打开馆藏', exact: true }).waitFor();
       assert.equal(await task.getByRole('button', { name: '提前处理' }).isHidden(), true);
@@ -2383,7 +2428,31 @@ describe('JAV 用户脚本', () => {
       assert.deepEqual(await page.evaluate(() => (window as unknown as { opened: unknown[] }).opened), [[`${BASE}/assets/4321`, '_blank', 'noopener']]);
       assert.deepEqual(await page.evaluate(() => window.javMock.dismissals.at(-1)), { keys: ['21@2026-11-14T08:00:00+00:00'] });
       assert.equal(await task.count(), 0);
-      assert.deepEqual(await shared.locator('.shared-code').allTextContents(), ['ABP-616']);
+      assert.deepEqual((await shared.locator('.shared-code').allTextContents()).sort(), ['ABP-616', 'OFJE-489']);
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
+  it('点标题栏的番号复制番号，鼠标与键盘都能触发，复制后短暂显示「已复制」', async () => {
+    const opened = await open(browser, { initial: 'owned', activeItems: [{ ...body('queued', 'STAR-628'), queue_position: 2 } as Body] });
+    const { page } = opened;
+    try {
+      const root = page.locator(ROOT), task = root.locator('.task-page');
+      // 主页标题：确定的番号可复制。
+      const heading = root.locator('.panel > .bar .bar-title > strong');
+      await heading.click();
+      assert.deepEqual(await page.evaluate(() => window.javMock.clipboard), ['SSIS-057']);
+      await root.locator('.copy-feedback', { hasText: '已复制' }).waitFor();
+      // 进度页标题：键盘 Enter 也能复制。
+      await page.waitForFunction(root => document.querySelector(root)?.shadowRoot?.querySelector('.shared-row'), ROOT);
+      await root.locator('.shared-row[data-code="STAR-628"]').click();
+      const code = task.getByRole('button', { name: 'STAR-628', exact: true });
+      await code.focus();
+      await code.press('Enter');
+      assert.deepEqual(await page.evaluate(() => window.javMock.clipboard), ['SSIS-057', 'STAR-628']);
+      await task.locator('.copy-feedback', { hasText: '已复制' }).waitFor();
+      await page.clock.fastForward(2_000);
+      await task.locator('.copy-feedback').waitFor({ state: 'detached' });
       assert.deepEqual(opened.problems, []);
     } finally { await opened.close(); }
   });

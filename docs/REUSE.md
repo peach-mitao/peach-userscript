@@ -32,6 +32,8 @@
 
 运行版本和跨标签安装感知分别复用官方 [GM_info](https://www.tampermonkey.net/documentation.php?locale=en&q=GM_info) 与 [GM_addValueChangeListener / GM_removeValueChangeListener](https://www.tampermonkey.net/documentation.php?locale=en&q=GM_values)。这些能力由脚本管理器提供，不增加运行包或第三方许可。页面退出释放新增监听、定时器和请求；未运行本版本检查器的既有页面无法接收新增监听，需刷新一次。
 
+标题栏复制番号复用官方 [GM_setClipboard](https://www.tampermonkey.net/documentation.php?locale=en&q=GM_setClipboard)，不受页面剪贴板权限与是否 HTTPS 影响；脚本管理器不提供时退回 `navigator.clipboard.writeText`。
+
 Sleazy 官方脚本 600821 的 JSON 元数据与 `.meta.js` 已通过严格 HTTPS 读取核对：名称 `Peach · JAV 入库`、namespace `https://github.com/peach-mitao/peach-userscript`、发行版本 `0.5.1`、对应同 ID 的下载地址一致。协议格式依据 [Greasy Fork 官方 API](https://greasyfork.org/en/help/api) 和维护者的[元数据下载域名说明](https://github.com/Tampermonkey/tampermonkey/issues/1904)。只解析版本与身份，不依赖影片识别或 Peach 配对；本地 Peach 接口继续复用既有发行快照。独立更新库及远程代码加载不适用于此只读需求。
 
 商品身份复用 Peach 的 `sources.dmm` CID 模型和 `catalog_rules` 商品番号判据，不引入第三方解析依赖。浏览器只提取明确字段与完整短番号，DMM 与 MGS 的来源差异由服务端解释；厂家番号与商品号联合校验，尾字母和日期分隔符保留。模拟 GM API 的 Chromium 回归覆盖字段冲突、特殊番号与 HTTP 错误分类；Peach 消费端另以完整安装脚本连接临时账本的真实识别接口，验证桌面与手机链路。

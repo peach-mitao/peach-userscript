@@ -4,6 +4,16 @@ Notable changes are grouped by version. English and Chinese describe the same be
 
 Entries are written for users to scan: one sentence each, saying where something changed and what you now see. Reasons, implementation, compatibility conditions and edge cases stay in commits and PRs. Changes to one feature become one entry, and within each group the bigger changes come first. The English part before ` / ` stays within 160 characters including spaces, and the Chinese part after it within 80 characters including punctuation; bold and code marks and link addresses are not counted, only the text they display. / 条目给使用者扫读：每条一句话，只写在哪儿看到了什么变化；原因、实现、兼容条件和边界情况留在提交与 PR。同一功能的几处改动合成一条，每组里影响大的排前面。` / ` 之前的英文部分不超过 160 个字符（含空格），之后的中文部分不超过 80 字（含标点）；加粗、代码标记和链接地址不计，只计显示出来的文字。
 
+## 0.7.12 — 2026-11-14
+
+### Added / 新增
+
+- **Panel titles** copy the video code when you click them or press Enter, briefly showing Copied. / 浮卡与进度页标题的番号点一下或按 Enter 即复制，并短暂显示「已复制」。
+
+### Changed / 变更
+
+- **Buttons** highlight the main action on task progress, such as Retry, and Settings hide Check for updates while an update is shown. / 进度页把重试等主要动作设为主按钮；设置页已提示可更新时不再显示「检查更新」。
+
 ## 0.7.11 — 2026-11-14
 
 ### Added / 新增

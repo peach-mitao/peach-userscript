@@ -84,6 +84,7 @@
       GM_getValue: (key, fallback) => previewValues[key] ?? fallback,
       GM_setValue: (key, value) => { previewValues[key] = value; },
       GM_registerMenuCommand: (label, callback) => { previewMenus[label] = callback; },
+      GM_setClipboard: text => { navigator.clipboard?.writeText(text).catch(() => {}); },
       GM_xmlhttpRequest: request => setTimeout(() => {
         // update=1 模拟 Sleazy 上有新版本，查看更新提醒。
         if (new URLSearchParams(location.search).get('update') === '1' && request.url.includes('update.sleazyfork.org/')) {
