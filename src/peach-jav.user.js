@@ -12,7 +12,7 @@
 // @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
 // @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.7.9
+// @version      0.7.10
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -2214,12 +2214,14 @@
     return body.state === 'ingested' && !tracking(body) && body.download?.postprocess_state !== 'failed';
   }
 
-  // 跨窗口共享进度：持锁窗口查 Peach 的进行中任务列表，有任务时每 4 秒、没有时每 30 秒一次，结果写入快照；
-  // 其余窗口只读快照。锁 45 秒过期；后台页的定时器会被浏览器放慢，可见窗口发现锁在后台页手里就接管。
-  // Peach 没有列表接口时快照记为不可用，各窗口退回自己逐个查询。
-  const SHARED_BUSY_MS = 4000, SHARED_IDLE_MS = 30_000, LEASE_MS = 45_000;
+  // 跨窗口共享进度：只有可见窗口持锁，查 Peach 的进行中任务列表并写入快照，其余窗口只读快照。
+  // 快照里有进行中的任务、或本窗口 1 分钟内提交过时每 4 秒查一次，查不到 Peach 时按 8、16、30 秒放慢；
+  // 进行中的都在暂停的渠道里时每 30 秒查一次。都没有时不再定时查，只在页面载入或回到前台、快照已超过 30 秒时
+  // 补查一次。页面隐藏时交出锁、停止查询。
+  // 锁 45 秒过期。Peach 没有列表接口时快照记为不可用，各窗口退回自己逐个查询。
+  const SHARED_BUSY_MS = 4000, SHARED_STALE_MS = 30_000, SHARED_GRACE_MS = 60_000, SHARED_BACKOFF_MS = 30_000, LEASE_MS = 45_000;
   const sharedLists = new Set();
-  let sharedSnapshot = readShared(), sharedTimer, sharedFetching = false, sharedFetchedAt = 0;
+  let sharedSnapshot = readShared(), sharedTimer, sharedFetching = false, sharedFetchedAt = 0, sharedSubmittedAt = 0, sharedFailures = 0;
 
   function readShared() {
     try {
@@ -2304,23 +2306,35 @@
     playSound('success');
   }
 
-  // force：本窗口刚提交任务，立刻刷新一次快照并接过轮询。
-  async function sharedTick(force = false) {
+  // force：本窗口刚提交任务，立刻刷新一次快照并接过轮询。wake：页面载入或回到前台，快照过期就补查一次。
+  async function sharedTick(force = false, wake = false) {
     clearTimeout(sharedTimer);
-    sharedTimer = setTimeout(() => void sharedTick(), SHARED_BUSY_MS);
+    const visible = document.visibilityState === 'visible';
+    // 隐藏的页面不排下一轮，回到前台时由 visibilitychange 重新开始。
+    if (visible) sharedTimer = setTimeout(() => void sharedTick(), SHARED_BUSY_MS);
     const config = configuration();
-    if (!config || sharedFetching || updateDisposed || !pageInterfaceAllowed()) return;
+    if (!config || sharedFetching || updateDisposed || !pageInterfaceAllowed() || (!force && !visible)) return;
+    const now = Date.now();
+    if (force) sharedSubmittedAt = now;
+    const known = sharedSnapshot?.base === config.base ? sharedSnapshot : null;
+    // 在动：有未暂停的进行中任务、本窗口刚提交过，或上次没查通（查通才能撤掉提示）。
+    const moving = Boolean(known?.problem || known?.items.some(body => tracking(body) && !body.paused))
+      || now - sharedSubmittedAt < SHARED_GRACE_MS;
+    const busy = moving || Boolean(known?.items.some(tracking));
+    const catchUp = wake && (!known || now - known.at >= SHARED_STALE_MS);
+    if (!force && !busy && !catchUp) return;
     let lease = null;
     try { lease = JSON.parse(GM_getValue(STORAGE_POLLER, 'null')); } catch { /* 损坏的锁视为空闲。 */ }
-    const now = Date.now(), visible = document.visibilityState === 'visible', mine = lease?.owner === WINDOW_ID;
-    if (!force && !mine && lease && lease.until > now && (lease.visible || !visible)) return;
+    const mine = lease?.owner === WINDOW_ID;
+    if (!force && !mine && lease && lease.until > now && lease.visible) return;
     GM_setValue(STORAGE_POLLER, JSON.stringify({ owner: WINDOW_ID, until: now + LEASE_MS, visible }));
-    // 渠道暂停时排着的番号不会动，按空闲间隔查，不让几百项的列表每几秒拉一次。
-    const interval = sharedSnapshot?.items.some(body => tracking(body) && !body.paused) ? SHARED_BUSY_MS : SHARED_IDLE_MS;
-    if (!force && mine && now - sharedFetchedAt < interval - 500) return;
+    // 在动时每 4 秒查，查不到 Peach 时按 8、16、30 秒放慢；只剩渠道暂停而排着的番号时每 30 秒查一次。
+    const interval = moving ? Math.min(SHARED_BACKOFF_MS, SHARED_BUSY_MS * 2 ** sharedFailures) : SHARED_STALE_MS;
+    if (!force && !catchUp && mine && now - sharedFetchedAt < interval - 500) return;
     sharedFetching = true; sharedFetchedAt = now;
     try {
       const active = await requestActive(config), items = active?.items ?? null;
+      sharedFailures = 0;
       if (configuration()?.base !== config.base) return;
       const previous = readShared();
       if (items) chimeTransitions(previous?.base === config.base ? previous.items : [], items);
@@ -2329,7 +2343,8 @@
       GM_setValue(STORAGE_TASKS, JSON.stringify(snapshot));
       applyShared(snapshot);
     } catch (error) {
-      // 连接异常保留上一份快照，记下从什么时候连不上，各窗口据此给出提示；下一轮再查，查通就撤掉。
+      sharedFailures++;
+      // 连接异常保留上一份快照，记下从什么时候连不上，各窗口据此给出提示；放慢后再查，查通就撤掉。
       if (!error?.kind || configuration()?.base !== config.base) return;
       const previous = readShared();
       const base = previous?.base === config.base ? previous : { version: 1, base: config.base, available: false, items: [] };
@@ -2338,6 +2353,12 @@
       GM_setValue(STORAGE_TASKS, JSON.stringify(snapshot));
       applyShared(snapshot);
     } finally { sharedFetching = false; }
+  }
+
+  // 页面隐藏或关闭时交出轮询锁，别的可见窗口下一轮就接手。
+  function releaseSharedLease() {
+    clearTimeout(sharedTimer);
+    try { if (JSON.parse(GM_getValue(STORAGE_POLLER, 'null'))?.owner === WINDOW_ID) GM_setValue(STORAGE_POLLER, 'null'); } catch { /* 锁会自行过期。 */ }
   }
 
   // 快照里有本页番号或本页番号列表里的番号时，按快照更新；提交或查询中的不打断。
@@ -3087,8 +3108,9 @@
   };
   addEventListener('urlchange', navigated);
   globalThis.navigation?.addEventListener('navigate', navigated);
-  // 用户脚本沙箱无需替换页面的 History API。
-  setInterval(refresh, 750);
+  // 用户脚本沙箱无需替换页面的 History API。上面的 DOM 变化与导航事件覆盖常见改址；
+  // 只换地址、不动 DOM 的少数情况由每 5 秒一次的兜底补上，页面隐藏时跳过。
+  setInterval(() => { if (!document.hidden) refresh(); }, 5000);
   refresh();
   if (typeof GM_addValueChangeListener === 'function') {
     for (const key of [STORAGE_INSTALLED, STORAGE_UPDATES, STORAGE_APPEARANCE, STORAGE_POSITION, STORAGE_DISPLAY]) updateListeners.push(GM_addValueChangeListener(key, () => {
@@ -3098,16 +3120,16 @@
     for(const key of [STORAGE_ENABLED,STORAGE_DISPLAY])updateListeners.push(GM_addValueChangeListener(key,(_key,before,after)=>{if(before!==after)applyDisplayPreference();}));
     updateListeners.push(GM_addValueChangeListener(STORAGE_TASKS, (_key, _before, _after, remote) => { if (remote) applyShared(readShared()); }));
   }
-  void sharedTick();
+  void sharedTick(false, true);
   addEventListener('resize', () => { for (const root of surfaces) if (root.isConnected) placeSurface(root); });
   document.addEventListener('visibilitychange', updateVisibility);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void sharedTick(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') { refresh(); void sharedTick(false, true); } else releaseSharedLease();
+  });
   addEventListener('focus', refreshInstalledVersion);
-  // 关闭时交出轮询锁，别的窗口下一轮就接手。
   addEventListener('pagehide', event => {
     if (event.persisted) return;
-    disposeUpdates(); clearTimeout(sharedTimer);
-    try { if (JSON.parse(GM_getValue(STORAGE_POLLER, 'null'))?.owner === WINDOW_ID) GM_setValue(STORAGE_POLLER, 'null'); } catch { /* 锁会自行过期。 */ }
+    disposeUpdates(); releaseSharedLease();
   });
   scheduleUpdateCheck();
 })();
