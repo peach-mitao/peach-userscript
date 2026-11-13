@@ -23,7 +23,7 @@
       <button type="button" id="activate-script">开启</button>
       <button type="button" id="check-script-update">检测更新</button>
       <button type="button" id="copy-pairing">复制模拟配对信息</button>
-      <a href="?site=dmm&state=idle">DMM 商品号</a><a href="?site=mgs&state=idle">MGS 商品号</a><a href="?site=fanza-clip&state=idle">FANZA 剪辑页</a><a href="?site=dmm-bonus&state=idle">DMM 特典版</a><a href="?site=dmm-regular&state=idle">DMM 有特典版的通常版</a><a href="?state=idle&scan=javdb">JavDB 整页扫描</a><a href="?state=idle&scan=states">本页番号行状态</a><a href="?site=list&state=idle&scan=javdb">JavDB 首页</a><a href="?state=idle&tasks=1">共享进度</a><a href="?site=list&state=idle&tasks=1">共享进度（无本页番号）</a><a href="?site=actress&state=idle">JavDB 女优页</a><a href="?site=missav-actress&state=idle">MISSAV 女优页</a><a href="?site=missav-actress&state=idle&performer=ambiguous">MISSAV 同名多位</a>
+      <a href="?site=dmm&state=idle">DMM 商品号</a><a href="?site=mgs&state=idle">MGS 商品号</a><a href="?site=fanza-clip&state=idle">FANZA 剪辑页</a><a href="?site=dmm-bonus&state=idle">DMM 特典版</a><a href="?site=dmm-regular&state=idle">DMM 有特典版的通常版</a><a href="?state=idle&scan=javdb">JavDB 整页扫描</a><a href="?state=idle&scan=states">本页番号行状态</a><a href="?site=list&state=idle&scan=javdb">JavDB 首页</a><a href="?state=idle&tasks=1">共享进度</a><a href="?site=list&state=idle&tasks=1">共享进度（无本页番号）</a><a href="?site=list&state=idle&tasks=paused">网盘空间不足暂停</a><a href="?site=list&state=idle&tasks=config">网盘配置失效暂停</a><a href="?site=actress&state=idle">JavDB 女优页</a><a href="?site=missav-actress&state=idle">MISSAV 女优页</a><a href="?site=missav-actress&state=idle&performer=ambiguous">MISSAV 同名多位</a>
     </nav>
     <h1>REAL-864 作品详情</h1>
     <p class="meta">来源页面示意</p>
@@ -99,13 +99,30 @@
           request.onload({status:200,responseText:JSON.stringify(performerBody())}); return;
         }
         // tasks=1 模拟 Peach 的进行中任务列表，下载百分比随每次查询往前走；其余预览按旧版 Peach 没有列表接口作答。
-        if (new URLSearchParams(location.search).get('tasks') === '1' && new URL(request.url).pathname.endsWith('/people')) {
+        // tasks=paused 模拟网盘空间不足：几十个番号排着、渠道暂停，另有几项失败；tasks=config 换成网盘配置失效。
+        const previewMode = new URLSearchParams(location.search).get('tasks');
+        const pausedMode = ['paused', 'config'].includes(previewMode);
+        if (['1', 'paused', 'config'].includes(previewMode) && new URL(request.url).pathname.endsWith('/people')) {
           const people = {'ABP-616':[{name:'Alice'}],'SSIS-057':[{name:'Bella'},{name:'Cora'}],'IPX-001':[{name:'Dana'}]};
           const items = Object.fromEntries(new URL(request.url).searchParams.get('codes').split(',').map(code => [code, people[code] || []]));
           request.onload({status:200,responseText:JSON.stringify({ok:true,source:'local-cache',items})}); return;
         }
         // 已结束的两项带确认键，确认后标为 dismissed；刷新页面后复原。
-        const previewItems = () => [
+        const pausedMessage = '网盘空间不足，已暂停；扩容或清理后自动继续';
+        const pausedItems = () => [
+          ...['JUR-112', 'IPX-001'].map((code, index) => ({ok:true,code,state:'failed',cause:'cloud',failure:'storage',
+            message:'网盘空间不足，扩容或清理后重试',ended_key:`${code}@2026-11-13T08:0${index}:00+00:00`})),
+          {ok:true,code:'MIDV-339',state:'no_match',message:'未找到可自动下载的磁力，可重试',ended_key:'MIDV-339@2026-11-13T07:50:00+00:00'},
+          ...Array.from({length: 36}, (_, index) => ({ok:true,code:`SNOS-${String(index + 100)}`,state:'queued',
+            queue_position:index + 1,message:pausedMessage,paused:{failure:'storage'}})),
+          {ok:true,code:'ABP-616',state:'ingested',download:{state:'ingested',label:'已入库',progress:1,postprocess_state:'complete',postprocess_label:'已整理'},ended_key:'101@2026-11-13T06:00:00+00:00'}]
+          .map(item => ({...item, ...(item.ended_key ? {dismissed: previewDismissed.has(item.ended_key)} : {})}));
+        const previewPaused = () => previewMode === 'paused'
+          ? [{provider:'115',provider_label:'115',failure:'storage',tone:'warning',message:pausedMessage,reason:'网盘空间不足',hint:'扩容或清理后自动继续',waiting:36}]
+          : previewMode === 'config'
+            ? [{provider:'115',provider_label:'115',failure:'config',tone:'error',message:'网盘配置或登录有问题，已暂停；修好下载设置后自动继续',
+              reason:'网盘配置或登录有问题',hint:'修好下载设置后自动继续',waiting:36}] : [];
+        const previewItems = () => pausedMode ? pausedItems() : [
           {ok:true,code:'ABP-616',state:'submitted',download:{state:'remote_running',label:'网盘下载中',progress:previewActive}},
           {ok:true,code:'MIDV-339',state:previewActive < .3 ? 'queued' : 'searching'},
           // 排在第 3 位的番号，进度页可以「提前处理」，提前后排到第 1 位。
@@ -121,12 +138,12 @@
         if (new URL(request.url).pathname.endsWith('/dismiss')) {
           const body = JSON.parse(request.data);
           for (const item of previewItems()) if (item.ended_key && (body.all || body.keys.includes(item.ended_key))) previewDismissed.add(item.ended_key);
-          request.onload({status:200,responseText:JSON.stringify({ok:true,items:previewItems()})}); return;
+          request.onload({status:200,responseText:JSON.stringify({ok:true,items:previewItems(),paused:previewPaused()})}); return;
         }
         if (new URL(request.url).pathname.endsWith('/active')) {
-          if (new URLSearchParams(location.search).get('tasks') !== '1') { request.onload({status:404,responseText:'{"detail":"Not Found"}'}); return; }
+          if (!['1', 'paused', 'config'].includes(previewMode)) { request.onload({status:404,responseText:'{"detail":"Not Found"}'}); return; }
           previewActive = Math.min(previewActive + .07, 1);
-          request.onload({status:200,responseText:JSON.stringify({ok:true,items:previewItems()})}); return;
+          request.onload({status:200,responseText:JSON.stringify({ok:true,items:previewItems(),paused:previewPaused()})}); return;
         }
         if (new URLSearchParams(location.search).get('scan') === 'states') {
           const url = new URL(request.url);

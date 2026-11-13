@@ -4,6 +4,19 @@ Notable changes are grouped by version. English and Chinese describe the same be
 
 Entries are written for users to scan: one sentence each, saying where something changed and what you now see. Reasons, implementation, compatibility conditions and edge cases stay in commits and PRs. Changes to one feature become one entry, and within each group the bigger changes come first. The English part before ` / ` stays within 160 characters including spaces, and the Chinese part after it within 80 characters including punctuation; bold and code marks and link addresses are not counted, only the text they display. / 条目给使用者扫读：每条一句话，只写在哪儿看到了什么变化；原因、实现、兼容条件和边界情况留在提交与 PR。同一功能的几处改动合成一条，每组里影响大的排前面。` / ` 之前的英文部分不超过 160 个字符（含空格），之后的中文部分不超过 80 字（含标点）；加粗、代码标记和链接地址不计，只计显示出来的文字。
 
+## 0.7.9 — 2026-11-13
+
+Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。
+
+### Changed / 变更
+
+- **Other tasks** lists every task with failures first, with notices above it when Peach is unreachable, the token stops working or adds are paused. / 其他任务全部列出且失败项排最前；连不上 Peach、令牌失效或添加暂停时上方显示提示框。
+- **Update reminders** for the script and Peach now appear as blue notices with the install button inside. / 脚本与 Peach 的更新提醒改为蓝色提示框，安装按钮在框内。
+
+### Fixed / 修复
+
+- **Retry failed** retries every failed task instead of only the first 20. / 「重试失败项」会重试全部失败项，不再只处理前 20 个。
+
 ## 0.7.8 — 2026-11-09
 
 Source only; release assets are not published yet. / 仅源码更新，尚未发布发行制品。

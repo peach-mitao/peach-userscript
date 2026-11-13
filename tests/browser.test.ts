@@ -36,6 +36,8 @@ type Mock = {
   automatic: boolean;
   reply(index: number, body: unknown, status?: number): void;
   activeItems: Body[] | null;
+  activePaused?: unknown[];
+  activeFailure?: 'offline' | 'auth' | '';
   activeRequests: number;
   dismissals: unknown[];
   dismissStatus: number;
@@ -108,7 +110,11 @@ async function open(browser: Browser, options: {
         // 默认按旧版 Peach 没有任务列表接口作答；共享进度用例给出 activeItems。
         if (request.url.endsWith('/api/jav-browser/active')) {
           mock.activeRequests++;
-          setTimeout(() => request.onload(mock.activeItems ? { status: 200, responseText: JSON.stringify({ ok: true, items: mock.activeItems }) }
+          // activeFailure 模拟连不上 Peach（offline）或令牌失效（auth）。
+          if (mock.activeFailure === 'offline') { setTimeout(() => request.onerror(), 0); return { abort: () => request.onabort?.() }; }
+          if (mock.activeFailure === 'auth') { setTimeout(() => request.onload({ status: 401, responseText: '{"detail":"token"}' }), 0); return { abort: () => request.onabort?.() }; }
+          setTimeout(() => request.onload(mock.activeItems ? { status: 200, responseText: JSON.stringify({ ok: true, items: mock.activeItems,
+            ...(mock.activePaused ? { paused: mock.activePaused } : {}) }) }
             : { status: 404, responseText: '{"detail":"Not Found"}' }), 0);
           return { abort: () => request.onabort?.() };
         }
@@ -131,7 +137,8 @@ async function open(browser: Browser, options: {
           mock.dismissals.push(body);
           if (mock.dismissStatus === 200 && mock.activeItems) mock.activeItems = mock.activeItems.map(item =>
             item.ended_key && (body.all || body.keys.includes(item.ended_key)) ? { ...item, dismissed: true } : item);
-          setTimeout(() => request.onload(mock.dismissStatus === 200 ? { status: 200, responseText: JSON.stringify({ ok: true, items: mock.activeItems }) }
+          setTimeout(() => request.onload(mock.dismissStatus === 200 ? { status: 200, responseText: JSON.stringify({ ok: true, items: mock.activeItems,
+            ...(mock.activePaused ? { paused: mock.activePaused } : {}) }) }
             : { status: mock.dismissStatus, responseText: '{"detail":"Not Found"}' }), 0);
           return { abort: () => request.onabort?.() };
         }
@@ -279,8 +286,10 @@ describe('JAV 用户脚本', () => {
         assert.equal(await updates.getByRole('link', {name:'查看 Peach 更新',exact:true}).count(), Number(example.peach));
         assert.equal(await updates.getByRole('button',{name:'检查更新',exact:true}).count(),0);
         if (example.script && example.peach) {
-          const colors = await updates.locator('a').evaluateAll(nodes => nodes.map(node => getComputedStyle(node).color));
-          assert.notEqual(colors[0], colors[1]);
+          // 两种更新各占一个蓝色提示框，靠标题区分，按钮在各自框内。
+          const boxes = updates.locator('.notice[data-tone=info]');
+          assert.deepEqual(await boxes.locator('.notice-title').allTextContents(), ['用户脚本 v9.2.0 可更新。', 'Peach 1.1.0 可更新。']);
+          assert.deepEqual(await boxes.evaluateAll(nodes => nodes.map(node => node.querySelectorAll('a').length)), [1, 1]);
         }
         if (!example.script && !example.peach) {
           await page.locator(ROOT).getByRole('button',{name:'Peach 设置',exact:true}).click();
@@ -2218,14 +2227,14 @@ describe('JAV 用户脚本', () => {
       // 失败项从已完成里单独计数，有失败时标题变红。
       assert.equal(await heading.textContent(), '其他任务 · 进行中 1 项 · 已完成 1 项 · 失败 1 项');
       assert.equal(await heading.getAttribute('data-tone'), 'failed');
-      // 确认过的 JUR-112 不再列出。
-      assert.deepEqual(await shared.locator('.shared-code').allTextContents(), ['MIDV-339', 'ABP-616', 'IPX-001']);
+      // 失败项排最前，其次进行中，已完成的最后；确认过的 JUR-112 不再列出。
+      assert.deepEqual(await shared.locator('.shared-code').allTextContents(), ['IPX-001', 'MIDV-339', 'ABP-616']);
       assert.equal(await shared.getByRole('button', { name: '将 MIDV-339 标为已读' }).count(), 0);
       await shared.getByRole('button', { name: '将 ABP-616 标为已读' }).click();
       assert.deepEqual(await page.evaluate(() => window.javMock.dismissals), [{ keys: ['11@2026-11-04T08:00:00+00:00'] }]);
-      assert.deepEqual(await shared.locator('.shared-code').allTextContents(), ['MIDV-339', 'IPX-001']);
-      // 标为已读后焦点落到下一行；Peach 的列表回来重绘时焦点仍留在这一行。
-      await page.waitForFunction(root => (document.querySelector(root)!.shadowRoot!.activeElement as HTMLElement | null)?.dataset.code === 'IPX-001', ROOT);
+      assert.deepEqual(await shared.locator('.shared-code').allTextContents(), ['IPX-001', 'MIDV-339']);
+      // 标为已读后焦点落到相邻行（最后一行落到上一行）；Peach 的列表回来重绘时焦点仍留在这一行。
+      await page.waitForFunction(root => (document.querySelector(root)!.shadowRoot!.activeElement as HTMLElement | null)?.dataset.code === 'MIDV-339', ROOT);
       // 进度页的「标为已读」确认后回到主页。
       await shared.locator('.shared-row[data-code="IPX-001"]').click();
       await root.locator('.task-page').getByRole('button', { name: '标为已读' }).click();
@@ -2306,6 +2315,85 @@ describe('JAV 用户脚本', () => {
         assert.equal(await main.isVisible(), true);
         assert.equal(await panel.locator(':scope > .task-page').count(), 0);
       }
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
+  it('共享进度：连不上 Peach 持续 15 秒后提示，令牌失效给出打开设置，查通后撤掉', async () => {
+    const opened = await open(browser, { initial: 'owned', activeItems: [body('queued', 'ABP-616')] });
+    const { page } = opened;
+    try {
+      const shared = page.locator(ROOT).locator('.shared-tasks'), notice = shared.locator('.shared-alerts .notice');
+      await shared.locator('.shared-row').first().waitFor();
+      await page.evaluate(() => { window.javMock.activeFailure = 'offline'; });
+      // 一次失败多半是抖动，不提示；连着失败 15 秒以上才提示，列表保留上一份。
+      await page.clock.fastForward(4_100);
+      assert.equal(await notice.count(), 0);
+      await page.clock.fastForward(16_000);
+      await notice.filter({ hasText: '连不上 Peach' }).waitFor();
+      assert.equal(await notice.getAttribute('data-tone'), 'error');
+      assert.match(await notice.locator('.notice-body').textContent() || '', /^任务进度停在 \d+ 分钟前，恢复后自动刷新$/);
+      assert.deepEqual(await shared.locator('.shared-code').allTextContents(), ['ABP-616']);
+      await page.evaluate(() => { window.javMock.activeFailure = 'auth'; });
+      await page.clock.fastForward(4_100);
+      await notice.filter({ hasText: 'Peach 令牌无效或已停用' }).waitFor();
+      assert.equal(await notice.getByRole('button', { name: '打开设置' }).isVisible(), true);
+      await page.evaluate(() => { window.javMock.activeFailure = ''; });
+      await page.clock.fastForward(4_100);
+      await notice.first().waitFor({ state: 'detached' });
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
+  it('共享进度：失败项排最前且全部列出，渠道暂停时给出提示并按空闲间隔查询', async () => {
+    const message = '网盘空间不足，已暂停；扩容或清理后自动继续';
+    const queued = Array.from({ length: 24 }, (_, index) =>
+      ({ ...body('queued', `ABC-${index + 100}`), message, paused: { failure: 'storage' } }) as Body);
+    const failed = (code: string) =>
+      ({ ...body('failed', code), cause: 'cloud', ended_key: `3${code.slice(-1)}@2026-11-13T08:00:00+00:00`, dismissed: false }) as Body;
+    const opened = await open(browser, { initial: 'owned', activeItems: [...queued, failed('IPX-001'), failed('JUR-112')] });
+    const { page } = opened;
+    try {
+      const root = page.locator(ROOT), shared = root.locator('.shared-tasks');
+      await page.waitForFunction(root => document.querySelector(root)?.shadowRoot?.querySelector('.shared-row'), ROOT);
+      await page.evaluate(value => { window.javMock.activePaused = [{ provider: '115', provider_label: '115', failure: 'storage',
+        message: value, reason: '网盘空间不足', hint: '扩容或清理后自动继续', waiting: 24 }]; }, message);
+      // 排着的番号都在暂停中，不按进行中的四秒间隔反复拉列表。
+      const before = await page.evaluate(() => window.javMock.activeRequests);
+      await page.clock.fastForward(8_000);
+      assert.equal(await page.evaluate(() => window.javMock.activeRequests), before);
+      await page.clock.fastForward(23_000);
+      // 提示框与 Peach 页面的提示同一形状：黄色状态底、圆角，标题与正文分两行。
+      const notice = shared.locator('.shared-alerts .notice');
+      await notice.filter({ hasText: '115：' }).waitFor();
+      assert.deepEqual(await notice.locator('p').allTextContents(), ['115：网盘空间不足', '24 项已暂停，扩容或清理后自动继续']);
+      assert.deepEqual(await notice.evaluate(node => { const style = getComputedStyle(node);
+        return [style.borderRadius, style.backgroundColor !== 'rgba(0, 0, 0, 0)']; }), ['10px', true]);
+      assert.equal(await shared.locator('.shared-heading').textContent(), '其他任务 · 进行中 24 项 · 失败 2 项');
+      // 提示框在标题上方、不进折叠区：标题紧接着展开的列表，收起列表时提示框照样显示。
+      assert.deepEqual(await shared.evaluate(node => [node.children[0]!.className, node.children[1]!.firstElementChild!.className]),
+        ['shared-alerts', 'shared-heading']);
+      const heading = shared.locator('.shared-heading');
+      if (await heading.getAttribute('aria-expanded') === 'true') await heading.click();
+      await shared.locator('.shared-list').waitFor({ state: 'hidden' });
+      assert.equal(await notice.isVisible(), true);
+      await heading.click();
+      // 底部两个动作各带图标，重试在左、标为已读在右。
+      const [retry, clear] = [shared.getByRole('button', { name: '重试失败项' }), shared.getByRole('button', { name: '全部标为已读' })];
+      assert.deepEqual([await retry.locator('svg').count(), await clear.locator('svg').count()], [1, 1]);
+      assert.ok((await retry.boundingBox())!.x + 40 < (await clear.boundingBox())!.x);
+      const codes = await shared.locator('.shared-code').allTextContents();
+      assert.equal(codes.length, 26);
+      assert.deepEqual(codes.slice(0, 3), ['IPX-001', 'JUR-112', 'ABC-100']);
+      const pausedRow = shared.locator('.shared-row[data-code="ABC-100"] .chip');
+      assert.deepEqual([await pausedRow.textContent(), await pausedRow.getAttribute('data-chip')], ['已暂停', 'yellow']);
+      assert.equal(await shared.locator('.shared-row[data-code="IPX-001"] .chip').textContent(), '网盘问题');
+      // 要用户动手修的暂停（配置失效）按错误语气显示。
+      await page.evaluate(() => { window.javMock.activePaused = [{ provider: '115', provider_label: '115', failure: 'config', tone: 'error',
+        message: '网盘配置或登录有问题，已暂停；修好下载设置后自动继续', reason: '网盘配置或登录有问题', hint: '修好下载设置后自动继续', waiting: 24 }]; });
+      await page.clock.fastForward(31_000);
+      await notice.filter({ hasText: '网盘配置或登录有问题' }).waitFor();
+      assert.equal(await notice.getAttribute('data-tone'), 'error');
       assert.deepEqual(opened.problems, []);
     } finally { await opened.close(); }
   });

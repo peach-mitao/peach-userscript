@@ -12,7 +12,7 @@
 // @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
 // @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.7.8
+// @version      0.7.9
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -293,7 +293,7 @@
   const STORAGE_POSITION = 'peach.jav.position';
   const STORAGE_APPEARANCE = 'peach.jav.appearance';
   const ROOT_ID = 'peach-jav-action';
-  const SCRIPT_VERSION = "0.7.8";
+  const SCRIPT_VERSION = "0.7.9";
   // 0.6.3 起默认名改为英文；发布页切换前仍返回原名。
   const PUBLISHED_NAMES = ['Peach Userscript', 'Peach · JAV 入库'];
   const PEACH_LOGO = "data:image/png;base64,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";
@@ -340,7 +340,7 @@
   // 未提交的「待加入」不是任务状态，只用次级文字。完整说明放在悬停提示。
   const ROW_STATES = {
     pending: ['待加入', 'plain'], checking: ['查询中', 'plain'], sending: ['提交中', 'blue'],
-    queued: ['排队中', 'soft'], searching: ['搜索中', 'blue'], submitted: ['下载中', 'blue'],
+    queued: ['排队中', 'soft'], paused: ['已暂停', 'yellow'], searching: ['搜索中', 'blue'], submitted: ['下载中', 'blue'],
     importing: ['入库中', 'blue'], organizing: ['整理中', 'blue'],
     ingested: ['已入库', 'lime'], owned: ['已有', 'lime'], no_match: ['无资源', 'yellow'], failed: ['失败', 'rose'],
   };
@@ -557,6 +557,8 @@
     .geist-button.launcher[data-count-tone=ended]::after{background:var(--color-status-lime-background);color:var(--color-status-lime-text)}
     .geist-button.launcher[data-count-tone=failed]::after{background:var(--color-status-rose-background);color:var(--color-status-rose-text)}
     .shared-note{margin:8px 0 0}.shared-foot{display:flex;justify-content:flex-end;gap:16px;margin-top:8px}.shared-foot:not(:has(>:not([hidden]))){display:none}
+    .shared-action[data-action=retry-failed]{margin-right:auto;color:var(--color-status-rose-text)}.shared-action[data-action=retry-failed]:hover{color:var(--color-status-rose-text);opacity:.8}
+    .shared-action-icon{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
     .performer-follow{display:grid;gap:8px;min-width:0}.performer-head{display:flex;align-items:center;gap:8px;min-width:0}
     .performer-head strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:var(--board-body-medium)}
     .shared-tasks{min-width:0}.shared-heading,.shared-action{display:flex;align-items:center;gap:4px;width:fit-content;margin:0;padding:0;border:0;background:transparent;
@@ -677,7 +679,23 @@
     .batch-empty{font:var(--board-body);color:var(--muted)}
     .geist-note{font:var(--board-body);color:var(--ink-2);overflow-wrap:anywhere}
     .geist-note[data-variant=error]{color:var(--drop)}
+    /* 提示框照 Peach 页面的 Note：状态色底、10px 圆角，标题 14px 中粗、正文 13px，动作在框内右侧。 */
+    .shared-alerts{display:grid;gap:8px}.shared-alerts[hidden]{display:none}.shared-alerts:not([hidden])+.shared-group{margin-top:8px}
+    .notice{--notice-bg:var(--color-status-yellow-background);--notice-fg:var(--color-status-yellow-text);display:flex;flex-wrap:wrap;align-items:center;
+      justify-content:space-between;gap:8px 12px;padding:8px 12px;border-radius:10px;background:var(--notice-bg);color:var(--notice-fg);overflow-wrap:anywhere}
+    .notice[data-tone=error]{--notice-bg:var(--color-status-rose-background);--notice-fg:var(--color-status-rose-text)}
+    .notice[data-tone=info]{--notice-bg:var(--color-status-blue-background);--notice-fg:var(--color-status-blue-text)}
+    .notice-text{display:flex;flex:1 1 160px;flex-direction:column;gap:2px;min-width:0}
+    .notice p{margin:0}.notice-title{font:var(--board-body-medium)}.notice-body{font:400 13px/18px var(--board-font)}
+    .notice-actions{display:flex;flex-wrap:wrap;gap:8px;flex:none}
+    /* 框内动作照 Peach 的 BoardUI Button secondary small：白底描边、32px 高、8px 圆角，不随更新类别染色。 */
+    .notice>.geist-button,.notice .notice-actions .geist-button{height:32px;padding:6px 10px;border-radius:8px;flex:none;text-decoration:none;color:var(--ink);
+      background:var(--color-background-primary-default);border-color:var(--color-border-button-default);box-shadow:var(--elevation-xs)}
+    @media(hover:hover) and (pointer:fine){.notice>.geist-button:hover,.notice .notice-actions .geist-button:hover{color:var(--ink);
+      background:var(--color-background-primary-hover);border-color:var(--color-border-button-hover)}}
     .update-section{display:grid;gap:8px;min-width:0;border-top:1px solid var(--line);padding-top:12px}
+    /* 浮卡里只有可用更新时是一个提示框，不再加分隔线。 */
+    .update-section[data-available-only=true]{border-top:0;padding-top:0}
     .update-actions{display:flex;flex-wrap:wrap;gap:8px}.update-actions a{text-decoration:none}
     .update-actions .geist-button{height:32px;padding-inline:10px}
     [data-update-kind=script],[data-update-kind=install],[data-update-kind=refresh]{--update-foreground:var(--update-script-foreground)}
@@ -1274,11 +1292,13 @@
     node.hidden = availableOnly && model.kind === 'current';
     if (node.hidden) { node.replaceChildren(); return; }
     const checking = updateChecking && model.kind === 'current';
-    const note = element('p', 'geist-note', checking ? '正在检查更新。' : model.message);
+    // 有更新可装或待刷新时用蓝色提示框，动作放在框内；已是最新时只写一行当前版本。
+    const available = model.kind !== 'current';
+    const note = element('p', available ? 'notice-title' : 'geist-note', checking ? '正在检查更新。' : model.message);
     note.dataset.updateKind = model.kind;
     note.dataset.copyKey = `userscript.updates.${checking ? 'checking' : model.kind}.message`;
     note.setAttribute('aria-label', '用户脚本更新状态');
-    const actions = element('div', 'update-actions');
+    const actions = element('div', available ? 'notice-actions' : 'update-actions');
     if (model.kind === 'refresh' || model.kind === 'install') {
       const reload = control('刷新本页');
       reload.dataset.updateKind = 'refresh';
@@ -1303,27 +1323,35 @@
     check.setAttribute('aria-disabled', String(updateChecking));
     check.disabled = updateChecking;
     check.addEventListener('click', () => { if (!updateChecking) void checkUpdates(true); });
-    if (!availableOnly) actions.append(check);
-    node.replaceChildren(note);
+    const tools = element('div', 'update-actions');
+    if (!availableOnly) (available ? tools : actions).append(check);
+    if (available) {
+      // 标题沿用带编辑键与读屏名的那一行，动作放进框内。
+      const box = notice({ tone: 'info', title: '' });
+      box.querySelector('.notice-title').replaceWith(note);
+      box.append(actions);
+      node.replaceChildren(box);
+    } else node.replaceChildren(note);
     if (updateError && !updateChecking) {
       const error = element('p', 'geist-note', updateError);
       error.dataset.variant = 'error'; error.setAttribute('role', 'alert');
       error.dataset.copyKey = 'userscript.updates.error.message';
       node.append(error);
     }
-    node.append(actions);
+    node.append(available ? tools : actions);
+    if (!tools.childElementCount) tools.remove();
     const config = configuration();
     const peach = config && updateCache.peach?.base === config.base ? updateCache.peach : null;
     if (model.kind !== 'peach' && peach?.release?.state === 'available' && typeof peach.release.latest_version === 'string') {
-      const app = element('p', 'geist-note', `Peach ${peach.release.latest_version} 可更新。`);
-      app.dataset.updateKind = 'peach';
-      app.dataset.copyKey = 'userscript.updates.peach.message';
       const open = element('a', 'geist-button', '查看 Peach 更新');
       open.dataset.updateKind = 'peach';
       Object.assign(open, { href: `${config.base}/settings/maintenance#releaseUpdates`, target: '_blank', rel: 'noopener noreferrer' });
       open.dataset.copyKey = 'userscript.updates.peach.action';
-      const appActions = element('div', 'update-actions'); appActions.append(open);
-      node.append(app, appActions);
+      const appActions = element('div', 'notice-actions'); appActions.append(open);
+      const app = notice({ tone: 'info', title: `Peach ${peach.release.latest_version} 可更新。`, action: appActions });
+      app.querySelector('.notice-title').dataset.updateKind = 'peach';
+      app.querySelector('.notice-title').dataset.copyKey = 'userscript.updates.peach.message';
+      node.append(app);
     }
   }
 
@@ -1720,6 +1748,8 @@
     if (body.state === 'idle') return ['pending'];
     const retry = automaticRetryText(body);
     if (retry) return [body.state === 'ingested' ? 'organizing' : 'queued', retry, '待自动重试'];
+    // 渠道因额度或网盘空间暂停：番号还排着，恢复后自动继续。
+    if (body.state === 'queued' && body.paused) return ['paused', typeof body.message === 'string' ? body.message.slice(0, 120) : ''];
     if (body.state === 'failed') return ['failed', failureText(body), {magnet:'磁力失效', cloud:'网盘问题'}[body.cause] || '失败'];
     if (body.state === 'no_match') return ['no_match', failureText(body)];
     if (organizeFailed(body)) return ['failed', body.retry_exhausted === true
@@ -2422,22 +2452,31 @@
           headers: { Authorization: `Bearer ${config.token}`, Accept: 'application/json' },
           onload(response) {
             if ([404, 405].includes(response.status)) { resolve(null); return; }
+            if ([401, 403].includes(response.status)) { reject(Object.assign(new Error('令牌无效或无权限'), { kind: 'auth' })); return; }
             try {
               if (response.status !== 200 || response.responseText.length > 2 * 1024 * 1024) throw new Error();
               resolve(activeItems(JSON.parse(response.responseText)));
             } catch { reject(new Error('Peach 返回的任务列表无效')); }
           },
-          onerror: () => reject(new Error('无法连接 Peach')), ontimeout: () => reject(new Error('Peach 请求超时')),
+          onerror: () => reject(offline('无法连接 Peach')), ontimeout: () => reject(offline('Peach 请求超时')),
           onabort: () => reject(new Error('Peach 请求已中止')),
         });
-      } catch { reject(new Error('无法连接 Peach')); }
+      } catch { reject(offline('无法连接 Peach')); }
     });
   }
+  const offline = message => Object.assign(new Error(message), { kind: 'offline' });
 
+  // Peach 的任务列表：进行中与已结束各自最多 200 项；`paused` 是因额度或网盘空间暂停的渠道，旧版 Peach 没有。
   function activeItems(data) {
     if (data?.ok !== true || !Array.isArray(data.items)) throw new Error();
-    return data.items.filter(body => body?.ok === true && STATES.has(body.state) && typeof body.code === 'string'
-      && candidates(body.code).size === 1).slice(0, 200);
+    const items = data.items.filter(body => body?.ok === true && STATES.has(body.state) && typeof body.code === 'string'
+      && candidates(body.code).size === 1).slice(0, 400);
+    const paused = (Array.isArray(data.paused) ? data.paused : []).filter(row => typeof row?.provider_label === 'string'
+      && typeof row.message === 'string' && Number.isSafeInteger(row.waiting) && row.waiting >= 0).slice(0, 4)
+      .map(row => ({ provider_label: row.provider_label.slice(0, 40), message: row.message.slice(0, 120), waiting: row.waiting,
+        reason: typeof row.reason === 'string' ? row.reason.slice(0, 40) : '', hint: typeof row.hint === 'string' ? row.hint.slice(0, 80) : '',
+        tone: row.tone === 'error' ? 'error' : 'warning' }));
+    return { items, paused };
   }
 
   // 确认已结束的任务，返回 Peach 的新任务列表；旧版 Peach 没有这个接口。
@@ -2489,19 +2528,29 @@
     const now = Date.now(), visible = document.visibilityState === 'visible', mine = lease?.owner === WINDOW_ID;
     if (!force && !mine && lease && lease.until > now && (lease.visible || !visible)) return;
     GM_setValue(STORAGE_POLLER, JSON.stringify({ owner: WINDOW_ID, until: now + LEASE_MS, visible }));
-    const interval = sharedSnapshot?.items.some(tracking) ? SHARED_BUSY_MS : SHARED_IDLE_MS;
+    // 渠道暂停时排着的番号不会动，按空闲间隔查，不让几百项的列表每几秒拉一次。
+    const interval = sharedSnapshot?.items.some(body => tracking(body) && !body.paused) ? SHARED_BUSY_MS : SHARED_IDLE_MS;
     if (!force && mine && now - sharedFetchedAt < interval - 500) return;
     sharedFetching = true; sharedFetchedAt = now;
     try {
-      const items = await requestActive(config);
+      const active = await requestActive(config), items = active?.items ?? null;
       if (configuration()?.base !== config.base) return;
       const previous = readShared();
       if (items) chimeTransitions(previous?.base === config.base ? previous.items : [], items);
-      const snapshot = { version: 1, base: config.base, at: Date.now(), available: items !== null, items: items || [] };
+      const snapshot = { version: 1, base: config.base, at: Date.now(), available: items !== null, items: items || [],
+        paused: active?.paused || [] };
       GM_setValue(STORAGE_TASKS, JSON.stringify(snapshot));
       applyShared(snapshot);
-    } catch { /* 连接异常保留上一份快照，下一轮再查。 */ }
-    finally { sharedFetching = false; }
+    } catch (error) {
+      // 连接异常保留上一份快照，记下从什么时候连不上，各窗口据此给出提示；下一轮再查，查通就撤掉。
+      if (!error?.kind || configuration()?.base !== config.base) return;
+      const previous = readShared();
+      const base = previous?.base === config.base ? previous : { version: 1, base: config.base, available: false, items: [] };
+      const since = base.problem?.kind === error.kind && Number.isFinite(base.problem.since) ? base.problem.since : Date.now();
+      const snapshot = { ...base, problem: { kind: error.kind, since } };
+      GM_setValue(STORAGE_TASKS, JSON.stringify(snapshot));
+      applyShared(snapshot);
+    } finally { sharedFetching = false; }
   }
 
   // 快照里有本页番号或本页番号列表里的番号时，按快照更新；提交或查询中的不打断。
@@ -2601,14 +2650,50 @@
   // 结束后等用户确认的任务：Peach 给了确认键的才能确认；旧版 Peach 没有，照旧 10 分钟后自行离开列表。
   const awaitingAck = body => !tracking(body) && typeof body.ended_key === 'string' && body.dismissed !== true;
 
-  // 进行中的在前，已结束的在后；每项一行，点开进入该番号的进度页，已结束的行尾可以标为已读。
+  // 提示框：照 Peach 页面的 Note，标题一行、正文一行，要用户当场做的事放在框内右侧。
+  // tone 为 warning（等着或腾空间就好）、error（要用户动手）、info（可选的更新）。
+  function notice({ tone = 'warning', title, body = '', action = null }) {
+    const box = element('div', 'notice'), text = element('div', 'notice-text');
+    box.dataset.tone = tone;
+    text.append(element('p', 'notice-title', title));
+    if (body) text.append(element('p', 'notice-body', body));
+    box.append(text);
+    if (action) box.append(action);
+    return box;
+  }
+
+  // 其他任务上方的提示：先说脚本自己连不连得上 Peach，再说 Peach 暂停了哪些渠道。
+  function sharedNotices() {
+    const config = configuration();
+    const snapshot = config && sharedSnapshot?.base === config.base ? sharedSnapshot : null;
+    const notices = [];
+    const problem = snapshot?.problem;
+    if (problem?.kind === 'auth') {
+      const open = control('打开设置');
+      open.addEventListener('click', configure);
+      notices.push(notice({ tone: 'error', title: 'Peach 令牌无效或已停用', body: '重新配对后恢复任务进度', action: open }));
+    } else if (problem?.kind === 'offline' && Number.isFinite(problem.since) && Date.now() - problem.since >= 15_000) {
+      // 一次查询失败多半是瞬时抖动，连着失败 15 秒以上才提示。
+      const minutes = Math.max(1, Math.round((Date.now() - problem.since) / 60_000));
+      notices.push(notice({ tone: 'error', title: '连不上 Peach', body: `任务进度停在 ${minutes} 分钟前，恢复后自动刷新` }));
+    }
+    // 标题写渠道与原因，正文写排着几项、怎样恢复；旧版 Peach 没有分开的原因时整句放进正文。
+    for (const row of snapshot?.paused || []) notices.push(notice({
+      tone: row.tone === 'error' ? 'error' : 'warning',
+      title: row.reason ? `${row.provider_label}：${row.reason}` : row.provider_label,
+      body: row.reason ? `${row.waiting} 项已暂停，${row.hint}` : `${row.message}（${row.waiting} 项排队中）`,
+    }));
+    return notices;
+  }
+
+  // 失败项在前，其次进行中，已完成的在后；每项一行，点开进入该番号的进度页，已结束的行尾可以标为已读。
   // 标题与列表跨重绘保留，开合状态变了（点标题或自动条件变化）才播高度过渡。
   function paintSharedList(node) {
-    const items = otherTasks();
-    node.hidden = !items.length;
+    const items = otherTasks(), notices = sharedNotices();
+    node.hidden = !items.length && !notices.length;
     const focused = node.getRootNode().activeElement?.closest?.('.shared-row');
-    // 列表空了只藏起整段，标题、提示与开合状态留着，确认失败时提示仍有处可写。
-    if (!items.length) return;
+    // 列表和提示都空了只藏起整段，标题、提示与开合状态留着，确认失败时提示仍有处可写。
+    if (node.hidden) return;
     loadSharedPeople(items);
     const auto = items.length > SHARED_FOLD_LIMIT || Boolean(ownKey() && (current.tracking || current.busy));
     if (node.foldChoice && node.foldChoice.auto !== auto) node.foldChoice = null;
@@ -2622,23 +2707,36 @@
         node.foldChoice = { auto: node.parts.auto, open: !node.parts.open };
         paintSharedList(node);
       });
+      // 底部两个动作各带图标、分在两端，一眼分得清重试与确认。
       const retryAll = element('button', 'shared-action', '重试失败项');
-      retryAll.type = 'button';
+      retryAll.type = 'button'; retryAll.dataset.action = 'retry-failed';
+      retryAll.prepend(chevronIcon('shared-action-icon', 'M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8M21 3v5h-5'));
       retryAll.addEventListener('click', () => void retryFailed(node));
       const clear = element('button', 'shared-action', '全部标为已读');
       clear.type = 'button';
+      clear.prepend(chevronIcon('shared-action-icon', 'M18 6 7 17l-5-5M22 10l-7.5 7.5L13 16'));
       clear.addEventListener('click', () => void acknowledgeEnded(node, { all: true }));
       const foot = element('div', 'shared-foot'); foot.append(retryAll, clear);
       const note = element('p', 'geist-note shared-note');
       note.dataset.variant = 'error'; note.setAttribute('role', 'alert'); note.hidden = true;
+      // 连接状态与渠道暂停的提示框，与 Peach 页面的提示同一形状；放在标题上方，不随列表折叠，
+      // 标题与展开的列表连在一起。没有其他任务时只留提示框。
+      const paused = element('div', 'shared-alerts');
+      paused.setAttribute('role', 'status'); paused.hidden = true;
       const body = element('div', 'shared-body fold-settled'), list = element('ul', 'shared-list');
       body.hidden = !open;
       body.append(list, foot);
-      node.replaceChildren(heading, note, body);
+      const group = element('div', 'shared-group');
+      group.append(heading, note, body);
+      node.replaceChildren(paused, group);
       overlayScrollbar(list, { square: true });
-      node.parts = { heading, label, retryAll, clear, note, body, list, open };
+      node.parts = { heading, label, retryAll, clear, note, paused, group, body, list, open };
     }
-    const { heading, label, retryAll, clear, body: fold, list } = node.parts;
+    const { heading, label, retryAll, clear, paused, group, body: fold, list } = node.parts;
+    paused.replaceChildren(...notices);
+    paused.hidden = !notices.length;
+    group.hidden = !items.length;
+    if (!items.length) return;
     // 失败（含未找到资源与整理失败）从已结束里单独计数，有失败项时整行标题变红。
     const failed = ended.filter(retryableTask), done = ended.length - failed.length;
     label.textContent = ['其他任务', running.length ? `进行中 ${running.length} 项` : '', done ? `已完成 ${done} 项` : '',
@@ -2650,7 +2748,8 @@
     if (open !== node.parts.open) setFoldOpen(fold, open, () => placeSurface(node.getRootNode().host));
     Object.assign(node.parts, { auto, open });
     const rows = [];
-    for (const body of [...running, ...ended].slice(0, 20)) {
+    // 全部列出，列表自己滚动；失败项排最前，排队再多也不会把它们挤出视野。
+    for (const body of [...failed, ...running, ...ended.filter(body => !retryableTask(body))]) {
       const row = element('button', 'shared-row'), status = element('span', 'chip');
       row.type = 'button'; row.dataset.code = body.code;
       row.append(sharedAvatars(body), element('span', 'shared-code', body.code), status, chevronIcon('shared-chevron', 'm9 6 6 6-6 6'));
@@ -2690,7 +2789,7 @@
   async function retryFailed(node) {
     const config = configuration(), parts = node.parts;
     if (!config || !parts || parts.retryAll.disabled) return;
-    const failed = otherTasks().filter(retryableTask).slice(0, 20);
+    const failed = otherTasks().filter(retryableTask);
     parts.retryAll.disabled = true; parts.note.hidden = true;
     let errors = 0, reason = '';
     for (const body of failed) {
@@ -2714,9 +2813,9 @@
     const local = { ...sharedSnapshot, at: Date.now(), items: marked };
     GM_setValue(STORAGE_TASKS, JSON.stringify(local)); applyShared(local);
     try {
-      const items = await requestDismiss(config, request.all ? { all: true } : { keys: [...keys] });
+      const { items, paused } = await requestDismiss(config, request.all ? { all: true } : { keys: [...keys] });
       if (configuration()?.base !== config.base) return;
-      const snapshot = { version: 1, base: config.base, at: Date.now(), available: true, items };
+      const snapshot = { version: 1, base: config.base, at: Date.now(), available: true, items, paused };
       GM_setValue(STORAGE_TASKS, JSON.stringify(snapshot)); applyShared(snapshot);
     } catch (error) {
       void sharedTick(true);
