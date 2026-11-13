@@ -1617,6 +1617,49 @@ describe('JAV 用户脚本', () => {
     } finally {await opened.close();}
   });
 
+  it('番号列默认按页面顺序，点表头依次切到字母升序、倒序再回页面顺序，记住选择，勾选随行移动', async () => {
+    const opened = await open(browser, {url:'https://javdb.com/', html:'<p>SSIS-057 IPX-100 ABP-616 IPX-99</p>'});
+    const {page} = opened;
+    try {
+      await page.evaluate(() => window.javMock.menus['开启']!());
+      const list = page.locator('#peach-jav-batch');
+      const codes = () => list.locator('.batch-row-code').allTextContents();
+      const header = list.getByRole('columnheader', {name:'番号', exact:true});
+      await list.getByRole('checkbox',{name:'选择 IPX-99',exact:true}).waitFor();
+      assert.deepEqual(await codes(), ['SSIS-057','IPX-100','ABP-616','IPX-99']);
+      assert.equal(await header.getAttribute('aria-sort'), 'none');
+      await list.getByRole('checkbox',{name:'选择 ABP-616',exact:true}).check();
+      await list.getByRole('button',{name:'番号',exact:true}).click();
+      assert.deepEqual(await codes(), ['ABP-616','IPX-99','IPX-100','SSIS-057']);
+      assert.equal(await header.getAttribute('aria-sort'), 'ascending');
+      assert.equal(await list.locator('.batch-row').first().locator('input').isChecked(), true);
+      assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.batch-order']), 'ascending');
+      await list.getByRole('button',{name:'番号',exact:true}).click();
+      assert.deepEqual(await codes(), ['SSIS-057','IPX-100','IPX-99','ABP-616']);
+      assert.equal(await header.getAttribute('aria-sort'), 'descending');
+      assert.equal(await list.locator('.batch-row').last().locator('input').isChecked(), true);
+      assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.batch-order']), 'descending');
+      await list.getByRole('button',{name:'番号',exact:true}).click();
+      assert.deepEqual(await codes(), ['SSIS-057','IPX-100','ABP-616','IPX-99']);
+      assert.equal(await header.getAttribute('aria-sort'), 'none');
+      assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.batch-order']), 'page');
+      assert.deepEqual(opened.problems,[]);
+    } finally {await opened.close();}
+  });
+
+  it('上次选了字母倒序时，打开列表直接按倒序排列', async () => {
+    const opened = await open(browser, {url:'https://javdb.com/', html:'<p>ABP-616 SSIS-057 IPX-001</p>', updateValues:{'peach.jav.batch-order':'descending'}});
+    const {page} = opened;
+    try {
+      await page.evaluate(() => window.javMock.menus['开启']!());
+      const list = page.locator('#peach-jav-batch');
+      await list.getByRole('checkbox',{name:'选择 SSIS-057',exact:true}).waitFor();
+      assert.deepEqual(await list.locator('.batch-row-code').allTextContents(), ['SSIS-057','IPX-001','ABP-616']);
+      assert.equal(await list.getByRole('columnheader', {name:'番号', exact:true}).getAttribute('aria-sort'), 'descending');
+      assert.deepEqual(opened.problems,[]);
+    } finally {await opened.close();}
+  });
+
   it('整页扫描只收带分隔符的番号，不把用户名、评论署名、导航和域名补成番号', async () => {
     const opened = await open(browser, {url:'https://javdb.com/', html:'<nav>TOP250</nav><p>hhd800.com@FC2-PPV-4302474.mp4</p>'
       + '<p>Exclusive50%OFF!</p><p>jay925 hush666 lexburner69 guangdao19450806</p><p>FC2-4091275 SSIS-057 ssis058</p>'

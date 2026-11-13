@@ -12,7 +12,7 @@
 // @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
 // @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
-// @version      0.7.10
+// @version      0.7.11
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -79,6 +79,7 @@
   const STORAGE_ENABLED = 'peach.jav.enabled';
   const STORAGE_POSITION = 'peach.jav.position';
   const STORAGE_APPEARANCE = 'peach.jav.appearance';
+  const STORAGE_BATCH_ORDER = 'peach.jav.batch-order';
   const ROOT_ID = 'peach-jav-action';
   const SCRIPT_VERSION = __PEACH_JAV_VERSION__;
   // 0.6.3 起默认名改为英文；发布页切换前仍返回原名。
@@ -410,6 +411,10 @@
     .bui-table{width:100%;border-collapse:collapse;text-align:left;table-layout:fixed}.bui-table col:first-child{width:40px}.bui-table col:last-child{width:108px}
     .bui-table th,.bui-table td{height:48px;padding:10px 12px;vertical-align:middle;font:var(--board-body-medium);white-space:nowrap;text-align:left}
     .bui-table th{color:var(--ink);background:var(--surface);border-bottom:1px solid var(--line)}.bui-table td{color:var(--ink)}
+    .sort-header{display:inline-flex;align-items:center;gap:2px;margin:0;padding:0;border:0;background:none;font:inherit;color:inherit;cursor:pointer}.sort-header:disabled{cursor:default}
+    .sort-header:focus-visible{outline:2px solid var(--tungsten);outline-offset:2px;border-radius:4px}
+    .sort-indicator{display:inline-flex;flex:none;color:var(--color-text-tertiary);transition:transform .15s ease,color .15s ease}.sort-indicator svg{width:24px;height:24px}
+    .sort-indicator[data-direction]{color:var(--color-text-secondary)}.sort-indicator[data-direction=ascending]{transform:rotate(180deg)}
     .bui-table .batch-row:not(:last-child){border-bottom:1px solid var(--line)}.batch-row{height:48px;cursor:pointer;transition:background-color .15s ease}
     @media(hover:hover) and (pointer:fine){.batch-row:not([aria-disabled=true]):hover{background:var(--color-background-primary-hover)}}
     .batch-row[data-board-selected]{background:var(--surface)}.batch-row[aria-disabled=true]{cursor:default}
@@ -1476,7 +1481,7 @@
       row.addEventListener('click',event=>{if(input.disabled||event.target.closest('label,input,button,a'))return;input.checked=!input.checked;view.paint();});
       return {code, row, input, status, people};
     });
-    view.list.replaceChildren(...view.rows.map(item => item.row));
+    view.arrange();
     view.tableFrame.hidden = !view.rows.length;
     view.note.textContent = view.rows.length ? `识别到 ${view.rows.length} 个候选番号，重复番号已合并。`
       : '本页未识别到完整番号。可以选中一个番号后使用脚本菜单，或切换到作品列表页。';
@@ -1661,7 +1666,14 @@
     const columns=element('colgroup');for(let i=0;i<3;i++)columns.append(element('col'));
     const head=element('thead'),header=element('tr'),selection=element('th');selection.scope='col';
     const {wrapper:selectLabel,input:selectAll}=tableCheckbox('全选本页番号');selection.append(selectLabel);
-    const numberHeader=element('th','','番号');numberHeader.scope='col';
+    // 番号列默认按页面出现顺序，点表头按字母排序；选择记在脚本存储里，下次打开沿用。
+    const numberHeader=element('th');numberHeader.scope='col';
+    const sortButton=element('button','sort-header');sortButton.type='button';
+    const sortIndicator=element('span','sort-indicator');sortIndicator.setAttribute('aria-hidden','true');
+    const sortSvg=document.createElementNS('http://www.w3.org/2000/svg','svg');sortSvg.setAttribute('viewBox','0 0 24 24');
+    const sortPath=document.createElementNS(sortSvg.namespaceURI,'path');sortPath.setAttribute('fill','currentColor');
+    sortPath.setAttribute('d','M12.7071 15.2929C12.3166 15.6834 11.6834 15.6834 11.2929 15.2929L7.70711 11.7071C7.07714 11.0771 7.52331 10 8.41421 10H15.5858C16.4767 10 16.9229 11.0771 16.2929 11.7071L12.7071 15.2929Z');
+    sortSvg.append(sortPath);sortIndicator.append(sortSvg);sortButton.append(element('span','','番号'),sortIndicator);numberHeader.append(sortButton);
     const statusHeader=element('th','','状态');statusHeader.scope='col';
     header.append(selection,numberHeader,statusHeader);head.append(header);
     const list=element('tbody');table.append(columns,head,list);tableFrame.append(table);
@@ -1674,7 +1686,21 @@
     const addAll = control('全部加入');
     footer.append(rescan, addAll, addSelected);
     form.append(bar, body, footer); dialog.append(form); shadow.append(dialog); overlayScrollbar(body, {square:true});
-    const view = {root, dialog, note, list, tableFrame, peopleNote, rows:[], busy:true, paint() {
+    // 点表头依次切换：页面顺序 → 字母升序 → 字母倒序 → 页面顺序。
+    const ORDERS = ['page', 'ascending', 'descending'];
+    const ORDER_TITLES = {page:'当前按页面顺序，点击按字母升序', ascending:'当前按字母升序，点击按字母倒序', descending:'当前按字母倒序，点击恢复页面顺序'};
+    let order = 'page';
+    try { const saved = GM_getValue(STORAGE_BATCH_ORDER, 'page'); if (ORDERS.includes(saved)) order = saved; } catch { /* 读不到时用页面顺序。 */ }
+    const view = {root, dialog, note, list, tableFrame, peopleNote, rows:[], busy:true, arrange() {
+      // view.rows 保持页面顺序，只调整表格里的行序；数字段按数值比较，IPX-99 排在 IPX-100 前。
+      const direction = order === 'descending' ? -1 : 1;
+      const rows = order === 'page' ? view.rows
+        : [...view.rows].sort((a, b) => direction * a.code.localeCompare(b.code, 'en', {numeric:true, sensitivity:'base'}));
+      list.replaceChildren(...rows.map(item => item.row));
+      numberHeader.setAttribute('aria-sort', order === 'page' ? 'none' : order);
+      sortButton.title = ORDER_TITLES[order];
+      if (order === 'page') delete sortIndicator.dataset.direction; else sortIndicator.dataset.direction = order;
+    }, paint() {
       const available = view.rows.filter(item => !item.done);
       const chosen = available.filter(item => item.input.checked);
       addSelected.textContent = `加入所选${chosen.length ? `（${chosen.length}）` : ''}`;
@@ -1690,6 +1716,11 @@
       }
     }};
     batchView = view;
+    sortButton.addEventListener('click', () => {
+      order = ORDERS[(ORDERS.indexOf(order) + 1) % ORDERS.length];
+      try { GM_setValue(STORAGE_BATCH_ORDER, order); } catch { /* 存不下时只在本次列表生效。 */ }
+      view.arrange();
+    });
     selectAll.addEventListener('change', () => { for (const item of view.rows) if (!item.done) item.input.checked = selectAll.checked; view.paint(); });
     const submit = async all => {
       if (view.busy) return;
@@ -1746,7 +1777,7 @@
     }, {once:true});
     coverPanels();
     if (switching) dialog.setAttribute('data-switch', '');
-    view.paint(); dialog.showModal(); placeSurface(root); void scanPage(view);
+    view.arrange(); view.paint(); dialog.showModal(); placeSurface(root); void scanPage(view);
   }
 
   function configure() {
