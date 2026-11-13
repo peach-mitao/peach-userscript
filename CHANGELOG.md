@@ -9,6 +9,15 @@ Entries are written for users to scan: one sentence each, saying where something
 ### Added / 新增
 
 - **Page codes** list sorts by code when you click the code column header, cycling A–Z, Z–A and back to page order, and remembers your choice. / 本页番号列表点「番号」表头可按字母升序、倒序排列，再点回到页面顺序，并记住选择。
+- **Task progress** for an imported title shows Open in library, which opens it in Peach and marks the task as read. / 已入库番号的进度页显示「打开馆藏」，在 Peach 中打开这部作品并标为已读。
+
+### Changed / 变更
+
+- **Task progress** shows its only button, such as Prioritize, as the primary button. / 进度页只有一个按钮时（如「提前处理」）显示为主按钮。
+
+### Fixed / 修复
+
+- **Script updates** no longer show the update and download addresses as changed each time; one last change appears when updating to this version. / 脚本更新时不再每次提示更新与下载地址被更换；更新到本版时还会最后提示一次。
 
 ## 0.7.10 — 2026-11-13
 

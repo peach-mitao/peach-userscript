@@ -9,8 +9,6 @@
 // @source       https://github.com/peach-mitao/peach-userscript
 // @supportURL   https://github.com/peach-mitao/peach-userscript/issues
 // @homepageURL  https://github.com/peach-mitao/peach-userscript
-// @updateURL    https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js
-// @downloadURL  https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js
 // @license      AGPL-3.0-or-later
 // @version      0.7.11
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
@@ -34,6 +32,8 @@
 // @connect      *
 // @connect      update.sleazyfork.org
 // @run-at       document-idle
+// @downloadURL https://update.sleazyfork.org/scripts/600821/Peach%20%E7%94%A8%E6%88%B7%E8%84%9A%E6%9C%AC.user.js
+// @updateURL https://update.sleazyfork.org/scripts/600821/Peach%20%E7%94%A8%E6%88%B7%E8%84%9A%E6%9C%AC.meta.js
 // ==/UserScript==
 
 (() => {
@@ -95,8 +95,8 @@
   const STORAGE_CHIMED = 'peach.jav.chimed';
   const WINDOW_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   // 更新入口直接打开 Sleazy 的安装文件，与 @downloadURL 相同，脚本管理器随即弹出更新确认。
-  const RELEASE_INSTALL = 'https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.user.js';
-  const RELEASE_META = 'https://update.sleazyfork.org/scripts/600821/Peach%20%C2%B7%20JAV%20%E5%85%A5%E5%BA%93.meta.js';
+  const RELEASE_INSTALL = 'https://update.sleazyfork.org/scripts/600821/Peach%20%E7%94%A8%E6%88%B7%E8%84%9A%E6%9C%AC.user.js';
+  const RELEASE_META = 'https://update.sleazyfork.org/scripts/600821/Peach%20%E7%94%A8%E6%88%B7%E8%84%9A%E6%9C%AC.meta.js';
   const infoVersion = typeof GM_info === 'object' && validVersion(GM_info?.script?.version) ? GM_info.script.version : SCRIPT_VERSION;
   const RUNNING_VERSION = compareVersion(SCRIPT_VERSION, infoVersion) <= 0 ? SCRIPT_VERSION : infoVersion;
   // 新实例在同页去重及桥接返回之前登记安装版本，正在运行的实例可收到变化。
@@ -2119,8 +2119,13 @@
 
   // Peach 里这部作品的详情页；只在馆藏已有或已入库、Peach 带回作品编号时有。
   function libraryLink(view) {
+    return assetLink(view.state, view.assetId);
+  }
+
+  function assetLink(state, assetId) {
     const config = configuration();
-    return config && view.assetId && ['ingested', 'owned'].includes(view.state) ? `${config.base}/assets/${view.assetId}` : '';
+    return config && Number.isSafeInteger(assetId) && assetId > 0 && ['ingested', 'owned'].includes(state)
+      ? `${config.base}/assets/${assetId}` : '';
   }
 
   function render(view) {
@@ -2759,12 +2764,23 @@
       void acknowledgeEnded(panel.querySelector('.shared-tasks'), { keys: [key] });
       closeTaskPage(panel, true);
     });
-    body.append(note, parts.flow, ahead, retry, ack);
+    // 已入库、Peach 带回作品编号时，「打开馆藏」代替「标为已读」：新标签页打开这部作品，同时标为已读。
+    const library = control('打开馆藏');
+    library.hidden = true;
+    library.addEventListener('click', () => {
+      const current = panel.taskPage?.body, link = current && !tracking(current) ? assetLink(current.state, current.asset_id) : '';
+      if (!link) return;
+      window.open(link, '_blank', 'noopener');
+      if (!awaitingAck(current)) return;
+      void acknowledgeEnded(panel.querySelector('.shared-tasks'), { keys: [current.ended_key] });
+      closeTaskPage(panel, true);
+    });
+    body.append(note, parts.flow, ahead, retry, library, ack);
     page.append(bar, body);
     switchPanel(panel, () => {
       for (const child of panel.children) if (!child.hidden) { child.hidden = true; child.dataset.taskHidden = ''; }
       panel.append(page);
-      panel.taskPage = { page, code, note, people, ahead, retry, ack, body: null, ...parts };
+      panel.taskPage = { page, code, note, people, ahead, retry, library, ack, body: null, ...parts };
       paintTaskPage(panel);
       return [page];
     });
@@ -2820,7 +2836,11 @@
     open.ahead.hidden = !canPrioritize(open.body);
     open.retry.hidden = !retryableTask(open.body);
     open.retry.textContent = retryLabel(open.body);
-    open.ack.hidden = !awaitingAck(open.body);
+    open.library.hidden = tracking(open.body) || !assetLink(open.body.state, open.body.asset_id);
+    open.ack.hidden = !awaitingAck(open.body) || !open.library.hidden;
+    // 进度页只剩一个按钮时用主按钮；状态随快照变化时跟着换，例如排队时的「提前处理」入库后换成「打开馆藏」。
+    const actions = [open.ahead, open.retry, open.library, open.ack], shown = actions.filter(button => !button.hidden);
+    for (const button of actions) button.classList.toggle('primary', shown.length === 1 && button === shown[0]);
     for (const root of surfaces) if (root.isConnected) placeSurface(root);
   }
 
