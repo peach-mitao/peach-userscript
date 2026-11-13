@@ -1,0 +1,48 @@
+name: 发布用户脚本
+# main 上的版本号还没有对应 Release 时自动发布：核对产物、按 CHANGELOG 生成正文、打标签、上传四个制品。
+# 发布会触发仓库的 release webhook，Sleazy 随即从最新 Release 同步。已发布的版本直接跳过。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: release
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - id: version
+        name: 当前版本是否已发布
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('package.json','utf8')).version)")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if gh release view "v$version" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "v$version 已发布，跳过。"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: 核对已提交的制品与源码一致
+        if: steps.version.outputs.published == 'false'
+        run: npm run check
+      - name: 生成正文并发布
+        if: steps.version.outputs.published == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          previous="$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName // ""')"
+          node scripts/release-notes.ts --version "$VERSION" --previous "$previous" --repo "$GITHUB_REPOSITORY" > "$RUNNER_TEMP/notes.md"
+          gh release create "v$VERSION" dist/peach-jav.user.js dist/jav-sites.json dist/release.json dist/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "v$VERSION" --notes-file "$RUNNER_TEMP/notes.md"
