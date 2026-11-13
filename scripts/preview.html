@@ -80,6 +80,9 @@
     const previewMenus = {};
     let previewActive = 0, previewRetried = false, previewAhead = false;
     const previewDismissed = new Set();
+    // want=1 模拟支持加入想要的 Peach：单条状态带 want，登记后切到已在想要；不带参数时按旧版 Peach。
+    const previewWantMode = new URLSearchParams(location.search).get('want') === '1';
+    const previewWants = new Set();
     Object.assign(window, {
       GM_getValue: (key, fallback) => previewValues[key] ?? fallback,
       GM_setValue: (key, value) => { previewValues[key] = value; },
@@ -132,6 +135,10 @@
           {ok:true,code:'IPX-001',state:'ingested',asset_id:4321,download:{state:'ingested',label:'已入库',progress:1,postprocess_state:'complete',postprocess_label:'已整理'},ended_key:'101@2026-11-04T08:00:00+00:00'},
           {ok:true,code:'JUR-112',state:'failed',cause:'magnet',failure:'no_source',message:'没有可用下载源',ended_key:'102@2026-11-04T07:30:00+00:00'}]
           .map(item => ({...item, ...(item.ended_key ? {dismissed: previewDismissed.has(item.ended_key)} : {})}));
+        if (previewWantMode && new URL(request.url).pathname.endsWith('/want')) {
+          const code = JSON.parse(request.data).code; previewWants.add(code);
+          request.onload({status:200,responseText:JSON.stringify({ok:true,code,state:'idle',want:{phase:'searching',created:true}})}); return;
+        }
         if (new URL(request.url).pathname.endsWith('/prioritize')) {
           previewAhead = true;
           request.onload({status:200,responseText:JSON.stringify(previewItems().find(item => item.code === JSON.parse(request.data).code))}); return;
@@ -172,6 +179,10 @@
             request.onload({status:200,responseText:JSON.stringify(rowBody(polled))}); return;
           }
         }
+        // 进度页单独查其他任务的番号时，按任务列表里那一项作答并带上 want。
+        const asked = new URL(request.url).searchParams.get('code');
+        const listed = previewWantMode && request.method !== 'POST' && asked && previewItems().find(item => item.code === asked);
+        if (listed) { request.onload({status:200,responseText:JSON.stringify({...listed, want: previewWants.has(asked) ? {phase:'searching'} : null})}); return; }
         const code = new URLSearchParams(location.search).get('site') === 'dmm' ? 'SSIS-519'
           : new URLSearchParams(location.search).get('site') === 'mgs' ? '300MIUM-1239'
             : new URLSearchParams(location.search).get('site') === 'fanza-clip' ? 'SABA-978'
@@ -192,7 +203,8 @@
         // 馆藏已有时 Peach 带回作品编号，主按钮直达 Peach 里的这部作品。
         const owned = request.method !== 'POST' && previewState === 'owned';
         request.onload({status:200,responseText:JSON.stringify({ok:true,code,state:request.method === 'POST' ? 'queued' : owned ? 'owned' : 'idle',
-          ...(owned ? {asset_id:4321} : {}), ...edition, ...(request.method === 'POST' ? {queue_position: 2} : {})})});
+          ...(owned ? {asset_id:4321} : {}), ...edition, ...(request.method === 'POST' ? {queue_position: 2} : {}),
+          ...(previewWantMode && request.method !== 'POST' ? {want: previewWants.has(code) ? {phase:'searching'} : null} : {})})});
       }, 650),
     });
     document.querySelector('#open-settings').addEventListener('click', () => previewMenus['设置']());

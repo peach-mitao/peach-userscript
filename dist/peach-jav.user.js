@@ -407,6 +407,8 @@
   let updateCache = readUpdateCache();
   let updateError = '';
   let updateChecking = false;
+  // 这台 Peach 能不能从脚本登记想要：undefined 还不知道，由任一单条状态响应里有没有 want 键决定。
+  let wantSupport;
   let updateInstallVersion = '';
   let updateDismissed = '';
   // 没有单部作品浮卡的页面，图标展开的是入口面板；本页番号返回时回到这里。
@@ -594,6 +596,7 @@
     .geist-button svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
     .feed-toggle{gap:6px}.feed-toggle .feed-mark{color:var(--feed-mark,#F78422)}.feed-toggle .feed-mark circle{fill:currentColor;stroke:none}
     .feed-toggle .feed-off,.feed-toggle[aria-pressed=true]:not([data-fresh]):is(:hover,:focus-visible) .feed-on{display:none}.feed-toggle[aria-pressed=true]:not([data-fresh]):is(:hover,:focus-visible) .feed-off{display:inline}
+    .want-toggle{gap:6px}.want-toggle svg{fill:currentColor;stroke:none}.want-toggle[data-added]{cursor:default;color:var(--ink-2)}.want-toggle[data-added]:hover{background:var(--color-background-primary-default)}
     .geist-button:focus-visible{outline:2px solid var(--tungsten);outline-offset:2px}
     @media(hover:hover) and (pointer:fine){.geist-button:not(:disabled,[aria-disabled=true]):hover{background-color:var(--color-background-primary-hover);border-color:var(--color-border-button-hover)}
       .geist-button.primary:not(:disabled,[aria-disabled=true]):hover::before{opacity:1}}
@@ -2365,6 +2368,8 @@
               if (body.ok !== true || !STATES.has(body.state) || typeof body.code !== 'string'
                 || candidates(body.code).size !== 1
                 || (!resolveIdentity && ![...candidates(body.code)].some(candidate => samePeachCode(candidate, code)))) throw new Error();
+              // 单条状态与 identify 带不带 want 键，说明这台 Peach 能不能从脚本登记想要。
+              if (method !== 'POST') wantSupport = Object.hasOwn(body, 'want');
               resolve(body);
               flushErrors(config);
             } catch { fail('invalid_response', 'Peach 返回的状态无效，请查询状态。', response.status); }
@@ -2417,6 +2422,44 @@
       ? `${config.base}/assets/${assetId}` : '';
   }
 
+  // 「想要」：Peach 的单条状态与 identify 带 want 键（ADR-0161）。没有这个键是旧版 Peach，不显示按钮；
+  // null 是还没登记，对象是已在想要清单上。加入番号的 POST 响应不带这个键，此时沿用之前的值。
+  const WANT_PHASES = new Set(['searching', 'unreleased', 'given_up', 'acquired']);
+  function wantOf(body, previous) {
+    if (!body || !Object.hasOwn(body, 'want')) return previous;
+    const want = body.want;
+    return want && typeof want === 'object' ? { phase: WANT_PHASES.has(want.phase) ? want.phase : '' } : null;
+  }
+
+  function wantButton(onClick) {
+    const button = control('加入想要');
+    button.classList.add('want-toggle');
+    button.hidden = true;
+    button.addEventListener('click', () => { if (button.getAttribute('aria-disabled') !== 'true') onClick(); });
+    return button;
+  }
+
+  // 与 Peach 作品详情页的「想要」同一语义（secondary 按钮加 aria-pressed）；脚本不能移出想要，已加入时是不可点的按下态。
+  function paintWant(button, want, state, busy) {
+    button.hidden = want === undefined || !configuration() || ['owned', 'ingested'].includes(state);
+    if (button.hidden) return;
+    const added = Boolean(want);
+    button.setAttribute('aria-pressed', String(added));
+    button.setAttribute('aria-disabled', String(added || busy));
+    button.setAttribute('aria-busy', String(busy));
+    button.toggleAttribute('data-added', added);
+    if (added) {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true');
+      const path = document.createElementNS(svg.namespaceURI, 'path'); path.setAttribute('d', STEP_ICON_PATHS.check);
+      svg.append(path); button.replaceChildren(svg, document.createTextNode('已加入想要'));
+    } else button.textContent = busy ? '正在加入想要' : '加入想要';
+  }
+
+  function requestWant(config, code) {
+    return requestTaskAction(config, 'want', code, 'Peach 尚不支持加入想要，请更新 Peach。', '加入想要未成功，请稍后重试。');
+  }
+
   function render(view) {
     if (!alive(view)) return;
     view.summary.textContent = panelMode === 'collapsed' ? view.note.textContent : '';
@@ -2439,6 +2482,7 @@
       && !view.busy && ['加入 Peach 馆藏', '重试加入 Peach 馆藏'].includes(view.button.textContent);
     view.alternate.hidden = !choosing;
     view.ahead.hidden = !configuration() || !canPrioritize({ state: view.state, queue_position: view.queuePosition });
+    paintWant(view.want, view.identity.conflict || view.identity.resolve ? undefined : view.wantState, view.state, view.wantBusy);
     if (choosing) {
       const retry = view.button.textContent.startsWith('重试') ? '重试' : '';
       const [own, other] = view.identity.edition === 'bonus' ? ['特典版', '通常版'] : ['通常版', '特典版'];
@@ -2512,6 +2556,22 @@
         });
       } catch { reject(new Error('无法连接 Peach，请稍后重试。')); }
     });
+  }
+
+  // 作品浮卡的「加入想要」：成功后按钮切到已加入态；失败时原因写在状态行。
+  async function addMainWant(view) {
+    const config = configuration();
+    if (!alive(view) || !config || view.wantBusy || view.wantState !== null) return;
+    view.wantBusy = true; render(view);
+    try {
+      const body = await requestWant(config, view.identity.code);
+      if (!alive(view)) return;
+      view.wantState = wantOf(body, view.wantState) || { phase: 'searching' };
+    } catch (error) {
+      if (alive(view)) { view.note.textContent = error.message; view.note.hidden = false; view.note.dataset.variant = 'error'; }
+    } finally {
+      if (alive(view)) { view.wantBusy = false; render(view); placeSurface(view.root); }
+    }
   }
 
   async function retryOrganize(view) {
@@ -3064,15 +3124,36 @@
       void acknowledgeEnded(panel.querySelector('.shared-tasks'), { keys: [current.ended_key] });
       closeTaskPage(panel, true);
     });
-    body.append(note, parts.flow, ahead, retry, library, ack);
+    // 没找到资源等还没入库的番号可以直接记进想要。共享快照不带 want，进页时单独查一次这个番号的状态，不轮询。
+    const want = wantButton(async () => {
+      const open = panel.taskPage, config = configuration();
+      if (!open || open.page !== page || !config || open.wantBusy || open.wantState !== null) return;
+      open.wantBusy = true; open.wantError = ''; paintTaskPage(panel);
+      try {
+        const result = await requestWant(config, code);
+        if (panel.taskPage === open) open.wantState = wantOf(result, open.wantState) || { phase: 'searching' };
+      } catch (error) {
+        if (panel.taskPage === open) open.wantError = error.message;
+      } finally {
+        if (panel.taskPage === open) { open.wantBusy = false; paintTaskPage(panel); }
+      }
+    });
+    body.append(note, parts.flow, ahead, retry, library, want, ack);
     page.append(bar, body);
     switchPanel(panel, () => {
       for (const child of panel.children) if (!child.hidden) { child.hidden = true; child.dataset.taskHidden = ''; }
       panel.append(page);
-      panel.taskPage = { page, code, note, people, ahead, retry, library, ack, body: null, ...parts };
+      panel.taskPage = { page, code, note, people, ahead, retry, library, want, ack, wantState: undefined, wantBusy: false, body: null, ...parts };
       paintTaskPage(panel);
       return [page];
     });
+    // 已知旧版 Peach 不查；作品浮卡还在问自己的状态时等它的答案，免得多发一次。
+    const config = configuration();
+    if (config && (wantSupport || (wantSupport === undefined && !current))) request(config, code, '', 'GET').then(result => {
+      const open = panel.taskPage;
+      if (open?.page !== page) return;
+      open.wantState = wantOf(result, open.wantState); paintTaskPage(panel);
+    }).catch(() => { /* 查不到就不显示加入想要，进度照常。 */ });
     back.addEventListener('click', () => closeTaskPage(panel, true));
     back.focus();
   }
@@ -3120,16 +3201,19 @@
       const people = sharedAvatars(open.body);
       open.people.replaceWith(people); open.people = people;
     }
-    open.note.textContent = statusLabel(open.body);
-    open.note.dataset.variant = statusVariant(open.body);
+    // 加入想要失败时原因留在状态行，直到下一次点击。
+    open.note.textContent = open.wantError || statusLabel(open.body);
+    open.note.dataset.variant = open.wantError ? 'error' : statusVariant(open.body);
     open.ahead.hidden = !canPrioritize(open.body);
     open.retry.hidden = !retryableTask(open.body);
     open.retry.textContent = retryLabel(open.body);
     open.library.hidden = tracking(open.body) || !assetLink(open.body.state, open.body.asset_id);
     open.ack.hidden = !awaitingAck(open.body) || !open.library.hidden;
-    // 进度页总有一个主按钮，按这一页的主要动作挑：重试 > 打开馆藏 > 提前处理 > 标为已读。
+    paintWant(open.want, open.wantState, open.body.state, open.wantBusy);
+    // 进度页总有一个主按钮，按这一页的主要动作挑：重试 > 打开馆藏 > 提前处理 > 加入想要 > 标为已读；已加入想要的按下态不算。
     // 状态随快照变化时跟着换，例如排队时的「提前处理」入库后换成「打开馆藏」。
-    const actions = [open.retry, open.library, open.ahead, open.ack], main = actions.find(button => !button.hidden);
+    const actions = [open.retry, open.library, open.ahead, open.want, open.ack];
+    const main = actions.find(button => !button.hidden && !button.hasAttribute('data-added'));
     for (const button of actions) button.classList.toggle('primary', button === main);
     for (const root of surfaces) if (root.isConnected) placeSurface(root);
   }
@@ -3183,6 +3267,7 @@
     if (!sharedMode() && finished(body) && view.tracking) playSound('success');
     view.state = body.state;
     view.queuePosition = body.queue_position;
+    view.wantState = wantOf(body, view.wantState);
     view.cause = body.state === 'failed' ? body.cause || '' : '';
     view.tracking = tracking(body);
     view.organizeFailed = organizeFailed(body);
@@ -3375,8 +3460,10 @@
     const alternate = control('加入通常版'); alternate.dataset.action = 'add-alternate'; alternate.hidden = true;
     const ahead = control('提前处理'); ahead.dataset.action = 'prioritize'; ahead.hidden = true;
     const scan = control('识别本页全部番号'); scan.addEventListener('click', openPageActions);
+    // 没发行或没资源的作品可以直接记进想要；次要按钮，不抢主按钮。
+    const want = wantButton(() => void addMainWant(current));
     // 先状态与进度、更新提示，再「其他任务」，按钮统一排在最下面；与入口面板同一顺序。
-    body.append(note, flow, updateSection({ availableOnly: true }), sharedSection(), button, alternate, ahead, scan);
+    body.append(note, flow, updateSection({ availableOnly: true }), sharedSection(), button, alternate, ahead, want, scan);
     panel.append(bar, body);
     const launcher = control('展开 Peach 面板');
     launcher.classList.add('launcher');
@@ -3392,7 +3479,7 @@
     wireDrag(root, launcher, panel);
     launcher.hidden = true;
     shadow.append(panel, launcher);
-    const view = { root, panel, body, launcher, collapse, summary, button, alternate, ahead, note, flow, steps, progress, progressFill, heading: label, loadPeople: loadTitlePeople, settings: settingsButton, identity: item, url: location.href, generation, state: 'idle', busy: false, tracking: false, queryOnly: attempts.has(comparisonKey(item.code)) };
+    const view = { root, panel, body, launcher, collapse, summary, button, alternate, ahead, want, wantState: undefined, wantBusy: false, note, flow, steps, progress, progressFill, heading: label, loadPeople: loadTitlePeople, settings: settingsButton, identity: item, url: location.href, generation, state: 'idle', busy: false, tracking: false, queryOnly: attempts.has(comparisonKey(item.code)) };
     current = view;
     refreshUpdateEntry();
     paintShared();

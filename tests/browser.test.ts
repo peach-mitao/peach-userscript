@@ -45,6 +45,11 @@ type Mock = {
   performer: { name: string; entity_id: number | null; following: boolean } | null;
   performerCalls: Call[];
   performerError: string;
+  // 想要：hasWant 为 false 是旧版 Peach（状态里没有 want 键、登记接口 404）；want 为 null 是还没登记。
+  hasWant: boolean;
+  want: { phase: string } | null;
+  wantCalls: string[];
+  wantError: string;
 };
 declare global { interface Window { javMock: Mock } }
 
@@ -56,6 +61,7 @@ async function open(browser: Browser, options: {
   url?: string; title?: string; html?: string; quirks?: boolean; configured?: boolean; viewport?: typeof VIEWPORTS[number]; initial?: State; postState?: State; peopleItems?: Mock['peopleItems']; script?: string; resolved?: string; automatic?: boolean; updateAutomatic?: boolean; updateValues?: Record<string, string | boolean>;
   activeItems?: Body[];
   performer?: Mock['performer'];
+  want?: Mock['want'];
 } = {}) {
   const viewport = options.viewport || VIEWPORTS[0]!;
   const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
@@ -67,11 +73,11 @@ async function open(browser: Browser, options: {
     // FANZA 等来源页没有 doctype，按怪异模式渲染。
     contentType: 'text/html; charset=utf-8', body: `${options.quirks ? '' : '<!doctype html>'}<html><head><meta charset="utf-8"><title>${options.title || 'SSIS-057 作品详情'}</title></head><body>${options.html ?? '<h1>SSIS-057 作品详情</h1>'}</body></html>`,
   }));
-  await page.addInitScript(({ configured, token, base, initial, postState, peopleItems, resolved, automatic, version, updateAutomatic, updateValues, activeItems, performer }) => {
+  await page.addInitScript(({ configured, token, base, initial, postState, peopleItems, resolved, automatic, version, updateAutomatic, updateValues, activeItems, performer, hasWant, want }) => {
     const listeners = new Map<number, { key: string; callback: (key: string, oldValue: string | boolean, newValue: string | boolean, remote: boolean) => void }>();
     let nextListener = 0;
     const mock: Mock = {
-      calls: [], reports: [], pending: [], updates: [], automatic, updateAutomatic, menus: {}, peopleItems, peopleRequests:[], clipboard: [], activeItems, activeRequests: 0, dismissals: [], dismissStatus: 200, performer, performerCalls: [], performerError: '',
+      calls: [], reports: [], pending: [], updates: [], automatic, updateAutomatic, menus: {}, peopleItems, peopleRequests:[], clipboard: [], activeItems, activeRequests: 0, dismissals: [], dismissStatus: 200, performer, performerCalls: [], performerError: '', hasWant, want, wantCalls: [], wantError: '',
       values: { ...(configured ? { 'peach.jav.base': base, 'peach.jav.token': token } : {}), ...updateValues },
       changed(key, value, remote = false) {
         const previous = mock.values[key] ?? '';
@@ -144,6 +150,19 @@ async function open(browser: Browser, options: {
             : { status: mock.dismissStatus, responseText: '{"detail":"Not Found"}' }), 0);
           return { abort: () => request.onabort?.() };
         }
+        // 登记想要：旧版 Peach 回 404；wantError 模拟登记失败；成功后单条状态带上 want。
+        if (request.url.endsWith('/api/jav-browser/want')) {
+          const code = JSON.parse(request.data!).code as string;
+          mock.wantCalls.push(code);
+          setTimeout(() => {
+            if (!mock.hasWant) { request.onload({ status: 404, responseText: '{"detail":"Not Found"}' }); return; }
+            if (mock.wantError) { request.onload({ status: 400, responseText: JSON.stringify({ detail: mock.wantError }) }); return; }
+            mock.want = { phase: 'searching' };
+            request.onload({ status: 200, responseText: JSON.stringify({ ok: true, code, state: initial, message: initial,
+              want: { phase: 'searching', created: true } }) });
+          }, 0);
+          return { abort: () => request.onabort?.() };
+        }
         mock.calls.push({ method: request.method, url: request.url, headers: request.headers,
           anonymous: request.anonymous, ...(request.data ? { data: request.data } : {}) });
         mock.pending.push(request);
@@ -152,13 +171,16 @@ async function open(browser: Browser, options: {
           const identify = new URL(request.url).pathname.endsWith('/identify');
           const code = (identify && resolved) || (request.data ? JSON.parse(request.data).code : new URL(request.url).searchParams.get('code')) || resolved || 'SSIS-057';
           const state = request.method === 'POST' ? postState || initial : initial;
-          request.onload({ status: 200, responseText: JSON.stringify({ ok: true, code, state, message: state }) });
+          // 单条状态与 identify 带 want（新版 Peach）；加入番号的 POST 响应不带。
+          const want = mock.hasWant && request.method !== 'POST' ? { want: mock.want } : {};
+          request.onload({ status: 200, responseText: JSON.stringify({ ok: true, code, state, message: state, ...want }) });
         }, 0);
       },
     });
   }, { configured: options.configured !== false, token: TOKEN, base: BASE, initial: options.initial || 'idle', postState: options.postState, peopleItems: options.peopleItems || {}, resolved: options.resolved,
     automatic: options.automatic !== false, version: VERSION, updateAutomatic: options.updateAutomatic !== false, updateValues: options.updateValues || {},
-    activeItems: options.activeItems || null, performer: options.performer || null });
+    activeItems: options.activeItems || null, performer: options.performer || null,
+    hasWant: Object.hasOwn(options, 'want'), want: options.want ?? null });
   await page.goto(options.url || 'https://missav.ws/en/ssis-057?private=value#player');
   await page.clock.install();
   await page.addScriptTag({ content: options.script ?? SCRIPT });
@@ -2457,6 +2479,75 @@ describe('JAV 用户脚本', () => {
       await task.locator('.copy-feedback').waitFor({ state: 'detached' });
       assert.deepEqual(opened.problems, []);
     } finally { await opened.close(); }
+  });
+
+  it('作品浮卡可以加入想要：未入库时显示次要按钮，点了切到已加入态；已在想要、已在库、旧版 Peach 时各自处理', async () => {
+    const wantButton = (page: Page) => page.locator(ROOT).locator('.want-toggle');
+    // 没发行或没资源：按钮在主按钮之后，不是主按钮。
+    let opened = await open(browser, { want: null });
+    try {
+      const { page } = opened;
+      await page.locator(ROOT).getByRole('button', { name: '加入想要', exact: true }).waitFor();
+      assert.equal(await wantButton(page).evaluate(node => node.classList.contains('primary')), false);
+      assert.equal(await button(page).evaluate(node => node.classList.contains('primary')), true);
+      await wantButton(page).click();
+      await page.locator(ROOT).getByRole('button', { name: '已加入想要', exact: true, pressed: true }).waitFor();
+      assert.equal(await wantButton(page).getAttribute('aria-disabled'), 'true');
+      assert.deepEqual(await page.evaluate(() => window.javMock.wantCalls), ['SSIS-057']);
+      // 已加入态不可再点：强行点也不会再发登记请求。
+      await wantButton(page).click({ force: true });
+      assert.deepEqual(await page.evaluate(() => window.javMock.wantCalls), ['SSIS-057']);
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+    // 登记失败：原因写在状态行，按钮仍可再点。
+    opened = await open(browser, { want: null });
+    try {
+      const { page } = opened;
+      await page.evaluate(() => { window.javMock.wantError = '想要清单暂时不可写'; });
+      await wantButton(page).click();
+      await page.locator(ROOT).getByRole('status').filter({ hasText: '想要清单暂时不可写' }).waitFor();
+      assert.equal(await wantButton(page).getAttribute('aria-disabled'), 'false');
+    } finally { await opened.close(); }
+    // 已在想要：直接显示已加入态。
+    opened = await open(browser, { want: { phase: 'unreleased' } });
+    try {
+      await opened.page.locator(ROOT).getByRole('button', { name: '已加入想要', exact: true, pressed: true }).waitFor();
+    } finally { await opened.close(); }
+    // 已在库或旧版 Peach（状态里没有 want 键）：不显示。
+    for (const options of [{ initial: 'owned' as State, want: null }, {}]) {
+      opened = await open(browser, options);
+      try {
+        await ready(opened.page, options.initial === 'owned' ? '已有该影片' : '加入 Peach 馆藏');
+        assert.equal(await wantButton(opened.page).isHidden(), true);
+      } finally { await opened.close(); }
+    }
+  });
+
+  it('没找到资源的进度页可以加入想要，重试仍是主按钮；已在想要时显示已加入态', async () => {
+    const missing = { ...body('no_match', 'OFJE-489'), ended_key: 'OFJE-489@2026-11-14T08:02:00+00:00', dismissed: false } as Body;
+    for (const preset of [null, { phase: 'searching' }]) {
+      const opened = await open(browser, { initial: 'owned', activeItems: [missing], want: preset });
+      const { page } = opened;
+      try {
+        const root = page.locator(ROOT), task = root.locator('.task-page');
+        await page.waitForFunction(root => document.querySelector(root)?.shadowRoot?.querySelector('.shared-row'), ROOT);
+        await root.locator('.shared-row[data-code="OFJE-489"]').click();
+        // 进页时单独查一次这个番号的状态取 want。
+        await page.waitForFunction(() => window.javMock.calls.some(call => call.method === 'GET' && call.url.includes('code=OFJE-489')));
+        const want = task.locator('.want-toggle');
+        if (preset) {
+          await task.getByRole('button', { name: '已加入想要', exact: true, pressed: true }).waitFor();
+        } else {
+          await task.getByRole('button', { name: '加入想要', exact: true }).waitFor();
+          await want.click();
+          await task.getByRole('button', { name: '已加入想要', exact: true, pressed: true }).waitFor();
+          assert.deepEqual(await page.evaluate(() => window.javMock.wantCalls), ['OFJE-489']);
+        }
+        assert.equal(await want.evaluate(node => node.classList.contains('primary')), false);
+        assert.equal(await task.getByRole('button', { name: '重试加入', exact: true }).evaluate(node => node.classList.contains('primary')), true);
+        assert.deepEqual(opened.problems, []);
+      } finally { await opened.close(); }
+    }
   });
 
   it('自动重试计划显示等待与次数，重试耗尽后显示失败并保留手动入口', async () => {

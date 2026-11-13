@@ -8,6 +8,7 @@ Entries are written for users to scan: one sentence each, saying where something
 
 ### Added / 新增
 
+- **Add to wants** appears on the title panel and on no-match task progress for titles not yet in the library, with newer Peach. / 未入库的作品在浮卡与没找到资源的进度页可「加入想要」，需要新版 Peach。
 - **Panel titles** copy the video code when you click them or press Enter, briefly showing Copied. / 浮卡与进度页标题的番号点一下或按 Enter 即复制，并短暂显示「已复制」。
 
 ### Changed / 变更
