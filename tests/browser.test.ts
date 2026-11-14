@@ -1232,7 +1232,7 @@ describe('JAV 用户脚本', () => {
       await button(page).click();
       await pending(page, 2);
       await reply(page, 1, { ...body('searching'), stage: 'submitting' });
-      await page.waitForFunction(() => document.querySelector('#peach-jav-action')!.shadowRoot!.querySelector('[role="status"]')!.textContent === '正在提交网盘');
+      await page.waitForFunction(() => document.querySelector('#peach-jav-action')!.shadowRoot!.querySelector('.panel > .body > .geist-note[role="status"]')!.textContent === '正在提交网盘');
       const stages = [
         { state: 'remote_running', label: '网盘下载中', progress: .42 },
         { state: 'remote_running', label: '网盘下载中', progress: null },
@@ -1246,7 +1246,7 @@ describe('JAV 用户脚本', () => {
         await pending(page, index + 3);
         await reply(page, index + 2, { ...body(download.state === 'ingested' ? 'ingested' : 'submitted'), download });
         const expected = `${download.label}${download.postprocess_label ? ` · ${download.postprocess_label}` : ''}${download.state !== 'remote_running' || download.progress == null ? '' : ` · ${Math.round(download.progress * 100)}%`}`;
-        await page.waitForFunction(expected => document.querySelector('#peach-jav-action')!.shadowRoot!.querySelector('[role="status"]')!.textContent === expected, expected);
+        await page.waitForFunction(expected => document.querySelector('#peach-jav-action')!.shadowRoot!.querySelector('.panel > .body > .geist-note[role="status"]')!.textContent === expected, expected);
         const bar = page.locator(ROOT).getByRole('progressbar', { name: '整体任务进度' });
         assert.equal(await bar.count(), 1);
         const done = download.state === 'ingested' ? download.postprocess_state === 'complete' ? 5 : 4
@@ -2753,7 +2753,7 @@ describe('JAV 用户脚本', () => {
     const opened = await open(browser, { initial: 'owned', activeItems: [body('queued', 'ABP-616')] });
     const { page } = opened;
     try {
-      const shared = page.locator(ROOT).locator('.shared-tasks'), notice = shared.locator('.shared-alerts .notice');
+      const shared = page.locator(ROOT).locator('.shared-tasks'), notice = page.locator(ROOT).locator('.notice-group .shared-alerts .notice');
       await shared.locator('.shared-row').first().waitFor();
       await page.evaluate(() => { window.javMock.activeFailure = 'offline'; });
       // 一次失败多半是抖动，不提示；连着失败 15 秒以上才提示，列表保留上一份。
@@ -2771,6 +2771,41 @@ describe('JAV 用户脚本', () => {
       await page.evaluate(() => { window.javMock.activeFailure = ''; });
       await page.clock.fastForward(4_100);
       await notice.first().waitFor({ state: 'detached' });
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
+  it('面板从上到下：提示组（更新提示在前）、状态、其他任务、按钮组，提示框里的动作键留在框内', async () => {
+    const queued = Array.from({ length: 4 }, (_, index) => ({ ...body('queued', `ABC-${index + 100}`), paused: { failure: 'storage' } }) as Body);
+    const opened = await open(browser, { updateAutomatic: false, activeItems: queued });
+    const { page } = opened;
+    try {
+      const root = page.locator(ROOT);
+      await page.evaluate(() => { window.javMock.activePaused = [{ provider: '115', provider_label: '115', failure: 'storage',
+        message: '网盘空间不足', reason: '网盘空间不足', hint: '扩容或清理后自动继续', waiting: 4 }]; });
+      await page.waitForFunction(() => window.javMock.updates.length >= 2);
+      await page.evaluate(current => {
+        window.javMock.updates[0]!.onload({ status: 200, responseText: `// ==UserScript==\n// @name Peach · JAV 入库\n// @namespace https://github.com/peach-mitao/peach-userscript\n// @version 9.2.0\n// ==/UserScript==` });
+        window.javMock.updates[1]!.onload({ status: 200, responseText: JSON.stringify({ runtime: { version: '1.0.0', build_id: 'fixture' },
+          release: { state: 'current' }, userscript: { version: current, minimum_version: '0.5.1', install_url: '/integrations/peach-jav.user.js' } }) });
+      }, VERSION);
+      await page.clock.fastForward(31_000);
+      const notices = root.locator('.notice-group');
+      await notices.locator('.notice', { hasText: '115：' }).waitFor();
+      await notices.getByRole('link', { name: '更新用户脚本', exact: true }).waitFor();
+      await root.locator('.shared-heading').waitFor();
+      await ready(page);
+      // 提示组内更新提示在前，网盘暂停在后；「更新用户脚本」在提示框里，不进底部按钮组。
+      assert.deepEqual(await notices.evaluate(group => [...group.querySelectorAll('.notice')].map(box => box.dataset.tone)), ['info', 'warning']);
+      assert.equal(await notices.locator('.notice').first().getByRole('link', { name: '更新用户脚本' }).count(), 1);
+      // 正文里看得见的区块按位置从上到下归类：提示组、状态（说明与进度条）、其他任务、按钮。
+      const layers = await root.locator('.panel > .body').evaluate(body => [...body.children]
+        .filter(node => (node as HTMLElement).offsetParent !== null)
+        .map(node => ({ top: node.getBoundingClientRect().top,
+          layer: node.classList.contains('notice-group') ? 0 : node.classList.contains('shared-tasks') ? 2 : node.matches('button, a') ? 3 : 1 })));
+      assert.deepEqual(layers.map(item => item.layer), [...layers].sort((a, b) => a.top - b.top).map(item => item.layer));
+      assert.deepEqual(layers.map(item => item.layer), [...layers.map(item => item.layer)].sort((a, b) => a - b));
+      assert.deepEqual([...new Set(layers.map(item => item.layer))].filter(layer => layer !== 1), [0, 2, 3]);
       assert.deepEqual(opened.problems, []);
     } finally { await opened.close(); }
   });
@@ -2794,15 +2829,15 @@ describe('JAV 用户脚本', () => {
       assert.equal(await page.evaluate(() => window.javMock.activeRequests), before);
       await page.clock.fastForward(23_000);
       // 提示框与 Peach 页面的提示同一形状：黄色状态底、圆角，标题与正文分两行。
-      const notice = shared.locator('.shared-alerts .notice');
+      const notice = root.locator('.notice-group .shared-alerts .notice');
       await notice.filter({ hasText: '115：' }).waitFor();
       assert.deepEqual(await notice.locator('p').allTextContents(), ['115：网盘空间不足', '24 项已暂停，扩容或清理后自动继续']);
       assert.deepEqual(await notice.evaluate(node => { const style = getComputedStyle(node);
         return [style.borderRadius, style.backgroundColor !== 'rgba(0, 0, 0, 0)']; }), ['10px', true]);
       assert.equal(await shared.locator('.shared-heading').textContent(), '其他任务 · 进行中 24 项 · 失败 2 项');
-      // 提示框在标题上方、不进折叠区：标题紧接着展开的列表，收起列表时提示框照样显示。
-      assert.deepEqual(await shared.evaluate(node => [node.children[0]!.className, node.children[1]!.firstElementChild!.className]),
-        ['shared-alerts', 'shared-heading']);
+      // 提示框在面板最上方的提示组里、不进折叠区：「其他任务」区块只有标题与列表，收起列表时提示框照样显示。
+      assert.deepEqual(await shared.evaluate(node => [node.children.length, node.firstElementChild!.firstElementChild!.className]),
+        [1, 'shared-heading']);
       const heading = shared.locator('.shared-heading');
       if (await heading.getAttribute('aria-expanded') === 'true') await heading.click();
       await shared.locator('.shared-list').waitFor({ state: 'hidden' });
@@ -2911,11 +2946,12 @@ describe('JAV 用户脚本', () => {
       await panel.getByRole('button', { name: '订阅新作', exact: true }).waitFor();
       assert.equal(await section.locator('strong').textContent(), '森日向子');
       assert.equal(await section.getByRole('status').textContent(), '订阅后，Peach 会定期查她的新作。');
-      // 先女优信息，再其他任务，订阅与识别两枚按钮排在最下面。
+      // 提示组最上，其次女优信息，再其他任务，订阅与识别两枚按钮排在最下面。
       assert.deepEqual(await panel.locator('.body').first().evaluate(body => [...body.children].map(node =>
-        node.classList.contains('performer-follow') ? 'performer' : node.classList.contains('shared-tasks') ? 'shared'
-          : node.classList.contains('feed-toggle') ? 'feed' : node.textContent === '识别本页全部番号' ? 'scan' : '').filter(Boolean)),
-        ['performer', 'shared', 'feed', 'scan']);
+        node.classList.contains('notice-group') ? 'notices' : node.classList.contains('performer-follow') ? 'performer'
+          : node.classList.contains('shared-tasks') ? 'shared' : node.classList.contains('feed-toggle') ? 'feed'
+            : node.textContent === '识别本页全部番号' ? 'scan' : '').filter(Boolean)),
+        ['notices', 'performer', 'shared', 'feed', 'scan']);
       // 未订阅时订阅是这张面板的主操作，识别本页番号退成次要按钮。
       assert.equal(await primary(feed), true);
       assert.equal(await primary(scan), false);
