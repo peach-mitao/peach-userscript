@@ -10,7 +10,7 @@
 // @supportURL   https://github.com/peach-mitao/peach-userscript/issues
 // @homepageURL  https://github.com/peach-mitao/peach-userscript
 // @license      AGPL-3.0-or-later
-// @version      0.7.13
+// @version      0.7.14
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -849,6 +849,10 @@
       (whole, prefix, digits, offset) => take(whole, offset, `${prefix}-S${digits}`));
     // 无码日期番号先认：MISSAV 写成 `PONDO-103126_001`、`CARIBBEANCOM-111326-001`，厂牌前缀不和日期拼成另一个番号。
     rest = rest.replace(/\b\d{6}[-_]\d{2,4}\b/g, (whole, offset) => take(whole, offset, whole));
+    // 厂牌段带数字的只认 Peach 登记过的（`catalog_rules.DIGIT_LABELS`）：TMA 的 `T28`、`T38`。
+    // 放开成任意「字母+数字」会把 `S1`、`VR180` 这类厂牌名和画质词当成番号。
+    rest = rest.replace(separated ? /\b(T28|T38)-(\d{2,5})(?=$|[^A-Z0-9])/g : /\b(T28|T38)[-_]?(\d{2,5})(?=$|[^A-Z0-9])/g,
+      (whole, label, digits, offset) => take(whole, offset, `${label}-${digits}`));
     const shape = separated ? /\b((?:\d{3})?[A-Z]{2,8})-(\d{2,5})([A-Z]{0,2})(?=$|[^A-Z0-9])(?!\s*(?:さん|さま|様|氏|くん|君|ちゃん))/g
       : /\b((?:\d{1,5})?[A-Z]{2,12})[-_]?(\d{1,8})([A-Z]{0,2})(?=$|[^A-Z0-9])/g;
     for (const match of rest.matchAll(shape)) found.push([match.index, `${match[1]}-${match[2]}${match[3]}`]);
@@ -965,7 +969,7 @@
 
   function comparisonKey(code) {
     if (code.startsWith('FC2-PPV-')) return code;
-    return code.toUpperCase().replace(/^((?:\d+)?[A-Z]+)-0*(\d+)([A-Z]{0,2})$/, '$1-$2$3');
+    return code.toUpperCase().replace(/^((?:\d+)?(?:[A-Z]+|T28|T38))-0*(\d+)([A-Z]{0,2})$/, '$1-$2$3');
   }
 
   // Peach 可把发行平台的店铺前缀归一成账本番号（MGS `107STZY-019` → `STZY-019`），对照表只在 Peach 维护。
@@ -1110,7 +1114,7 @@
     const site = siteFor(url);
     if (!site) return;
     const raw = String(getSelection() || '').trim();
-    const shortCode = /^(?:FC2(?:[-_ ]?PPV)?[-_ ]?\d{4,9}|[NK]\d{4}|MKB?D-S\d{2,4}|(?:\d{1,5})?[A-Z]{2,12}[-_]?\d{1,8}[A-Z]{0,2}|\d{6}[-_]\d{2,4})$/i;
+    const shortCode = /^(?:FC2(?:[-_ ]?PPV)?[-_ ]?\d{4,9}|[NK]\d{4}|MKB?D-S\d{2,4}|(?:T28|T38)[-_]?\d{2,5}|(?:\d{1,5})?[A-Z]{2,12}[-_]?\d{1,8}[A-Z]{0,2}|\d{6}[-_]\d{2,4})$/i;
     const extracted = candidates(raw);
     if (raw.length > 80 || !shortCode.test(raw) || extracted.size !== 1) {
       showNotice('请只选中一个完整的短番号，再在脚本菜单选择「开启」。');
