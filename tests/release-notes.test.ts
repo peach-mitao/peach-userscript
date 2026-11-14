@@ -77,6 +77,17 @@ test('第一次发布没有上一个标签时只写本版，给出提交历史�
   assert.match(notes, /Initial release \/ 初始发布：\[commits\]\(https:\/\/github\.com\/o\/r\/commits\/v1\.1\.0\)\n$/);
 });
 
+test('每个版本都按分组写，历史 Release 重新生成时与新版同一格式', async () => {
+  const changelog = await readFile(new URL('../CHANGELOG.md', import.meta.url), 'utf8');
+  const versions = [...changelog.matchAll(/^## (\d+\.\d+\.\d+)\b/gm)].map(match => match[1]!);
+  assert.ok(versions.length);
+  for (const version of versions) {
+    const lines = versionSection(changelog, version);
+    assert.ok(lines.some(line => /^### \S.* \/ \S/.test(line)), `${version} 缺少「English / 中文」分组标题`);
+    assert.ok(lines.filter(line => line.startsWith('- ')).every(line => line.includes(' / ')), `${version} 有条目不是双语`);
+  }
+});
+
 test('当前版本在 CHANGELOG.md 里有可发布的一段', async () => {
   const changelog = await readFile(new URL('../CHANGELOG.md', import.meta.url), 'utf8');
   const { version } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
