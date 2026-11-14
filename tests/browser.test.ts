@@ -663,7 +663,7 @@ describe('JAV 用户脚本', () => {
     } finally { await opened.close(); }
   });
 
-  for (const code of ['MKBD-S123', 'MKD-S123', '092415_01', '092415_0001', 'DANDY-851C']) {
+  for (const code of ['MKBD-S123', 'MKD-S123', '092415_01', '092415_0001', 'DANDY-851C', 'T28-612', 'T38-076']) {
     it(`自动识别和主动选中支持完整番号 ${code}`, async () => {
       const automatic = await open(browser, { url: `https://123av.com/en/v/${code.toLowerCase()}`, title: code, html: `<h1>${code}</h1>` });
       try {
@@ -1067,6 +1067,17 @@ describe('JAV 用户脚本', () => {
       } finally { await opened.close(); }
     });
   }
+
+  // 厂牌段带数字的只认 Peach 登记过的 TMA `T28`、`T38`；`S1`、`VR180` 这类写法不算番号。
+  it('JAVtiful 的 TMA 番号 T38-076 能识别，未登记的字母加数字不另算番号', async () => {
+    const title = 'T38-076 今日、家族に売られました。 S1 VR180';
+    const opened = await open(browser, { url: 'https://javtiful.com/zh/video/115905/t38-076', title, html: `<h1>${title}</h1>` });
+    try {
+      await ready(opened.page);
+      assert.equal(await opened.page.locator(ROOT).locator('header strong').innerText(), 'T38-076');
+      assert.equal(new URL(await opened.page.evaluate(() => window.javMock.calls[0]!.url)).searchParams.get('code'), 'T38-076');
+    } finally { await opened.close(); }
+  });
 
   it('标题后段的单词加数字不另算番号，字段开头是另一番号仍报冲突', async () => {
     const title = 'JMTY-039 Tadaman File05 Luna 24 歳';
