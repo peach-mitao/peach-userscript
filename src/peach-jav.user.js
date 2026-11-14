@@ -10,7 +10,7 @@
 // @supportURL   https://github.com/peach-mitao/peach-userscript/issues
 // @homepageURL  https://github.com/peach-mitao/peach-userscript
 // @license      AGPL-3.0-or-later
-// @version      0.7.14
+// @version      0.7.15
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -493,7 +493,7 @@
     .geist-note{font:var(--board-body);color:var(--ink-2);overflow-wrap:anywhere}
     .geist-note[data-variant=error]{color:var(--drop)}
     /* 提示框照 Peach 页面的 Note：状态色底、10px 圆角，标题 14px 中粗、正文 13px，动作在框内右侧。 */
-    .shared-alerts{display:grid;gap:8px}.shared-alerts[hidden]{display:none}.shared-alerts:not([hidden])+.shared-group{margin-top:8px}
+    .notice-group,.shared-alerts{display:grid;gap:8px}.shared-alerts[hidden]{display:none}.notice-group:not(:has(>:not([hidden]))){display:none}
     .notice{--notice-bg:var(--color-status-yellow-background);--notice-fg:var(--color-status-yellow-text);display:flex;flex-wrap:wrap;align-items:center;
       justify-content:space-between;gap:8px 12px;padding:8px 12px;border-radius:10px;background:var(--notice-bg);color:var(--notice-fg);overflow-wrap:anywhere}
     .notice[data-tone=error]{--notice-bg:var(--color-status-rose-background);--notice-fg:var(--color-status-rose-text)}
@@ -1466,9 +1466,9 @@
       actions.append(settings, collapse, later);
       bar.append(element('strong', '', 'Peach'), actions);
       const scan = control('识别本页全部番号', { primary: true }); scan.addEventListener('click', openPageActions);
-      // 先信息（女优、更新提示），再「其他任务」，按钮统一排在最下面。
-      const body = element('div', 'body');
-      body.append(performerSection(), updateSection({ availableOnly: true }), sharedSection(), performerView.button, scan);
+      // 提示组在最上，其次女优信息，再「其他任务」，按钮统一排在最下面；与作品浮卡同一顺序。
+      const body = element('div', 'body'), tasks = sharedSection();
+      body.append(noticeGroup(tasks), performerSection(), tasks, performerView.button, scan);
       launcher.addEventListener('click', () => { entryOpen = true; entryCollapsed = false; refreshUpdateEntry(); later.focus(); });
       panel.append(bar, body); entry.shadow.append(panel, launcher);
       updateEntry = { ...entry, launcher, panel, body, collapse, scan };
@@ -2643,12 +2643,23 @@
     paintShared();
   }
 
+  // 「其他任务」只放标题与列表；连接状态与渠道暂停的提示框画进 node.alerts，由面板放进最上方的提示组。
   function sharedSection() {
     const node = element('section', 'shared-tasks');
     node.setAttribute('aria-label', '其他 Peach 任务');
+    node.alerts = element('div', 'shared-alerts');
+    node.alerts.setAttribute('role', 'status'); node.alerts.hidden = true;
     sharedLists.add(node);
     paintSharedList(node);
     return node;
+  }
+
+  // 面板正文统一四层：提示组（更新提示在前，其后是连接状态与渠道暂停）、状态与进度、其他任务、按钮组。
+  // 提示框自带的动作键留在框内，不算底部按钮组；整组都空时不占位。
+  function noticeGroup(tasks) {
+    const group = element('div', 'notice-group');
+    group.append(updateSection({ availableOnly: true }), tasks.alerts);
+    return group;
   }
 
   function paintShared() {
@@ -2756,9 +2767,11 @@
   // 标题与列表跨重绘保留，开合状态变了（点标题或自动条件变化）才播高度过渡。
   function paintSharedList(node) {
     const items = otherTasks(), notices = sharedNotices();
-    node.hidden = !items.length && !notices.length;
+    node.alerts.replaceChildren(...notices);
+    node.alerts.hidden = !notices.length;
+    node.hidden = !items.length;
     const focused = node.getRootNode().activeElement?.closest?.('.shared-row');
-    // 列表和提示都空了只藏起整段，标题、提示与开合状态留着，确认失败时提示仍有处可写。
+    // 列表空了只藏起整段，标题与开合状态留着。
     if (node.hidden) return;
     loadSharedPeople(items);
     const auto = items.length > SHARED_FOLD_LIMIT || Boolean(ownKey() && (current.tracking || current.busy));
@@ -2791,24 +2804,17 @@
       const foot = element('div', 'shared-foot'); foot.append(retryAll, clear);
       const note = element('p', 'geist-note shared-note');
       note.dataset.variant = 'error'; note.setAttribute('role', 'alert'); note.hidden = true;
-      // 连接状态与渠道暂停的提示框，与 Peach 页面的提示同一形状；放在标题上方，不随列表折叠，
-      // 标题与展开的列表连在一起。没有其他任务时只留提示框。
-      const paused = element('div', 'shared-alerts');
-      paused.setAttribute('role', 'status'); paused.hidden = true;
+      // 标题与展开的列表连在一起；提示框不在这里，画在面板最上方的提示组。
       const body = element('div', 'shared-body fold-settled'), list = element('ul', 'shared-list');
       body.hidden = !open;
       body.append(list, foot);
       const group = element('div', 'shared-group');
       group.append(heading, note, body);
-      node.replaceChildren(paused, group);
+      node.replaceChildren(group);
       overlayScrollbar(list, { square: true });
-      node.parts = { heading, counts, retryAll, clear, note, paused, group, body, list, open };
+      node.parts = { heading, counts, retryAll, clear, note, group, body, list, open };
     }
-    const { heading, counts, retryAll, clear, paused, group, body: fold, list } = node.parts;
-    paused.replaceChildren(...notices);
-    paused.hidden = !notices.length;
-    group.hidden = !items.length;
-    if (!items.length) return;
+    const { heading, counts, retryAll, clear, body: fold, list } = node.parts;
     // 失败（含未找到资源与整理失败）从已结束里单独计数，有失败项时整行标题变红。
     const failed = ended.filter(retryableTask), done = ended.length - failed.length;
     // 计数段以「 · 」开头，整行文字仍是「其他任务 · 进行中 N 项 …」；行首空白不显示，间距由标题行的 gap 给。
@@ -3342,8 +3348,9 @@
     const scan = control('识别本页全部番号'); scan.addEventListener('click', openPageActions);
     // 没发行或没资源的作品可以直接记进想要；次要按钮，不抢主按钮。
     const want = wantButton(() => void addMainWant(current));
-    // 先状态与进度、更新提示，再「其他任务」，按钮统一排在最下面；与入口面板同一顺序。
-    body.append(note, flow, updateSection({ availableOnly: true }), sharedSection(), button, alternate, ahead, want, scan);
+    // 提示组在最上，其次状态与进度，再「其他任务」，按钮统一排在最下面；与入口面板同一顺序。
+    const tasks = sharedSection();
+    body.append(noticeGroup(tasks), note, flow, tasks, button, alternate, ahead, want, scan);
     panel.append(bar, body);
     const launcher = control('展开 Peach 面板');
     launcher.classList.add('launcher');
