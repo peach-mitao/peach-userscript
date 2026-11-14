@@ -4,6 +4,14 @@ Notable changes are grouped by version. English and Chinese describe the same be
 
 Entries are written for users to scan: one sentence each, saying where something changed and what you now see. Reasons, implementation, compatibility conditions and edge cases stay in commits and PRs. Changes to one feature become one entry, and within each group the bigger changes come first. The English part before ` / ` stays within 160 characters including spaces, and the Chinese part after it within 80 characters including punctuation; bold and code marks and link addresses are not counted, only the text they display. / 条目给使用者扫读：每条一句话，只写在哪儿看到了什么变化；原因、实现、兼容条件和边界情况留在提交与 PR。同一功能的几处改动合成一条，每组里影响大的排前面。` / ` 之前的英文部分不超过 160 个字符（含空格），之后的中文部分不超过 80 字（含标点）；加粗、代码标记和链接地址不计，只计显示出来的文字。
 
+## 0.7.13 — 2026-11-14
+
+### Fixed / 修复
+
+- **Video pages** no longer report a false code conflict for a word plus number later in the title, such as File05, or uncensored date codes on MissAV and Jable. / 详情页标题后段的单词加数字（如 File05）及 MISSAV、Jable 的无码日期番号不再误报「番号存在冲突」。
+- **Panels** scroll long codes, actress names and Other tasks counts back and forth on one line, and stack at most three avatars, fewer when space is tight. / 浮卡里放不下的番号、女优名与「其他任务」计数改为在行内自动来回滚动；头像最多叠三枚，空间窄时更少。
+- **Other tasks** rows no longer have the left edge of their hover highlight cut off. / 「其他任务」列表行的悬停底色左侧不再被切掉。
+
 ## 0.7.12 — 2026-11-14
 
 ### Added / 新增
