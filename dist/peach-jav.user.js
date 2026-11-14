@@ -1143,13 +1143,17 @@
     scroller.classList.add('marquee');
     scroller.addEventListener('scroll', () => edgeFade(scroller), { passive: true });
     const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    let pos = 0, dir = 1, last = 0, frame = 0, max = -1, hovered = false, focused = false, resync = false;
-    let holdUntil = performance.now() + 2000;
+    let pos = 0, dir = 1, last = 0, frame = 0, max = -1, hovered = false, focused = false, resync = false, fits = true, holdUntil = 0;
     const running = () => !still && scroller.isConnected && !hovered && !focused;
     const tick = now => {
       frame = 0;
       if (!running()) return;
-      if (max < 0) max = scroller.scrollWidth - scroller.clientWidth;
+      if (max < 0) {
+        max = scroller.scrollWidth - scroller.clientWidth;
+        // 刚变得放不下（头像加载完、文字变长、从收起展开）时先停在开头 2 秒，再开始滚。
+        if (max > 1 && fits) { pos = 0; dir = 1; scroller.scrollLeft = 0; holdUntil = now + 2000; }
+        fits = max <= 1;
+      }
       if (max <= 1) { pos = 0; dir = 1; return; }
       frame = requestAnimationFrame(tick);
       const dt = last ? Math.min(now - last, 64) : 0; last = now;

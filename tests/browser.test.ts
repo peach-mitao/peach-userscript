@@ -2264,7 +2264,8 @@ describe('JAV 用户脚本', () => {
     const opened = await open(browser, { initial: 'owned', activeItems: [...queued, ...done, failed] });
     const { page } = opened;
     try {
-      await page.setViewportSize({ width: 320, height: 720 });
+      // 视口留窄一些：Linux 上的字体比 Windows 窄，320px 时这一行可能刚好放得下。
+      await page.setViewportSize({ width: 280, height: 720 });
       const shared = page.locator(ROOT).locator('.shared-tasks'), heading = shared.locator('.shared-heading');
       await page.waitForFunction(root => document.querySelector(root)?.shadowRoot?.querySelector('.shared-heading')?.textContent
         === '其他任务 · 进行中 66 项 · 已完成 39 项 · 失败 1 项', ROOT);
@@ -2279,7 +2280,7 @@ describe('JAV 用户脚本', () => {
           left: counts.hasAttribute('data-overflow-left'), right: counts.hasAttribute('data-overflow-right') };
       });
       // 时钟停住再逐段推进：开头停 2 秒，再以每秒 24px 滚到头，停 2 秒后滚回开头。
-      await page.clock.pauseAt(await page.evaluate(() => Date.now() + 10));
+      await page.clock.pauseAt(await page.evaluate(() => Date.now() + 500));
       const before = await geometry();
       assert.ok(before.overflow > 0, '窄浮卡里标题应放不下');
       assert.ok(before.height < before.lineHeight * 1.5, `标题折成了 ${before.height}px`);
@@ -2872,7 +2873,7 @@ describe('JAV 用户脚本', () => {
     try {
       const label = page.locator('#peach-jav-updates .performer-head strong');
       await label.waitFor();
-      await page.clock.pauseAt(await page.evaluate(() => Date.now() + 10));
+      await page.clock.pauseAt(await page.evaluate(() => Date.now() + 500));
       const read = () => label.evaluate(node => ({ overflow: node.scrollWidth - node.clientWidth, left: node.scrollLeft,
         clip: getComputedStyle(node).textOverflow, marquee: node.classList.contains('marquee'), text: node.textContent }));
       const before = await read();
