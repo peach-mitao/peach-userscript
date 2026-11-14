@@ -313,8 +313,15 @@ Published on GitHub; not published on Sleazy because a localized description was
 
 Not published separately on Sleazy; included in 0.6.1. / 未单独发布到 Sleazy，随 0.6.1 提供。
 
+Release backfilled on 2026-10-27 from the original commit; assets were not rebuilt or retested. / 2026-10-27 按原提交补录发布，制品未重新构建或回归。
+
+### Added / 新增
+
 - **Page scans**: select codes across the page, select all and submit them in a batch. / 整页识别番号，可多选、全选并批量提交。
 - **Launcher** follows Peach's theme and accent, remembers where you drag it, and can show always, only on JAV sites or never. / 图标同步 Peach 深浅色与强调色，记住拖动位置，可常驻、仅在 JAV 站点显示或彻底关闭。
+
+### Changed / 变更
+
 - **Settings**, table selection, avatars and stage animations match Peach. / 设置、表格选择、头像和各阶段动画与 Peach 对齐。
 
 [Source changes / 源码变更](https://github.com/peach-mitao/peach-userscript/compare/74dd91b9e3e91b00bc4d75d1ad119fe3f7e95ba5...5aa16f5f706318892187f1324d30a7cc43201adc)
@@ -323,10 +330,18 @@ Not published separately on Sleazy; included in 0.6.1. / 未单独发布到 Slea
 
 Bundled with Peach 0.50.0; not published separately on Sleazy. / 随 Peach 0.50.0 分发，未单独发布到 Sleazy。
 
+Release backfilled on 2026-10-27 from the original commit; assets were not rebuilt or retested. / 2026-10-27 按原提交补录发布，制品未重新构建或回归。
+
+### Added / 新增
+
 - **Update checks** look at Sleazy and Peach releases separately, run daily and prompt a refresh after installing. / 分别检查 Sleazy 与 Peach 发行版本，每日自动检查，安装后提示刷新。
 - **Announcements** for task status and updates are kept apart. / 任务状态与更新提示分别播报。
 
 ## 0.5.1 — 2026-10-25
+
+Release backfilled on 2026-10-27 from the original commit; assets were not rebuilt or retested. / 2026-10-27 按原提交补录发布，制品未重新构建或回归。
+
+### Added / 新增
 
 - **Progress** shows the queue, search, download, import and organizing stages, with download progress when available. / 显示排队、搜索、下载、入库和整理各阶段，能取得时显示下载进度。
 - **Views**: the panel can be compact, collapsed or minimized. / 浮卡支持紧凑、折叠和图标三种视图。
@@ -334,15 +349,25 @@ Bundled with Peach 0.50.0; not published separately on Sleazy. / 随 Peach 0.50.
 
 ## 0.5.0 — 2026-10-25
 
+Release backfilled on 2026-10-27 from the original commit; assets were not rebuilt or retested. / 2026-10-27 按原提交补录发布，制品未重新构建或回归。
+
+### Changed / 变更
+
 - **Code recognition** checks DMM and FANZA maker codes against product URLs, keeps MGS prefixes and suffixes, and adds Kirari and date codes. / 番号识别对照商品地址校验 DMM／FANZA 厂家番号，保留 MGS 前缀与尾字母，补上 Kirari 和日期式番号。
 - **Errors** tell service failures, unsupported interfaces, rate limits and invalid identities apart. / 区分服务故障、接口不兼容、限流与身份无效。
 
 ## 0.4.0 — 2026-10-20
 
+Release backfilled on 2026-10-27 from the original commit; assets were not rebuilt or retested. / 2026-10-27 按原提交补录发布，制品未重新构建或回归。
+
+### Added / 新增
+
 - **Settings** and library controls match Peach, and pairing accepts pasted details and detects the installation. / 设置与馆藏控件与 Peach 对齐，配对支持粘贴信息并检测安装。
 - **DMM and MGS** products are identified through Peach, and reviewed mirror domains are added. / 通过 Peach 识别 DMM、MGS 商品身份，补充已复核的镜像站。
 
 ## 0.3.0 — 2026-10-18 — Initial release / 初始发布
+
+### Added / 新增
 
 - **Video codes** on the page or in a selection are detected, checked against the library and handed to Peach to download. / 识别页面或选中的影片编号，查询馆藏状态，交给 Peach 下载入库。
 - **Site rules** ship as a manifest with a reproducible build and Peach export files. / 提供站点规则清单、可复现构建与 Peach 同步制品。
