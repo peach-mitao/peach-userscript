@@ -1052,6 +1052,38 @@ describe('JAV 用户脚本', () => {
     });
   }
 
+  // 无码日期番号：MISSAV 的地址与标题带厂牌前缀，身份仍是 Peach 认的日期番号。
+  for (const example of [
+    { url: 'https://missav.ai/dm31/cn/pondo-103126_001', title: 'PONDO-103126_001 性感兔女郎', code: '103126_001' },
+    { url: 'https://missav.ai/dm31/cn/caribbeancom-111326-001', title: 'CARIBBEANCOM-111326-001 作品 15', code: '111326-001' },
+    // Jable 地址把下划线写成连字符，标题保留下划线。
+    { url: 'https://jable.tv/videos/020121-429-paco/', title: '020121_429-paco 作品 - Jable.TV', code: '020121_429' },
+  ]) {
+    it(`无码日期番号 ${example.code} 不报冲突`, async () => {
+      const opened = await open(browser, { url: example.url, title: example.title, html: `<h1>${example.title}</h1>` });
+      try {
+        await ready(opened.page);
+        assert.equal(new URL(await opened.page.evaluate(() => window.javMock.calls[0]!.url)).searchParams.get('code'), example.code);
+      } finally { await opened.close(); }
+    });
+  }
+
+  it('标题后段的单词加数字不另算番号，字段开头是另一番号仍报冲突', async () => {
+    const title = 'JMTY-039 Tadaman File05 Luna 24 歳';
+    const opened = await open(browser, { url: 'https://missav.ai/dm31/cn/jmty-039', title, html: `<h1>${title}</h1>` });
+    try {
+      await ready(opened.page);
+      assert.equal(await opened.page.locator(ROOT).locator('header strong').innerText(), 'JMTY-039');
+      assert.equal(new URL(await opened.page.evaluate(() => window.javMock.calls[0]!.url)).searchParams.get('code'), 'JMTY-039');
+    } finally { await opened.close(); }
+    const other = await open(browser, { url: 'https://missav.ai/dm31/cn/jmty-039', title: 'ABW-123 Tadaman File05',
+      html: '<h1>ABW-123 Tadaman File05</h1>' });
+    try {
+      await ready(other.page, '番号存在冲突');
+      assert.equal(await other.page.evaluate(() => window.javMock.calls.length), 0);
+    } finally { await other.close(); }
+  });
+
   it('身份字段冲突时禁用，推荐区与查询参数不参与身份', async () => {
     const opened = await open(browser, { title: 'SSIS-057', html: '<h1>SSIS-057</h1><dl><dt>番号：</dt><dd>ABW-123</dd></dl>' });
     try {
@@ -1852,6 +1884,35 @@ describe('JAV 用户脚本', () => {
     } finally {await opened.close();}
   });
 
+  it('人物头像多了也限宽：最多叠三枚，标题区变窄时减到两枚，番号留出位置', async () => {
+    const five = ['Alice', 'Bella', 'Cora', 'Dana', 'Erin'].map(name => ({ name }));
+    const opened = await open(browser, { initial: 'owned', peopleItems: { 'SSIS-057': five, 'IPX-001': five },
+      activeItems: [body('queued', 'IPX-001')] });
+    const { page } = opened;
+    try {
+      const root = page.locator(ROOT);
+      // 第五枚按规则隐藏，不在无障碍树里，按 title 等它渲染出来。
+      const title = root.locator('.panel > .bar .bar-title'), row = root.locator('.shared-row[data-code="IPX-001"]');
+      await title.locator('.batch-person[title="Erin"]').waitFor({ state: 'attached' });
+      await row.locator('.batch-person[title="Erin"]').waitFor({ state: 'attached' });
+      const read = (node: Element) => ({
+        shown: [...node.querySelectorAll('.batch-person')].filter(person => getComputedStyle(person).display !== 'none').length,
+        width: Math.round(node.getBoundingClientRect().width) });
+      const rule = (width: number) => width < 120 ? 1 : width < 180 ? 2 : 3;
+      // 其他任务的行够宽，叠三枚到顶。
+      assert.equal((await row.evaluate(read)).shown, 3);
+      for (const width of [1280, 340, 300]) {
+        await page.setViewportSize({ width, height: 720 });
+        await page.waitForTimeout(100);
+        const header = await title.evaluate(read);
+        assert.equal(header.shown, rule(header.width), `视口 ${width}px，标题区 ${header.width}px`);
+        // 番号仍有足够宽度：头像让出的位置给番号。
+        assert.ok(await title.locator('strong').evaluate(node => node.clientWidth >= Math.min(node.scrollWidth, 60)), `视口 ${width}px 时番号太窄`);
+      }
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
   it('单个人物头像悬停不抬起，两枚以上才抬起让位', async () => {
     const opened = await open(browser, {url:'https://javdb.com/', html:'<p>SSIS-057 ABP-616</p>'});
     const {page} = opened;
@@ -2193,6 +2254,81 @@ describe('JAV 用户脚本', () => {
         return { right: document.documentElement.clientWidth - box.right, bottom: innerHeight - box.bottom }; });
       assert.ok(Math.abs(gap.right - converted.right) < 1 && Math.abs(gap.bottom - converted.bottom) < 1);
       assert.deepEqual(await page.evaluate(() => JSON.parse(String(window.javMock.values['peach.jav.position']))), converted);
+    } finally { await opened.close(); }
+  });
+
+  it('其他任务标题放不下时保持一行，计数自动来回横滚，「其他任务」与箭头固定', async () => {
+    const queued = Array.from({ length: 66 }, (_, index) => body('queued', `ABC-${index + 100}`));
+    const done = Array.from({ length: 39 }, (_, index) => body('ingested', `DEF-${index + 100}`));
+    const failed = { ...body('failed', 'IPX-001'), cause: 'cloud', ended_key: '1@2026-11-14T08:00:00+00:00', dismissed: false } as Body;
+    const opened = await open(browser, { initial: 'owned', activeItems: [...queued, ...done, failed] });
+    const { page } = opened;
+    try {
+      // 视口留窄一些：Linux 上的字体比 Windows 窄，320px 时这一行可能刚好放得下。
+      await page.setViewportSize({ width: 280, height: 720 });
+      const shared = page.locator(ROOT).locator('.shared-tasks'), heading = shared.locator('.shared-heading');
+      await page.waitForFunction(root => document.querySelector(root)?.shadowRoot?.querySelector('.shared-heading')?.textContent
+        === '其他任务 · 进行中 66 项 · 已完成 39 项 · 失败 1 项', ROOT);
+      const geometry = () => heading.evaluate(node => {
+        // 箭头开合时在旋转，外接框会变大；按中心点判断它落在计数之后、标题行之内。
+        const counts = node.querySelector('.shared-counts')!, fold = node.querySelector('.shared-fold')!.getBoundingClientRect();
+        const title = node.querySelector('.shared-title')!.getBoundingClientRect();
+        const text = counts.getBoundingClientRect(), box = node.getBoundingClientRect(), centre = (fold.left + fold.right) / 2;
+        return { height: box.height, lineHeight: parseFloat(getComputedStyle(counts).lineHeight), overflow: counts.scrollWidth - counts.clientWidth,
+          foldInside: centre > text.right && centre < box.right && box.right <= node.parentElement!.getBoundingClientRect().right + .5,
+          title: [title.left, title.width], scrollLeft: counts.scrollLeft, scrollbar: getComputedStyle(counts).scrollbarWidth,
+          left: counts.hasAttribute('data-overflow-left'), right: counts.hasAttribute('data-overflow-right') };
+      });
+      // 时钟停住再逐段推进：开头停 2 秒，再以每秒 24px 滚到头，停 2 秒后滚回开头。
+      await page.clock.pauseAt(await page.evaluate(() => Date.now() + 500));
+      const before = await geometry();
+      assert.ok(before.overflow > 0, '窄浮卡里标题应放不下');
+      assert.ok(before.height < before.lineHeight * 1.5, `标题折成了 ${before.height}px`);
+      assert.deepEqual([before.foldInside, before.scrollbar, before.scrollLeft, before.left, before.right], [true, 'none', 0, false, true]);
+      const travel = Math.ceil(before.overflow / 24 * 1000);
+      await page.clock.runFor(2000 + travel + 500);
+      await page.waitForFunction(root => document.querySelector(root)!.shadowRoot!.querySelector('.shared-counts')!.hasAttribute('data-overflow-left'), ROOT);
+      const end = await geometry();
+      assert.ok(end.scrollLeft >= end.overflow - 1, `应滚到末尾，停在 ${end.scrollLeft}`);
+      assert.deepEqual([end.foldInside, end.right, end.title], [true, false, before.title]);
+      await page.clock.runFor(2000 + travel + 500);
+      assert.equal((await geometry()).scrollLeft, 0);
+      // 指针停在标题上时不动；竖向滚轮在标题上转成横滚。
+      await heading.hover();
+      await page.clock.runFor(2000 + travel);
+      assert.equal((await geometry()).scrollLeft, 0);
+      await page.mouse.wheel(0, 400);
+      await page.waitForFunction(root => document.querySelector(root)!.shadowRoot!.querySelector('.shared-counts')!.hasAttribute('data-overflow-left'), ROOT);
+      const after = await geometry();
+      assert.ok(after.scrollLeft > 0);
+      assert.deepEqual([after.foldInside, after.right, after.title], [true, false, before.title]);
+      // 点击与键盘照旧开合。
+      const expanded = await heading.getAttribute('aria-expanded');
+      await heading.click();
+      assert.notEqual(await heading.getAttribute('aria-expanded'), expanded);
+      await heading.focus();
+      await page.keyboard.press('Enter');
+      assert.equal(await heading.getAttribute('aria-expanded'), expanded);
+      // 悬停底色只盖住行，行尾的「标为已读」在底色外。列表是滚动容器，底色左侧外扩的 8px 不能被它裁掉：
+      // 左边比头像宽 8px，头像仍与「其他任务」对齐。
+      if (await heading.getAttribute('aria-expanded') !== 'true') await heading.click();
+      await page.clock.runFor(1000);
+      const row = shared.locator('.shared-row[data-code="IPX-001"]');
+      assert.equal(await row.locator('.shared-code').evaluate(node => node.classList.contains('marquee')), true);
+      await row.hover();
+      await page.clock.runFor(300);
+      const hovered = await row.evaluate(node => {
+        // 底色有淡入过渡，先结束过渡再读终值。
+        for (const animation of node.getAnimations()) animation.finish();
+        const list = node.closest('.shared-list')!, box = node.getBoundingClientRect();
+        const dismiss = node.parentElement!.querySelector('.geist-button')!.getBoundingClientRect(), avatar = node.firstElementChild!.getBoundingClientRect();
+        const title = node.closest('.shared-tasks')!.querySelector('.shared-title')!.getBoundingClientRect();
+        return { row: getComputedStyle(node).backgroundColor, outside: dismiss.left >= box.right,
+          clipped: box.left < list.getBoundingClientRect().left - .5,
+          gutter: Math.round(avatar.left - box.left), aligned: Math.abs(avatar.left - title.left) < 1 };
+      });
+      assert.notEqual(hovered.row, 'rgba(0, 0, 0, 0)');
+      assert.deepEqual([hovered.outside, hovered.clipped, hovered.gutter, hovered.aligned], [true, false, 8, true]);
     } finally { await opened.close(); }
   });
 
@@ -2726,6 +2862,29 @@ describe('JAV 用户脚本', () => {
       await organizeRow.locator('.chip').filter({ hasText: '已入库' }).waitFor();
       assert.equal(await organizeRow.locator('.chip').getAttribute('data-chip'), 'lime');
       assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
+  it('单行放不下的文字不截省略号，在原位自动来回横滚，指针停在上面时不动', async () => {
+    const name = '森日向子（もりひなこ）Hinako Mori 旧名 白石アイリ Airi Shiraishi';
+    const opened = await open(browser, { url: 'https://javdb.com/actors/bkxd', title: `${name} | JavDB`,
+      html: `<h2><span class="actor-section-name">${name}</span></h2>`, performer: { name, entity_id: 8112, following: false } });
+    const { page } = opened;
+    try {
+      const label = page.locator('#peach-jav-updates .performer-head strong');
+      await label.waitFor();
+      await page.clock.pauseAt(await page.evaluate(() => Date.now() + 500));
+      const read = () => label.evaluate(node => ({ overflow: node.scrollWidth - node.clientWidth, left: node.scrollLeft,
+        clip: getComputedStyle(node).textOverflow, marquee: node.classList.contains('marquee'), text: node.textContent }));
+      const before = await read();
+      assert.ok(before.overflow > 0, '名字应放不下');
+      assert.deepEqual([before.clip, before.marquee, before.left, before.text], ['clip', true, 0, name]);
+      await page.clock.runFor(3000);
+      const moved = (await read()).left;
+      assert.ok(moved > 0, '应自动横滚');
+      await label.hover();
+      await page.clock.runFor(2000);
+      assert.equal((await read()).left, moved);
     } finally { await opened.close(); }
   });
 

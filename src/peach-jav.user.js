@@ -10,7 +10,7 @@
 // @supportURL   https://github.com/peach-mitao/peach-userscript/issues
 // @homepageURL  https://github.com/peach-mitao/peach-userscript
 // @license      AGPL-3.0-or-later
-// @version      0.7.12
+// @version      0.7.13
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -337,7 +337,7 @@
     .bar strong{font-weight:500;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
     .copy-code{cursor:copy;border-radius:4px}.copy-code[data-code=""]{cursor:auto}.copy-code:focus-visible{outline:2px solid var(--tungsten);outline-offset:2px}
     .bar-title{position:relative}.copy-feedback{position:absolute;top:calc(100% + 4px);z-index:2;padding:2px 8px;border-radius:6px;font:var(--board-caption);color:var(--ground);background:var(--ink);white-space:nowrap;pointer-events:none}.copy-feedback[data-variant=error]{background:var(--drop)}
-    .bar-heading{display:grid;min-width:0;gap:2px}.bar-title{display:flex;align-items:center;gap:8px;min-width:0}.bar-summary{font:var(--board-caption);color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .bar-heading{display:grid;min-width:0;gap:2px}.bar-title{display:flex;align-items:center;gap:8px;min-width:0}.bar-summary{font:var(--board-caption);color:var(--ink-2)}
     .bar-actions{display:flex;gap:4px;flex:none}
     .bar-actions [data-collapse-chevron]{transition:transform .2s ease-in-out}
     .bar-actions [aria-expanded="false"] [data-collapse-chevron]{transform:rotate(180deg)}
@@ -353,26 +353,34 @@
     .shared-action[data-action=retry-failed]{margin-right:auto;color:var(--color-status-rose-text)}.shared-action[data-action=retry-failed]:hover{color:var(--color-status-rose-text);opacity:.8}
     .shared-action-icon{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
     .performer-follow{display:grid;gap:8px;min-width:0}.performer-head{display:flex;align-items:center;gap:8px;min-width:0}
-    .performer-head strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:var(--board-body-medium)}
+    .performer-head strong{font:var(--board-body-medium)}
     .shared-tasks{min-width:0}.shared-heading,.shared-action{display:flex;align-items:center;gap:4px;width:fit-content;margin:0;padding:0;border:0;background:transparent;
       font:var(--board-caption-semibold);color:var(--muted);cursor:pointer}.shared-heading:hover,.shared-action:hover{color:var(--ink)}.shared-action:disabled{opacity:.5;cursor:default}
     .shared-heading:focus-visible,.shared-action:focus-visible{outline:2px solid var(--tungsten);outline-offset:2px;border-radius:4px}
     .shared-fold{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s ease}
     .shared-heading[aria-expanded=false] .shared-fold{transform:rotate(-90deg)}
     .shared-heading[data-tone=failed],.shared-heading[data-tone=failed]:hover{color:var(--color-status-rose-text)}
+    /* 单行放不下的文字（marquee）：不截省略号，在原位自动来回横滚，滚动条不画、两端按滚动位置渐隐（同 Peach 横向滚动层）。 */
+    .marquee{min-width:0;overflow-x:auto;overflow-y:hidden;white-space:nowrap;text-overflow:clip;scrollbar-width:none;overscroll-behavior-x:contain;
+      --fade-l:0px;--fade-r:0px;mask-image:linear-gradient(90deg,transparent,#000 var(--fade-l),#000 calc(100% - var(--fade-r)),transparent)}
+    .marquee::-webkit-scrollbar{display:none}.marquee[data-overflow-left]{--fade-l:16px}.marquee[data-overflow-right]{--fade-r:16px}
+    /* 「其他任务」标题始终一行：标题与箭头固定，计数放不下时在中间横滚。 */
+    .shared-heading{max-width:100%}.shared-title{flex:none;white-space:nowrap}
     /* 折叠沿用 Peach Collapse（frontend/src/ui-kit/collapse.css）：过渡时裁边，展开停稳后摘掉，行的悬停底色才不被切。 */
     .shared-body{position:relative;display:flow-root;overflow:hidden;transition:height .2s ease-in-out}.shared-body.fold-settled{overflow:visible}
-    .shared-list{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:4px;max-height:172px;overflow:auto;overscroll-behavior:contain;scrollbar-width:none}
+    /* 列表本身是滚动容器，会裁掉伸出去的子元素：行的悬停底色左右各外扩 8px 由列表的负边距给，行内容仍与标题左对齐。 */
+    .shared-list{list-style:none;margin:8px -8px 0;padding:0;display:grid;gap:4px;max-height:172px;overflow:auto;overscroll-behavior:contain;scrollbar-width:none}
     /* 滚动条用 Peach 的悬浮轨道（overlayScrollbar）；能滚动时右侧留出轨道位置，不压住行尾的关闭键。 */
     .shared-list::-webkit-scrollbar{display:none}.shared-list[data-overflowing]{padding-right:12px}
-    .shared-list li{min-width:0}.shared-row{display:flex;align-items:center;gap:8px;width:calc(100% + 16px);min-width:0;min-height:32px;margin:0 -8px;padding:4px 8px;border:0;border-radius:6px;
-      background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;transition:background-color .15s ease}.shared-row:hover{background:var(--surface)}
+    /* 悬停底色只画在行上，行尾的「标为已读」留在底色外；头像描边跟着换成悬停底色，不露出一圈页面底色。 */
+    .shared-item{display:flex;align-items:center;gap:4px;min-width:0}
+    .shared-row{display:flex;flex:1;align-items:center;gap:8px;min-width:0;min-height:32px;margin:0;padding:4px 8px;border:0;border-radius:6px;
+      background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;transition:background-color .15s ease}
+    .shared-row:hover{--row-bg:var(--surface);background:var(--surface)}
     .shared-row:focus-visible{outline:2px solid var(--tungsten);outline-offset:-2px}
-    .shared-item{display:flex;align-items:center;gap:4px}.shared-item .shared-row{flex:1;width:auto;margin-right:0}
     .shared-item .geist-button.icon{width:28px;height:28px;color:var(--muted)}.shared-item .geist-button.icon:hover{color:var(--ink)}
-    .shared-code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:var(--board-body-medium)}
+    .shared-code{flex:1;font:var(--board-body-medium)}
     .shared-chevron{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;color:var(--muted)}
-    .task-page .bar strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .panel.draggable{cursor:grab}:host([data-dragging]) .panel{cursor:grabbing;user-select:none}
     .body{padding:0 20px 20px;display:grid;gap:16px;min-width:0}.footer{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-height:var(--fieldset-bar-h);padding:8px 16px;border-top:1px solid var(--line);background:var(--surface)}
     .geist-button{height:var(--control-h);padding:8px 12px;border:1px solid var(--color-border-button-default);border-radius:var(--control-radius);background:var(--color-background-primary-default);color:var(--ink);display:inline-flex;
@@ -449,7 +457,12 @@
     .batch-people>.batch-person:hover+.batch-person+.batch-person{--lift-y:-.5px;--lift-x:12px}
     .batch-people>.batch-person:hover+.batch-person+.batch-person+.batch-person{--lift-x:18px}
     .batch-people>.batch-person:hover+.batch-person+.batch-person+.batch-person+.batch-person{--lift-x:24px}
-    @container identity (max-width:179px){.batch-people>.batch-person:nth-child(n+3){display:none}.batch-row-code{--cap:2}}
+    /* 头像多了也限宽：最多叠三枚；番号所在一栏不到 180px 只留两枚，不到 120px 只留一枚，让出位置给番号。
+       标题栏与进度页标题和表格的番号格一样按自身宽度判断，所以标题区占满剩余宽度。 */
+    .bar-heading{flex:1}.subpage-bar>.bar-title{flex:1}.bar-title{container:identity/inline-size}
+    .batch-people>.batch-person:nth-child(n+4){display:none}:is(.batch-row-code,.bar-title>strong){--cap:3}
+    @container identity (max-width:179px){.batch-people>.batch-person:nth-child(n+3){display:none}:is(.batch-row-code,.bar-title>strong){--cap:2}}
+    @container identity (max-width:119px){.batch-people>.batch-person:nth-child(n+2){display:none}:is(.batch-row-code,.bar-title>strong){--cap:1}}
     /* 头像右侧紧跟番号：展开时番号随最后一枚头像同步右移，距离为 6px ×（显示枚数 − 指到的序号）。 */
     :is(.batch-row-code,.bar-title>strong){transition:transform calc(var(--spring-press-ms) * 1ms) var(--spring-press)}
     :is(.batch-row-main,.bar-title):has(.batch-person:hover) :is(.batch-row-code,.bar-title>strong){transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.3s;transform:translateX(calc(6px * (min(var(--count,1),var(--cap,5)) - var(--hovered,1))))}
@@ -463,7 +476,7 @@
     :is(.batch-row-main,.bar-title):has(>.batch-people>.batch-person:nth-child(4):hover) :is(.batch-row-code,.bar-title>strong){--hovered:4}
     :is(.batch-row-main,.bar-title):has(>.batch-people>.batch-person:nth-child(5):hover) :is(.batch-row-code,.bar-title>strong){--hovered:5}
     .batch-row{--row-bg:var(--color-background-primary-default)}.batch-row[data-board-selected]{--row-bg:var(--surface)}
-    @media(hover:hover) and (pointer:fine){.batch-row:not([aria-disabled=true]):hover{--row-bg:var(--color-background-primary-hover)}}.batch-row-code{font:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}.batch-row-status{min-width:0}
+    @media(hover:hover) and (pointer:fine){.batch-row:not([aria-disabled=true]):hover{--row-bg:var(--color-background-primary-hover)}}.batch-row-code{font:inherit}.batch-row-status{min-width:0}
     .batch-footer{flex-wrap:nowrap;gap:8px}.batch-footer .geist-button.icon{padding:0;border:1px solid var(--color-border-button-default);background:var(--color-background-primary-default);box-shadow:var(--elevation-xs)}
     .batch-footer [data-spinning] svg{animation:peach-jav-spin .7s linear infinite}@keyframes peach-jav-spin{to{transform:rotate(1turn)}}
     .batch-footer .geist-button.primary:disabled{border:1px solid var(--color-border-button-default);background:var(--color-background-primary-default)}
@@ -813,24 +826,32 @@
   // 只收原文带连字符的厂牌与素人番号，用户名、导航、域名里的「字母+数字」不补分隔符。
   // 评论署名也会写成带连字符的形状（mgstage 的「qwert-02さんのレビュー」），后面紧跟敬称的不算番号。
   function candidates(value, maxLength = 800, separated = false) {
-    const found = new Set();
+    return new Set(placedCandidates(value, maxLength, separated).map(([, code]) => code));
+  }
+
+  // 一段身份字段只按最先出现的番号定身份，与 Peach `feeds.scan_code` 一致：
+  // MISSAV 标题「JMTY-039 Tadaman File05 …」后段的 File05 不另算一部作品。
+  function leadingCandidate(value) {
+    const placed = placedCandidates(value);
+    return placed.length ? placed.reduce((first, item) => item[0] < first[0] ? item : first)[1] : '';
+  }
+
+  // 认出的番号连同它在原文中的位置；已认出的片段换成等长空白，后面的位置不偏移。
+  function placedCandidates(value, maxLength = 800, separated = false) {
+    const found = [];
+    const take = (whole, offset, code) => { found.push([offset, code]); return ' '.repeat(whole.length); };
     const bounded = String(value || '').slice(0, maxLength).toUpperCase();
-    let rest = bounded.replace(/\bFC2(?:[-_ ]?PPV)?[-_ ]?(\d{4,9})\b/g, (_, digits) => {
-      found.add(`FC2-PPV-${digits}`);
-      return ' ';
-    });
-    rest = rest.replace(/\b([NK])(\d{4})\b/g, (_, prefix, digits) => {
-      found.add(prefix.toLowerCase() + digits);
-      return ' ';
-    });
-    rest = rest.replace(/\b(MKB?D)-S(\d{2,4})(?=$|[^A-Z0-9])/g, (_, prefix, digits) => {
-      found.add(`${prefix}-S${digits}`);
-      return ' ';
-    });
+    let rest = bounded.replace(/\bFC2(?:[-_ ]?PPV)?[-_ ]?(\d{4,9})\b/g,
+      (whole, digits, offset) => take(whole, offset, `FC2-PPV-${digits}`));
+    rest = rest.replace(/\b([NK])(\d{4})\b/g,
+      (whole, prefix, digits, offset) => take(whole, offset, prefix.toLowerCase() + digits));
+    rest = rest.replace(/\b(MKB?D)-S(\d{2,4})(?=$|[^A-Z0-9])/g,
+      (whole, prefix, digits, offset) => take(whole, offset, `${prefix}-S${digits}`));
+    // 无码日期番号先认：MISSAV 写成 `PONDO-103126_001`、`CARIBBEANCOM-111326-001`，厂牌前缀不和日期拼成另一个番号。
+    rest = rest.replace(/\b\d{6}[-_]\d{2,4}\b/g, (whole, offset) => take(whole, offset, whole));
     const shape = separated ? /\b((?:\d{3})?[A-Z]{2,8})-(\d{2,5})([A-Z]{0,2})(?=$|[^A-Z0-9])(?!\s*(?:さん|さま|様|氏|くん|君|ちゃん))/g
       : /\b((?:\d{1,5})?[A-Z]{2,12})[-_]?(\d{1,8})([A-Z]{0,2})(?=$|[^A-Z0-9])/g;
-    for (const match of rest.matchAll(shape)) found.add(`${match[1]}-${match[2]}${match[3]}`);
-    for (const match of rest.matchAll(/\b\d{6}[-_]\d{2,4}\b/g)) found.add(match[0]);
+    for (const match of rest.matchAll(shape)) found.push([match.index, `${match[1]}-${match[2]}${match[3]}`]);
     return found;
   }
 
@@ -885,6 +906,61 @@
       to(event); event.preventDefault();
     });
     return sync;
+  }
+
+  // 横滚层两端的渐隐标记：左边还有内容、右边还有内容各一个。
+  function edgeFade(scroller) {
+    const max = scroller.scrollWidth - scroller.clientWidth;
+    scroller.toggleAttribute('data-overflow-left', max > 1 && scroller.scrollLeft > 1);
+    scroller.toggleAttribute('data-overflow-right', max > 1 && scroller.scrollLeft < max - 1);
+  }
+
+  // 单行放不下的文字一律用 marquee：不截省略号，在原位自动来回横滚，同 Peach `ui-kit/scroll.ts` 的 wireAutoScroll——
+  // 每秒 24px，到头停 2 秒再折返；指针或焦点在 host 上时停，离开 3 秒后从停下的位置接着走。
+  // 放得下、被收起（尺寸为 0）时循环停住，尺寸或文字变了再叫醒；后台标签页里动画帧本来就不跑。
+  // 系统要求减少动态效果时不自动滚，只留两端渐隐。整份列表每次重画都会换掉这些元素，
+  // 所以尺寸观察共用一个、元素离开文档就解除，监听都挂在元素自己身上，随元素一起回收。
+  const marqueeChanges = new WeakMap();
+  const marqueeSizes = new ResizeObserver(entries => {
+    for (const { target } of entries) {
+      if (target.isConnected) marqueeChanges.get(target)?.(); else marqueeSizes.unobserve(target);
+    }
+  });
+  function marquee(scroller, host = scroller) {
+    scroller.classList.add('marquee');
+    scroller.addEventListener('scroll', () => edgeFade(scroller), { passive: true });
+    const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let pos = 0, dir = 1, last = 0, frame = 0, max = -1, hovered = false, focused = false, resync = false, fits = true, holdUntil = 0;
+    const running = () => !still && scroller.isConnected && !hovered && !focused;
+    const tick = now => {
+      frame = 0;
+      if (!running()) return;
+      if (max < 0) {
+        max = scroller.scrollWidth - scroller.clientWidth;
+        // 刚变得放不下（头像加载完、文字变长、从收起展开）时先停在开头 2 秒，再开始滚。
+        if (max > 1 && fits) { pos = 0; dir = 1; scroller.scrollLeft = 0; holdUntil = now + 2000; }
+        fits = max <= 1;
+      }
+      if (max <= 1) { pos = 0; dir = 1; return; }
+      frame = requestAnimationFrame(tick);
+      const dt = last ? Math.min(now - last, 64) : 0; last = now;
+      if (now < holdUntil) return;
+      if (resync) { resync = false; pos = scroller.scrollLeft; }
+      // 位置自己记一份小数：一帧只走零点几个像素，scrollLeft 读回来是取整后的值。
+      pos = Math.min(max, Math.max(0, pos + dir * 24 * dt / 1000));
+      scroller.scrollLeft = pos;
+      if (pos >= max || pos <= 0) { dir = pos >= max ? -1 : 1; holdUntil = now + 2000; }
+    };
+    const wake = () => { if (!frame && running()) { last = 0; frame = requestAnimationFrame(tick); } };
+    const resume = () => { resync = true; holdUntil = performance.now() + 3000; wake(); };
+    const changed = () => { max = -1; edgeFade(scroller); wake(); };
+    host.addEventListener('pointerenter', () => { hovered = true; });
+    host.addEventListener('pointerleave', () => { hovered = false; resume(); });
+    host.addEventListener('focusin', () => { focused = true; });
+    host.addEventListener('focusout', () => { focused = false; resume(); });
+    marqueeChanges.set(scroller, changed); marqueeSizes.observe(scroller);
+    new MutationObserver(changed).observe(scroller, { childList: true, characterData: true, subtree: true });
+    return scroller;
   }
 
   function comparisonKey(code) {
@@ -1003,8 +1079,14 @@
       }
     }
     let foundField = false;
-    for (const field of fields) for (const code of candidates(field)) {
+    for (const field of fields) {
+      const code = leadingCandidate(field);
+      if (!code) continue;
       foundField = true;
+      // 地址里写不出下划线：Jable 把 `020121_429-paco` 写成 `/videos/020121-429-paco/`，以字段里的下划线写法为准。
+      // 反过来地址写下划线、字段写连字符时，两种写法分属不同厂牌，仍算冲突。
+      const dashed = /^\d{6}_\d{2,4}$/.test(code) ? code.replace('_', '-') : '';
+      if (dashed && pathCodes.has(dashed)) codes.delete(comparisonKey(dashed));
       if (!codes.has(comparisonKey(code))) codes.set(comparisonKey(code), code);
     }
     if (!foundField) return null;
@@ -1256,7 +1338,7 @@
     const node = element('section', 'performer-follow');
     node.setAttribute('aria-label', '女优新作订阅');
     node.hidden = true;
-    const head = element('div', 'performer-head'), people = element('span', 'batch-people'), label = element('strong');
+    const head = element('div', 'performer-head'), people = element('span', 'batch-people'), label = marquee(element('strong'));
     people.append(defaultPersonAvatar());
     head.append(people, label);
     const note = element('p', 'geist-note');
@@ -1554,7 +1636,7 @@
       const status = element('span', 'batch-row-status chip');
       status.dataset.chip='plain';status.textContent='查询中';status.title='正在查询 Peach 状态';
       const result=element('td');result.append(status);
-      const codeLabel=element('span','batch-row-code',code);codeLabel.title=code;
+      const codeLabel=marquee(element('span','batch-row-code',code),row);codeLabel.title=code;
       main.append(people,codeLabel);identity.append(main);row.append(selection,identity,result);
       input.addEventListener('change', view.paint);
       row.addEventListener('click',event=>{if(input.disabled||event.target.closest('label,input,button,a'))return;input.checked=!input.checked;view.paint();});
@@ -2680,9 +2762,15 @@
     const open = node.foldChoice ? node.foldChoice.open : !auto;
     const running = items.filter(tracking), ended = items.filter(body => !tracking(body));
     if (!node.parts) {
-      const heading = element('button', 'shared-heading'), label = element('span');
+      // 「其他任务」与箭头固定，只有中间的计数横滚。
+      const heading = element('button', 'shared-heading'), counts = element('span', 'shared-counts');
       heading.type = 'button';
-      heading.append(label, chevronIcon('shared-fold', 'm6 9 6 6 6-6'));
+      // 竖向滚轮转成横滚；放得下时不拦，滚轮照常滚面板。
+      heading.addEventListener('wheel', event => {
+        if (counts.scrollWidth - counts.clientWidth <= 1 || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+        event.preventDefault(); counts.scrollLeft += event.deltaY;
+      }, { passive: false });
+      heading.append(element('span', 'shared-title', '其他任务'), marquee(counts, heading), chevronIcon('shared-fold', 'm6 9 6 6 6-6'));
       heading.addEventListener('click', () => {
         node.foldChoice = { auto: node.parts.auto, open: !node.parts.open };
         paintSharedList(node);
@@ -2710,17 +2798,18 @@
       group.append(heading, note, body);
       node.replaceChildren(paused, group);
       overlayScrollbar(list, { square: true });
-      node.parts = { heading, label, retryAll, clear, note, paused, group, body, list, open };
+      node.parts = { heading, counts, retryAll, clear, note, paused, group, body, list, open };
     }
-    const { heading, label, retryAll, clear, paused, group, body: fold, list } = node.parts;
+    const { heading, counts, retryAll, clear, paused, group, body: fold, list } = node.parts;
     paused.replaceChildren(...notices);
     paused.hidden = !notices.length;
     group.hidden = !items.length;
     if (!items.length) return;
     // 失败（含未找到资源与整理失败）从已结束里单独计数，有失败项时整行标题变红。
     const failed = ended.filter(retryableTask), done = ended.length - failed.length;
-    label.textContent = ['其他任务', running.length ? `进行中 ${running.length} 项` : '', done ? `已完成 ${done} 项` : '',
-      failed.length ? `失败 ${failed.length} 项` : ''].filter(Boolean).join(' · ');
+    // 计数段以「 · 」开头，整行文字仍是「其他任务 · 进行中 N 项 …」；行首空白不显示，间距由标题行的 gap 给。
+    counts.textContent = ['', running.length ? `进行中 ${running.length} 项` : '', done ? `已完成 ${done} 项` : '',
+      failed.length ? `失败 ${failed.length} 项` : ''].filter((part, index) => index === 0 || part).join(' · ');
     if (failed.length) heading.dataset.tone = 'failed'; else delete heading.dataset.tone;
     clear.hidden = !ended.some(awaitingAck);
     retryAll.hidden = !ended.some(retryableTask);
@@ -2732,7 +2821,7 @@
     for (const body of [...failed, ...running, ...ended.filter(body => !retryableTask(body))]) {
       const row = element('button', 'shared-row'), status = element('span', 'chip');
       row.type = 'button'; row.dataset.code = body.code;
-      row.append(sharedAvatars(body), element('span', 'shared-code', body.code), status, chevronIcon('shared-chevron', 'm9 6 6 6-6 6'));
+      row.append(sharedAvatars(body), marquee(element('span', 'shared-code', body.code), row), status, chevronIcon('shared-chevron', 'm9 6 6 6-6 6'));
       setRowState({ row, status }, ...rowState(body));
       row.setAttribute('aria-label', `${body.code}，${status.textContent}，查看进度`);
       row.addEventListener('click', () => openTaskPage(node.closest('.panel'), body.code));
@@ -2847,7 +2936,7 @@
     const back = control('返回 Peach 主页', { icon: 'back' });
     const title = element('div', 'bar-title'), people = element('span', 'batch-people');
     people.append(defaultPersonAvatar());
-    title.append(people, copyableCode(element('strong', '', code), () => code));
+    title.append(people, marquee(copyableCode(element('strong', '', code), () => code)));
     // 右上角与主页同一组：设置、折叠、隐藏，点了交给主页标题栏上的那一枚。
     const actions = element('div', 'bar-actions');
     for (const [label, icon] of [['Peach 设置', 'settings'], ['折叠 Peach 详情', 'collapse'], ['隐藏 Peach 面板', 'close']]) {
@@ -3206,8 +3295,8 @@
     const label = element('strong', '', item.conflict ? '番号待核对' : item.code || '作品番号');
     // 只有确定的番号可复制；冲突待核对、商品号待 Peach 解析时不响应，解析出番号后由 query 补上。
     label.dataset.code = !item.conflict && !item.resolve ? item.code || '' : '';
-    copyableCode(label, () => label.dataset.code);
-    const summary = element('span', 'bar-summary');
+    marquee(copyableCode(label, () => label.dataset.code));
+    const summary = marquee(element('span', 'bar-summary'));
     summary.hidden = true;
     const heading = element('div', 'bar-heading');
     const title = element('div', 'bar-title');

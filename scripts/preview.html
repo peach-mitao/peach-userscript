@@ -23,7 +23,7 @@
       <button type="button" id="activate-script">开启</button>
       <button type="button" id="check-script-update">检测更新</button>
       <button type="button" id="copy-pairing">复制模拟配对信息</button>
-      <a href="?site=dmm&state=idle">DMM 商品号</a><a href="?site=mgs&state=idle">MGS 商品号</a><a href="?site=fanza-clip&state=idle">FANZA 剪辑页</a><a href="?site=dmm-bonus&state=idle">DMM 特典版</a><a href="?site=dmm-regular&state=idle">DMM 有特典版的通常版</a><a href="?state=idle&scan=javdb">JavDB 整页扫描</a><a href="?state=idle&scan=states">本页番号行状态</a><a href="?site=list&state=idle&scan=javdb">JavDB 首页</a><a href="?state=idle&tasks=1">共享进度</a><a href="?site=list&state=idle&tasks=1">共享进度（无本页番号）</a><a href="?site=list&state=idle&tasks=paused">网盘空间不足暂停</a><a href="?site=list&state=idle&tasks=config">网盘配置失效暂停</a><a href="?site=actress&state=idle">JavDB 女优页</a><a href="?site=missav-actress&state=idle">MISSAV 女优页</a><a href="?site=missav-actress&state=idle&performer=ambiguous">MISSAV 同名多位</a>
+      <a href="?site=dmm&state=idle">DMM 商品号</a><a href="?site=mgs&state=idle">MGS 商品号</a><a href="?site=fanza-clip&state=idle">FANZA 剪辑页</a><a href="?site=dmm-bonus&state=idle">DMM 特典版</a><a href="?site=dmm-regular&state=idle">DMM 有特典版的通常版</a><a href="?state=idle&scan=javdb">JavDB 整页扫描</a><a href="?state=idle&scan=states">本页番号行状态</a><a href="?site=list&state=idle&scan=javdb">JavDB 首页</a><a href="?state=idle&tasks=1">共享进度</a><a href="?site=list&state=idle&tasks=1">共享进度（无本页番号）</a><a href="?site=list&state=idle&tasks=paused">网盘空间不足暂停</a><a href="?site=list&state=idle&tasks=config">网盘配置失效暂停</a><a href="?site=actress&state=idle">JavDB 女优页</a><a href="?site=missav-actress&state=idle">MISSAV 女优页</a><a href="?site=missav-actress&state=idle&performer=ambiguous">MISSAV 同名多位</a><a href="?site=missav-title&state=idle">MISSAV 标题带 File05</a><a href="?state=owned&tasks=many">其他任务计数很长</a><a href="?site=actress&state=idle&performer=long">女优名很长</a><a href="?site=fc2&state=owned&tasks=long">长番号多头像</a><a href="?site=fc2&state=idle&scan=states">长番号本页表格</a>
     </nav>
     <h1>REAL-864 作品详情</h1>
     <p class="meta">来源页面示意</p>
@@ -34,10 +34,15 @@
   <script>
     const previewState = new URLSearchParams(location.search).get('state') || 'unconfigured';
     const previewSite = new URLSearchParams(location.search).get('site');
-    if (previewSite === 'dmm' || previewSite === 'mgs') {
-      const code = previewSite === 'dmm' ? 'SSIS-519' : '300MIUM-1239';
+    if (previewSite === 'dmm' || previewSite === 'mgs' || previewSite === 'fc2') {
+      const code = {dmm: 'SSIS-519', mgs: '300MIUM-1239', fc2: 'FC2-PPV-4302474'}[previewSite];
       document.title = code + ' 作品详情';
       document.querySelector('h1').textContent = code + ' 作品详情';
+    }
+    // MISSAV 标题后段带「单词+数字」（File05），只按开头的番号定身份。
+    if (previewSite === 'missav-title') {
+      document.title = 'JMTY-039 Tadaman File05 Luna 24 歳';
+      document.querySelector('h1').textContent = document.title;
     }
     // 女优页：JavDB 演员页的标题栏把几种写法用逗号连成一串；MISSAV 女优页的名字只在地址里。
     if (previewSite === 'actress' || previewSite === 'missav-actress') {
@@ -47,8 +52,10 @@
     }
     // performer=ambiguous 模拟 MISSAV 页同名不止一位：订阅时 Peach 拒绝并说明原因。
     const previewPerformer = { following: false, ambiguous: new URLSearchParams(location.search).get('performer') === 'ambiguous' };
+    // performer=long 模拟浮卡里放不下的女优名，查看单行文字的自动横滚。
+    const previewName = new URLSearchParams(location.search).get('performer') === 'long' ? '森日向子（もりひなこ）Hinako Mori 旧名 白石アイリ' : '森日向子';
     const performerBody = () => previewSite === 'actress'
-      ? { ok: true, name: '森日向子', entity_id: 8112, following: previewPerformer.following }
+      ? { ok: true, name: previewName, entity_id: 8112, following: previewPerformer.following }
       : { ok: true, name: '涼森れむ', entity_id: previewPerformer.following ? 9001 : null, following: previewPerformer.following };
     if (new URLSearchParams(location.search).get('scan') === 'javdb') {
       // 仿 JavDB 详情页：导航、磁链、相关作品与短评用户名，外加 30 部相关作品用于查看表格滚动。
@@ -73,7 +80,7 @@
     };
     const FAILURES = {'failed-magnet':{cause:'magnet', failure:'no_source', message:'没有可用下载源或进度长时间未更新'},
       'failed-cloud':{cause:'cloud', failure:'quota', message:'下载额度已用完'}};
-    const ROW_PEOPLE = {'ABP-100':[{name:'Alice'},{name:'Bella'}],'ABP-101':[{name:'Alice'},{name:'Bella'},{name:'Cora'},{name:'Dana'}]};
+    const ROW_PEOPLE = {'FC2-PPV-4302474':['Alice','Bella','Cora','Dana','Erin'].map(name => ({name})),'ABP-100':[{name:'Alice'},{name:'Bella'}],'ABP-101':[{name:'Alice'},{name:'Bella'},{name:'Cora'},{name:'Dana'}]};
     if (new URLSearchParams(location.search).get('scan') === 'states')
       document.querySelector('main').insertAdjacentHTML('beforeend', `<section aria-label="行状态样例"><h2>行状态样例</h2><dl><dt>出演者：</dt><dd><a href="#">河北彩花（河北彩伽）</a></dd></dl><p>${Object.keys(ROW_STATES).slice(1).join(' ')}</p></section>`);
     const previewValues = previewState === 'unconfigured' ? {} : { 'peach.jav.base': 'https://peach.example.com', 'peach.jav.token': 'preview-only-token' };
@@ -106,8 +113,10 @@
         // tasks=paused 模拟网盘空间不足：几十个番号排着、渠道暂停，另有几项失败；tasks=config 换成网盘配置失效。
         const previewMode = new URLSearchParams(location.search).get('tasks');
         const pausedMode = ['paused', 'config'].includes(previewMode);
-        if (['1', 'paused', 'config'].includes(previewMode) && new URL(request.url).pathname.endsWith('/people')) {
-          const people = {'ABP-616':[{name:'Alice'}],'SSIS-057':[{name:'Bella'},{name:'Cora'}],'IPX-001':[{name:'Dana'}]};
+        if (['1', 'paused', 'config', 'many', 'long'].includes(previewMode) && new URL(request.url).pathname.endsWith('/people')) {
+          const five = ['Alice','Bella','Cora','Dana','Erin'].map(name => ({name}));
+          const people = {'ABP-616':[{name:'Alice'}],'SSIS-057':[{name:'Bella'},{name:'Cora'}],'IPX-001':[{name:'Dana'}],
+            'FC2-PPV-4302474':five,'FC2-PPV-4091275':five,'300MIUM-1239':five.slice(0, 3),'FC2-PPV-4162241':five.slice(0, 4)};
           const items = Object.fromEntries(new URL(request.url).searchParams.get('codes').split(',').map(code => [code, people[code] || []]));
           request.onload({status:200,responseText:JSON.stringify({ok:true,source:'local-cache',items})}); return;
         }
@@ -126,7 +135,22 @@
           : previewMode === 'config'
             ? [{provider:'115',provider_label:'115',failure:'config',tone:'error',message:'网盘配置或登录有问题，已暂停；修好下载设置后自动继续',
               reason:'网盘配置或登录有问题',hint:'修好下载设置后自动继续',waiting:36}] : [];
-        const previewItems = () => pausedMode ? pausedItems() : [
+        // tasks=many 模拟计数很长的「其他任务」：进行中 166 项、已完成 139 项、失败 12 项，标准宽度的浮卡里也放不下。
+        const manyItems = () => [
+          ...Array.from({length: 166}, (_, index) => ({ok:true,code:`SNOS-${index + 100}`,state:'queued',queue_position:index + 1})),
+          // 已完成的与生产一样带作品编号、已整理，进度页出「打开馆藏」。
+          ...Array.from({length: 139}, (_, index) => ({ok:true,code:`ABP-${index + 600}`,state:'ingested',asset_id:5000 + index,
+            download:{state:'ingested',label:'已入库',progress:1,postprocess_state:'complete',postprocess_label:'已整理'},ended_key:`${index}@2026-11-14T06:00:00+00:00`})),
+          ...Array.from({length: 12}, (_, index) => ({ok:true,code:`JUR-${index + 100}`,state:'failed',cause:'magnet',failure:'no_source',
+            message:'没有可用下载源',ended_key:`JUR-${index}@2026-11-14T07:30:00+00:00`}))]
+          .map(item => ({...item, ...(item.ended_key ? {dismissed: previewDismissed.has(item.ended_key)} : {})}));
+        // tasks=long 模拟长番号、多头像的其他任务，配合 site=fc2 查看各处番号放不下时的横滚。
+        const longItems = () => [
+          {ok:true,code:'FC2-PPV-4091275',state:'submitted',download:{state:'remote_running',label:'网盘下载中',progress:.4}},
+          {ok:true,code:'300MIUM-1239',state:'queued',queue_position:2},
+          {ok:true,code:'FC2-PPV-4162241',state:'ingested',asset_id:4400,download:{state:'ingested',label:'已入库',progress:1,postprocess_state:'complete',postprocess_label:'已整理'},ended_key:'FC2@2026-11-14T08:00:00+00:00'}]
+          .map(item => ({...item, ...(item.ended_key ? {dismissed: previewDismissed.has(item.ended_key)} : {})}));
+        const previewItems = () => previewMode === 'many' ? manyItems() : previewMode === 'long' ? longItems() : pausedMode ? pausedItems() : [
           {ok:true,code:'ABP-616',state:'submitted',download:{state:'remote_running',label:'网盘下载中',progress:previewActive}},
           {ok:true,code:'MIDV-339',state:previewActive < .3 ? 'queued' : 'searching'},
           // 排在第 3 位的番号，进度页可以「提前处理」，提前后排到第 1 位。
@@ -149,7 +173,7 @@
           request.onload({status:200,responseText:JSON.stringify({ok:true,items:previewItems(),paused:previewPaused()})}); return;
         }
         if (new URL(request.url).pathname.endsWith('/active')) {
-          if (!['1', 'paused', 'config'].includes(previewMode)) { request.onload({status:404,responseText:'{"detail":"Not Found"}'}); return; }
+          if (!['1', 'paused', 'config', 'many', 'long'].includes(previewMode)) { request.onload({status:404,responseText:'{"detail":"Not Found"}'}); return; }
           previewActive = Math.min(previewActive + .07, 1);
           request.onload({status:200,responseText:JSON.stringify({ok:true,items:previewItems(),paused:previewPaused()})}); return;
         }
@@ -186,7 +210,9 @@
         const code = new URLSearchParams(location.search).get('site') === 'dmm' ? 'SSIS-519'
           : new URLSearchParams(location.search).get('site') === 'mgs' ? '300MIUM-1239'
             : new URLSearchParams(location.search).get('site') === 'fanza-clip' ? 'SABA-978'
-              : ['dmm-bonus', 'dmm-regular'].includes(new URLSearchParams(location.search).get('site')) ? 'SDJS-304' : 'REAL-864';
+              : ['dmm-bonus', 'dmm-regular'].includes(new URLSearchParams(location.search).get('site')) ? 'SDJS-304'
+                : new URLSearchParams(location.search).get('site') === 'missav-title' ? 'JMTY-039'
+                  : new URLSearchParams(location.search).get('site') === 'fc2' ? 'FC2-PPV-4302474' : 'REAL-864';
         // 有特典版的作品：识别应答带本页版本，浮卡出特典版与通常版两个添加按钮。
         const previewEdition = {'dmm-bonus': 'bonus', 'dmm-regular': 'regular'}[new URLSearchParams(location.search).get('site')];
         const edition = previewEdition && new URL(request.url).pathname.endsWith('/identify') ? {edition: previewEdition} : {};

@@ -18,7 +18,9 @@ const server = createServer(async (request, response) => {
           : site === 'list' ? 'https://javdb.com/'
             : site === 'actress' ? 'https://javdb.com/actors/bkxd'
               : site === 'missav-actress' ? 'https://missav.ws/dm127/cn/actresses/%E6%B6%BC%E6%A3%AE%E3%82%8C%E3%82%80'
-                : 'https://missav.ws/en/real-864';
+                : site === 'missav-title' ? 'https://missav.ai/dm31/cn/jmty-039'
+                  : site === 'fc2' ? 'https://missav.ws/en/fc2-ppv-4302474'
+                    : 'https://missav.ws/en/real-864';
       // 状态总览把各状态放进 iframe；正式脚本拒绝在框架里运行，只在预览构建里放开。
       const script = files.get('peach-jav.user.js').replace("  'use strict';", `  'use strict';
   const location = new URL(${JSON.stringify(fixture)});`).replace('if (window.top !== window.self) return;', '');
