@@ -10,7 +10,7 @@
 // @supportURL   https://github.com/peach-mitao/peach-userscript/issues
 // @homepageURL  https://github.com/peach-mitao/peach-userscript
 // @license      AGPL-3.0-or-later
-// @version      0.7.15
+// @version      0.7.16
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -388,6 +388,11 @@
     .geist-button.primary{position:relative;isolation:isolate;background:var(--board-blue);border:0;color:var(--color-text-white)}
     .geist-button.primary::before{content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;background:var(--board-blue-hover);opacity:0;transition:opacity .15s ease}
     .geist-button.icon{padding:0;width:var(--control-h);flex:none;border:0;background:transparent;box-shadow:none}
+    /* 按钮区（layoutActions）：每行按钮平分宽度；图标键与本页番号列表底部「重新识别」同一写法，带框的方形键。 */
+    .action-area{display:grid;gap:8px;min-width:0}.action-row{display:flex;gap:8px;min-width:0}.action-spare{display:none}
+    .action-row>.geist-button:not(.icon){flex:1 1 0;min-width:0}.action-keys{display:flex;gap:8px;flex:none;margin-left:auto}
+    .action-keys .geist-button.icon{border:1px solid var(--color-border-button-default);background:var(--color-background-primary-default);box-shadow:var(--elevation-xs)}
+    .geist-button .action-icon{width:16px;height:16px;flex:none;fill:currentColor;stroke:none}
     .geist-button svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
     .feed-toggle{gap:6px}.feed-toggle .feed-mark{color:var(--feed-mark,#F78422)}.feed-toggle .feed-mark circle{fill:currentColor;stroke:none}
     .feed-toggle .feed-off,.feed-toggle[aria-pressed=true]:not([data-fresh]):is(:hover,:focus-visible) .feed-on{display:none}.feed-toggle[aria-pressed=true]:not([data-fresh]):is(:hover,:focus-visible) .feed-off{display:inline}
@@ -550,6 +555,18 @@
     skipped: 'M5 11V13H19V11H5Z',
   };
 
+  // 按钮区的动作图标：Remix Icon 4.9.1（同上授权）。键名即 Remix Icon 图标名，按钮与 Peach 前端同类动作用同一个图形。
+  const ACTION_ICON_PATHS = {
+    'file-search-line': 'M15 4H5V20H19V8H15V4ZM3 2.9918C3 2.44405 3.44749 2 3.9985 2H16L20.9997 7L21 20.9925C21 21.5489 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5447 3 21.0082V2.9918ZM13.529 14.4464C11.9951 15.3524 9.98633 15.1464 8.66839 13.8284C7.1063 12.2663 7.1063 9.73367 8.66839 8.17157C10.2305 6.60948 12.7631 6.60948 14.3252 8.17157C15.6432 9.48951 15.8492 11.4983 14.9432 13.0322L17.1537 15.2426L15.7395 16.6569L13.529 14.4464ZM12.911 12.4142C13.6921 11.6332 13.6921 10.3668 12.911 9.58579C12.13 8.80474 10.8637 8.80474 10.0826 9.58579C9.30156 10.3668 9.30156 11.6332 10.0826 12.4142C10.8637 13.1953 12.13 13.1953 12.911 12.4142Z',
+    'exchange-line': 'M12.0049 22.0027C6.48204 22.0027 2.00488 17.5256 2.00488 12.0027C2.00488 6.4799 6.48204 2.00275 12.0049 2.00275C17.5277 2.00275 22.0049 6.4799 22.0049 12.0027C22.0049 17.5256 17.5277 22.0027 12.0049 22.0027ZM12.0049 20.0027C16.4232 20.0027 20.0049 16.421 20.0049 12.0027C20.0049 7.58447 16.4232 4.00275 12.0049 4.00275C7.5866 4.00275 4.00488 7.58447 4.00488 12.0027C4.00488 16.421 7.5866 20.0027 12.0049 20.0027ZM7.00488 13.0027H16.0049V15.0027H12.0049V18.0027L7.00488 13.0027ZM12.0049 9.00275V6.00275L17.0049 11.0027H8.00488V9.00275H12.0049Z',
+    'speed-up-line': 'M20 13C20 15.2091 19.1046 17.2091 17.6569 18.6569L19.0711 20.0711C20.8807 18.2614 22 15.7614 22 13 22 7.47715 17.5228 3 12 3 6.47715 3 2 7.47715 2 13 2 15.7614 3.11929 18.2614 4.92893 20.0711L6.34315 18.6569C4.89543 17.2091 4 15.2091 4 13 4 8.58172 7.58172 5 12 5 16.4183 5 20 8.58172 20 13ZM15.293 8.29297 10.793 12.793 12.2072 14.2072 16.7072 9.70718 15.293 8.29297Z',
+    'add-line': 'M11 11V5H13V11H19V13H13V19H11V13H5V11H11Z',
+    'check-double-line': 'M11.602 13.7599L13.014 15.1719L21.4795 6.7063L22.8938 8.12051L13.014 18.0003L6.65 11.6363L8.06421 10.2221L10.189 12.3469L11.6025 13.7594L11.602 13.7599ZM11.6037 10.9322L16.5563 5.97949L17.9666 7.38977L13.014 12.3424L11.6037 10.9322ZM8.77698 16.5873L7.36396 18.0003L1 11.6363L2.41421 10.2221L3.82723 11.6352L3.82604 11.6363L8.77698 16.5873Z',
+    'external-link-line': 'M10 6V8H5V19H16V14H18V20C18 20.5523 17.5523 21 17 21H4C3.44772 21 3 20.5523 3 20V7C3 6.44772 3.44772 6 4 6H10ZM21 3V11H19L18.9999 6.413L11.2071 14.2071L9.79289 12.7929L17.5849 5H13V3H21Z',
+    'refresh-line': 'M5.46257 4.43262C7.21556 2.91688 9.5007 2 12 2C17.5228 2 22 6.47715 22 12C22 14.1361 21.3302 16.1158 20.1892 17.7406L17 12H20C20 7.58172 16.4183 4 12 4C9.84982 4 7.89777 4.84827 6.46023 6.22842L5.46257 4.43262ZM18.5374 19.5674C16.7844 21.0831 14.4993 22 12 22C6.47715 22 2 17.5228 2 12C2 9.86386 2.66979 7.88416 3.8108 6.25944L7 12H4C4 16.4183 7.58172 20 12 20C14.1502 20 16.1022 19.1517 17.5398 17.7716L18.5374 19.5674Z',
+    'star-line': 'M12.0006 18.26L4.94715 22.2082L6.52248 14.2799L0.587891 8.7918L8.61493 7.84006L12.0006 0.5L15.3862 7.84006L23.4132 8.7918L17.4787 14.2799L19.054 22.2082L12.0006 18.26ZM12.0006 15.968L16.2473 18.3451L15.2988 13.5717L18.8719 10.2674L14.039 9.69434L12.0006 5.27502L9.96214 9.69434L5.12921 10.2674L8.70231 13.5717L7.75383 18.3451L12.0006 15.968Z',
+  };
+
   const STAGE_ICON_PATHS = [
     'M12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22ZM12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20ZM13 12H17V14H11V7H13V12Z',
     'M18.031 16.6168L22.3137 20.8995L20.8995 22.3137L16.6168 18.031C15.0769 19.263 13.124 20 11 20C6.032 20 2 15.968 2 11C2 6.032 6.032 2 11 2C15.968 2 20 6.032 20 11C20 13.124 19.263 15.0769 18.031 16.6168ZM16.0247 15.8748C17.2475 14.6146 18 12.8956 18 11C18 7.1325 14.8675 4 11 4C7.1325 4 4 7.1325 4 11C4 14.8675 7.1325 18 11 18C12.8956 18 14.6146 17.2475 15.8748 16.0247L16.0247 15.8748Z',
@@ -590,9 +607,44 @@
         for (const [name, value] of Object.entries({ cx: '12', cy: '12', r: '3' })) circle.setAttribute(name, value);
         svg.append(circle);
       }
+      // 按钮区的图标键：用动作图标，悬停时 title 写全称。
+      if (ACTION_ICON_PATHS[icon]) { path.setAttribute('d', ACTION_ICON_PATHS[icon]); svg.style.fill = 'currentColor'; svg.style.stroke = 'none'; node.title = label; }
       node.append(svg);
     }
     return node;
+  }
+
+  // 文字按钮前的动作图标；文字由各处 textContent 重写后再调一次，图标随之补回。
+  function dress(button, icon) {
+    button.querySelector(':scope > .action-icon')?.remove();
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true'); svg.setAttribute('class', 'action-icon');
+    const path = document.createElementNS(svg.namespaceURI, 'path'); path.setAttribute('d', ACTION_ICON_PATHS[icon]);
+    svg.append(path); button.prepend(svg);
+    return button;
+  }
+
+  // 按钮区：主按钮单独一行整宽；次要操作每行最多两个、平分宽度，只有一个时占整行；
+  // 图标键（识别本页番号、手动查询）排在第一行次要操作的最右，没有次要操作时单独一行靠右。
+  // 只在组成变了时重排，避免每次刷新都把按钮摘下再放回、丢掉键盘焦点。
+  const actionIds = new WeakMap();
+  let nextActionId = 0;
+  function layoutActions(area, main, secondary, icons) {
+    const id = button => { if (!actionIds.has(button)) actionIds.set(button, ++nextActionId); return actionIds.get(button); };
+    const shown = secondary.filter(button => button && button !== main && !button.hidden), keys = icons.filter(button => !button.hidden);
+    const key = [main ? id(main) : 0, ...shown.map(id), '|', ...keys.map(id)].join(',');
+    if (area.dataset.layout === key) return false;
+    area.dataset.layout = key;
+    const row = (...nodes) => { const line = element('div', 'action-row'); line.append(...nodes); return line; };
+    const rows = main ? [row(main)] : [];
+    const group = element('div', 'action-keys'); group.append(...keys);
+    for (let index = 0; index < shown.length; index += 2) rows.push(row(...shown.slice(index, index + 2)));
+    if (keys.length) shown.length ? rows[main ? 1 : 0].append(group) : rows.push(row(group));
+    // 隐藏的按钮仍留在区内（不占位），状态变了再排进来。
+    const spare = element('div', 'action-spare'); spare.hidden = true;
+    spare.append(...[...secondary, ...icons, main].filter(button => button && !rows.some(line => line.contains(button))));
+    area.replaceChildren(...rows, spare);
+    return true;
   }
 
   // 标题栏的番号点一下复制；鼠标、Enter 与空格都能触发，复制后在番号后面短暂显示结果。
@@ -1380,9 +1432,18 @@
     const view = performerView;
     if (!view?.node.isConnected) return;
     paintPerformerSection(view, page);
-    // 女优页上未订阅时「订阅新作」是这张面板的主操作，识别本页番号退成次要按钮；
-    // 已订阅后订阅键是按下态，主按钮回到识别本页番号。
-    updateEntry?.scan.classList.toggle('primary', view.button.hidden || !view.button.classList.contains('primary'));
+    layoutEntry();
+  }
+
+  // 入口面板的按钮区：女优页上未订阅时「订阅新作」是主操作，识别本页番号缩成图标键；
+  // 其余时候（列表页、已订阅）识别本页番号就是这一屏最该做的事，仍是整宽主按钮，已订阅的按下态排在它下面。
+  function layoutEntry() {
+    const entry = updateEntry, follow = performerView?.button;
+    if (!entry) return;
+    const leads = Boolean(follow && !follow.hidden && follow.classList.contains('primary'));
+    entry.scan.hidden = leads; entry.scanKey.hidden = !leads;
+    // 订阅键换了位置就已离开指针，不必再等指针移开才换成「取消订阅」。
+    if (layoutActions(entry.area, leads ? follow : entry.scan, [follow].filter(Boolean), [entry.scanKey]) && follow) delete follow.dataset.fresh;
   }
 
   function paintPerformerSection(view, page) {
@@ -1466,12 +1527,14 @@
       actions.append(settings, collapse, later);
       bar.append(element('strong', '', 'Peach'), actions);
       const scan = control('识别本页全部番号', { primary: true }); scan.addEventListener('click', openPageActions);
+      const scanKey = control('识别本页全部番号', { icon: 'file-search-line' }); scanKey.addEventListener('click', openPageActions);
       // 提示组在最上，其次女优信息，再「其他任务」，按钮统一排在最下面；与作品浮卡同一顺序。
-      const body = element('div', 'body'), tasks = sharedSection();
-      body.append(noticeGroup(tasks), performerSection(), tasks, performerView.button, scan);
+      const body = element('div', 'body'), tasks = sharedSection(), area = element('div', 'action-area');
+      body.append(noticeGroup(tasks), performerSection(), tasks, area);
       launcher.addEventListener('click', () => { entryOpen = true; entryCollapsed = false; refreshUpdateEntry(); later.focus(); });
       panel.append(bar, body); entry.shadow.append(panel, launcher);
-      updateEntry = { ...entry, launcher, panel, body, collapse, scan };
+      updateEntry = { ...entry, launcher, panel, body, collapse, scan, scanKey, area };
+      layoutEntry();
     }
     paintPerformer(performer);
     const folded = expanded && entryCollapsed;
@@ -2326,7 +2389,10 @@
       svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('aria-hidden', 'true');
       const path = document.createElementNS(svg.namespaceURI, 'path'); path.setAttribute('d', STEP_ICON_PATHS.check);
       svg.append(path); button.replaceChildren(svg, document.createTextNode('已加入想要'));
-    } else button.textContent = busy ? '正在加入想要' : '加入想要';
+    } else {
+      button.replaceChildren(busy ? '正在加入想要' : '加入想要');
+      dress(button, 'star-line');
+    }
   }
 
   function requestWant(config, code) {
@@ -2360,8 +2426,21 @@
       const retry = view.button.textContent.startsWith('重试') ? '重试' : '';
       const [own, other] = view.identity.edition === 'bonus' ? ['特典版', '通常版'] : ['通常版', '特典版'];
       view.button.textContent = `${retry}加入${own}`;
-      view.alternate.textContent = `${retry}加入${other}`;
+      dress(view.alternate, 'add-line').lastChild.textContent = `${retry}加入${other}`;
     }
+    // 排队、搜索、下载、整理中浮卡自己在刷新（逐个轮询中，或有共享进度快照）时不给查询键；
+    // 轮询因断线、超时或满一小时停下，或提交后没收到回复时，只给刷新图标键。
+    // 这时主按钮让给次要操作里最该做的一件，顺序与进度页一致：提前处理 > 加入想要。
+    const checking = Boolean(configuration()) && !view.identity.conflict && !view.organizeFailed && !terminalSuccess
+      && (view.queryOnly || ACTIVE.has(view.state));
+    const refreshing = (ACTIVE.has(view.state) || view.tracking) && (view.busy || sharedMode());
+    view.button.hidden = checking;
+    view.recheck.hidden = !checking || refreshing;
+    view.recheck.disabled = view.busy; view.recheck.setAttribute('aria-busy', String(view.busy));
+    const main = !view.button.hidden ? view.button
+      : [view.ahead, view.want].find(button => !button.hidden && !button.hasAttribute('data-added')) || null;
+    for (const button of [view.button, view.alternate, view.ahead, view.want]) button.classList.toggle('primary', button === main);
+    layoutActions(view.area, main, [view.button, view.alternate, view.ahead, view.want], [view.recheck, view.scan]);
     if (view.busy) {
       const spinner = element('span', 'ui-geist-spinner');
       spinner.setAttribute('aria-hidden', 'true');
@@ -3024,12 +3103,14 @@
         if (panel.taskPage === open) { open.wantBusy = false; paintTaskPage(panel); }
       }
     });
-    body.append(note, parts.flow, ahead, retry, library, want, ack);
+    dress(ahead, 'speed-up-line'); dress(library, 'external-link-line'); dress(ack, 'check-double-line');
+    const area = element('div', 'action-area');
+    body.append(note, parts.flow, area);
     page.append(bar, body);
     switchPanel(panel, () => {
       for (const child of panel.children) if (!child.hidden) { child.hidden = true; child.dataset.taskHidden = ''; }
       panel.append(page);
-      panel.taskPage = { page, code, note, people, ahead, retry, library, want, ack, wantState: undefined, wantBusy: false, body: null, ...parts };
+      panel.taskPage = { page, code, note, people, ahead, retry, library, want, ack, area, wantState: undefined, wantBusy: false, body: null, ...parts };
       paintTaskPage(panel);
       return [page];
     });
@@ -3093,6 +3174,7 @@
     open.ahead.hidden = !canPrioritize(open.body);
     open.retry.hidden = !retryableTask(open.body);
     open.retry.textContent = retryLabel(open.body);
+    dress(open.retry, switchesMagnet(open.body) ? 'exchange-line' : 'refresh-line');
     open.library.hidden = tracking(open.body) || !assetLink(open.body.state, open.body.asset_id);
     open.ack.hidden = !awaitingAck(open.body) || !open.library.hidden;
     paintWant(open.want, open.wantState, open.body.state, open.wantBusy);
@@ -3101,6 +3183,7 @@
     const actions = [open.retry, open.library, open.ahead, open.want, open.ack];
     const main = actions.find(button => !button.hidden && !button.hasAttribute('data-added'));
     for (const button of actions) button.classList.toggle('primary', button === main);
+    layoutActions(open.area, main, actions, []);
     for (const root of surfaces) if (root.isConnected) placeSurface(root);
   }
 
@@ -3344,13 +3427,15 @@
     note.setAttribute('aria-live', 'polite');
     const { flow, progress, progressFill, steps } = buildFlow();
     const alternate = control('加入通常版'); alternate.dataset.action = 'add-alternate'; alternate.hidden = true;
-    const ahead = control('提前处理'); ahead.dataset.action = 'prioritize'; ahead.hidden = true;
-    const scan = control('识别本页全部番号'); scan.addEventListener('click', openPageActions);
+    const ahead = dress(control('提前处理'), 'speed-up-line'); ahead.dataset.action = 'prioritize'; ahead.hidden = true;
+    // 识别本页番号是页面操作，在作品浮卡里只留图标键；手动查询只在没有自动跟踪、又需要核对状态时出现。
+    const scan = control('识别本页全部番号', { icon: 'file-search-line' }); scan.addEventListener('click', openPageActions);
+    const recheck = control('查询 Peach 状态', { icon: 'refresh-line' }); recheck.dataset.action = 'query'; recheck.hidden = true;
     // 没发行或没资源的作品可以直接记进想要；次要按钮，不抢主按钮。
     const want = wantButton(() => void addMainWant(current));
     // 提示组在最上，其次状态与进度，再「其他任务」，按钮统一排在最下面；与入口面板同一顺序。
-    const tasks = sharedSection();
-    body.append(noticeGroup(tasks), note, flow, tasks, button, alternate, ahead, want, scan);
+    const tasks = sharedSection(), area = element('div', 'action-area');
+    body.append(noticeGroup(tasks), note, flow, tasks, area);
     panel.append(bar, body);
     const launcher = control('展开 Peach 面板');
     launcher.classList.add('launcher');
@@ -3366,7 +3451,7 @@
     wireDrag(root, launcher, panel);
     launcher.hidden = true;
     shadow.append(panel, launcher);
-    const view = { root, panel, body, launcher, collapse, summary, button, alternate, ahead, want, wantState: undefined, wantBusy: false, note, flow, steps, progress, progressFill, heading: label, loadPeople: loadTitlePeople, settings: settingsButton, identity: item, url: location.href, generation, state: 'idle', busy: false, tracking: false, queryOnly: attempts.has(comparisonKey(item.code)) };
+    const view = { root, panel, body, launcher, collapse, summary, button, alternate, ahead, want, scan, recheck, area, wantState: undefined, wantBusy: false, note, flow, steps, progress, progressFill, heading: label, loadPeople: loadTitlePeople, settings: settingsButton, identity: item, url: location.href, generation, state: 'idle', busy: false, tracking: false, queryOnly: attempts.has(comparisonKey(item.code)) };
     current = view;
     refreshUpdateEntry();
     paintShared();
@@ -3403,6 +3488,7 @@
         if (alive(view)) { view.note.textContent = error.message; view.note.hidden = false; view.note.dataset.variant = 'error'; }
       } finally { ahead.disabled = false; }
     });
+    recheck.addEventListener('click', () => { if (alive(view) && !view.busy && configuration()) void query(view); });
     alternate.addEventListener('click', () => {
       if (!alive(view) || view.busy || view.alternate.hidden) return;
       void query(view, 'POST', view.identity.edition === 'bonus' ? 'regular' : 'bonus');
