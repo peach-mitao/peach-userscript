@@ -200,9 +200,11 @@ async function pairingStorage(page: Page) {
     'peach.jav.display': display,
     'peach.jav.enabled': enabled,
     'peach.jav.success-sound': sound,
+    'peach.jav.record-browsing': recording,
     ...pairing
   } = values;
   if (sound !== undefined) assert.equal(typeof sound, 'boolean');
+  if (recording !== undefined) assert.equal(typeof recording, 'boolean');
   if (installed !== undefined) assert.equal(installed, VERSION);
   if (attempted !== undefined) assert.match(String(attempted), /^\d+$/);
   if (updates !== undefined) assert.deepEqual(JSON.parse(String(updates)), { script: { version: VERSION } });
@@ -2194,6 +2196,43 @@ describe('JAV 用户脚本', () => {
       assert.equal(await page.locator(ROOT).getAttribute('data-panel-mode'),'minimized');
       assert.equal(await page.evaluate(()=>window.javMock.calls.filter(call=>call.method==='POST').length),0);
     } finally {await opened.close();}
+  });
+
+  it('设置里勾选浏览记录后，作品浮卡与女优页的查询带 record=1，列表批量查询不带', async () => {
+    const settings = await open(browser);
+    try {
+      await ready(settings.page);
+      assert.equal(new URL(await settings.page.evaluate(() => window.javMock.calls[0]!.url)).searchParams.get('record'), null);
+      await settings.page.locator(ROOT).getByRole('button', { name: 'Peach 设置', exact: true }).click();
+      const option = settingsDialog(settings.page).getByRole('checkbox', { name: '把打开过的作品页、女优页记进 Peach，作推荐参考' });
+      assert.equal(await option.isChecked(), false);
+      await option.check();
+      await settingsDialog(settings.page).getByRole('button', { name: '保存设置', exact: true }).click();
+      await settings.page.locator('#peach-jav-settings').waitFor({ state: 'detached' });
+      assert.equal(await settings.page.evaluate(() => window.javMock.values['peach.jav.record-browsing']), true);
+    } finally { await settings.close(); }
+    const recording = { 'peach.jav.record-browsing': true };
+    const detail = await open(browser, { updateValues: recording });
+    try {
+      await ready(detail.page);
+      const asked = new URL(await detail.page.evaluate(() => window.javMock.calls[0]!.url));
+      assert.deepEqual([asked.pathname, asked.searchParams.get('record')], ['/api/jav-browser', '1']);
+    } finally { await detail.close(); }
+    // 列表面板逐个查番号状态，不是打开了这些作品页。
+    const list = await open(browser, { url: 'https://javdb.com/', html: '<p>SSIS-057</p>', automatic: false, updateValues: recording });
+    try {
+      await list.page.evaluate(() => window.javMock.menus['开启']!());
+      await initialRows(list.page, ['SSIS-057']);
+      assert.equal(new URL(await list.page.evaluate(() => window.javMock.calls[0]!.url)).searchParams.get('record'), null);
+    } finally { await list.close(); }
+    const performer = await open(browser, { url: 'https://javdb.com/actors/bkxd', title: '森日向子 | JavDB',
+      html: '<h2><span class="actor-section-name">森日向子</span></h2>',
+      performer: { name: '森日向子', entity_id: 8112, following: false }, updateValues: recording });
+    try {
+      await performer.page.waitForFunction(() => window.javMock.performerCalls.length > 0);
+      const asked = new URL(await performer.page.evaluate(() => window.javMock.performerCalls[0]!.url));
+      assert.equal(asked.searchParams.get('record'), '1');
+    } finally { await performer.close(); }
   });
 
   it('展开的面板按住空白处可拖动，按在按钮上照常点击', async () => {
