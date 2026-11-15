@@ -188,6 +188,8 @@ async function open(browser: Browser, options: {
 }
 
 const button = (page: Page) => page.locator(ROOT).locator('[data-action="add"]');
+// 没在跟踪又要核对状态时，查询是按钮区里的刷新图标键，主按钮隐藏。
+const recheck = (page: Page) => page.locator(ROOT).locator('[data-action="query"]');
 const settingsDialog = (page: Page) => page.locator('#peach-jav-settings').getByRole('dialog');
 async function pairingStorage(page: Page) {
   const values = await page.evaluate(() => window.javMock.values);
@@ -1119,11 +1121,11 @@ describe('JAV 用户脚本', () => {
       await ready(page, '查询 Peach 状态');
       await page.clock.fastForward(30_000);
       assert.equal(await page.evaluate(() => window.javMock.calls.length), 2);
-      await button(page).click();
+      await recheck(page).click();
       await pending(page, 3);
       await page.evaluate(() => window.javMock.pending[2]!.onerror());
       await ready(page, '查询 Peach 状态');
-      await button(page).click();
+      await recheck(page).click();
       await pending(page, 4);
       await reply(page, 3, body('failed'));
       await ready(page, '重试加入 Peach 馆藏');
@@ -1147,7 +1149,7 @@ describe('JAV 用户脚本', () => {
       await reply(page, 1, body('owned', 'ABW-123'));
       await ready(page, '查询 Peach 状态');
       assert.match(await page.locator(ROOT).getByRole('status').innerText(), /状态无效/);
-      await button(page).click();
+      await recheck(page).click();
       await pending(page, 3);
       await page.evaluate(() => window.javMock.reply(2, {}, 401));
       await ready(page, '查询 Peach 状态');
@@ -1184,7 +1186,7 @@ describe('JAV 用户脚本', () => {
       for (const value of [TOKEN, 'private=value', 'player', '/en/ssis-057']) assert.ok(!first.data!.includes(value));
       await page.evaluate(() => window.javMock.reports[0]!.onerror());
       await page.clock.fastForward(61_000);
-      await button(page).click();
+      await recheck(page).click();
       await pending(page, 3);
       await reply(page, 2, body('owned'));
       await ready(page, '已有该影片');
@@ -1285,7 +1287,9 @@ describe('JAV 用户脚本', () => {
       const bar = page.locator(ROOT).getByRole('progressbar', {name:'整体任务进度'});
       assert.equal(await bar.getAttribute('aria-valuenow'),'2.42');
       assert.match(await bar.getAttribute('aria-valuetext') ?? '', /最近一次确认/);
-      await button(page).click();
+      // 查询超时后逐个轮询已停下，下载中的任务也要给刷新图标键，主按钮仍隐藏。
+      assert.deepEqual([await recheck(page).isVisible(), await button(page).isHidden()], [true, true]);
+      await recheck(page).click();
       await pending(page, 4);
       await reply(page, 3, { ...body('ingested'), download:{state:'ingested',label:'已入库',progress:1,postprocess_state:'not_requested',postprocess_label:'整理未开始'} });
       await ready(page, '已有该影片');
@@ -2775,6 +2779,39 @@ describe('JAV 用户脚本', () => {
     } finally { await opened.close(); }
   });
 
+  it('按钮区：主按钮单独一行，次要操作带图标两个一行，识别本页番号是图标键；跟踪中不给查询键', async () => {
+    const opened = await open(browser, { want: null });
+    const { page } = opened;
+    try {
+      const area = page.locator(ROOT).locator('.panel > .body > .action-area');
+      // 每一行看得见的按钮：主按钮记 ★，图标键记 [全称]，文字按钮记文字并标出是否带图标。
+      const rows = () => area.evaluate(node => [...node.querySelectorAll(':scope > .action-row')]
+        .map(row => [...row.querySelectorAll('button')].filter(button => button.offsetParent)
+          .map(button => `${button.classList.contains('primary') ? '★' : ''}${button.classList.contains('icon')
+            ? `[${button.getAttribute('aria-label')}|${button.title}]` : `${button.querySelector('.action-icon') ? '◇' : ''}${button.textContent!.trim()}`}`))
+        .filter(row => row.length));
+      await ready(page);
+      await area.getByRole('button', { name: '加入想要' }).waitFor();
+      assert.deepEqual(await rows(), [['★加入 Peach 馆藏'], ['◇加入想要', '[识别本页全部番号|识别本页全部番号]']]);
+      // 两个按钮平分一行，图标键是方形、贴在行尾。
+      const [want, scan] = await Promise.all([area.getByRole('button', { name: '加入想要' }).boundingBox(),
+        area.getByRole('button', { name: '识别本页全部番号' }).boundingBox()]);
+      const box = (await area.boundingBox())!;
+      assert.ok(Math.abs(scan!.x + scan!.width - (box.x + box.width)) < 1 && Math.abs(scan!.width - scan!.height) < 1);
+      assert.ok(want!.width > box.width / 2);
+      // 排进队列、前面还有别的番号：浮卡自己刷新，不给查询键；主按钮让给「提前处理」。
+      await page.evaluate(() => { window.javMock.automatic = false; });
+      await button(page).click();
+      await pending(page, 2);
+      await reply(page, 1, { ...body('queued'), queue_position: 2 } as Body);
+      await area.getByRole('button', { name: '提前处理' }).waitFor();
+      assert.deepEqual(await rows(), [['★◇提前处理'], ['◇加入想要', '[识别本页全部番号|识别本页全部番号]']]);
+      assert.equal(await area.getByRole('button', { name: '查询 Peach 状态' }).count(), 0);
+      assert.equal(await button(page).isHidden(), true);
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
   it('面板从上到下：提示组（更新提示在前）、状态、其他任务、按钮组，提示框里的动作键留在框内', async () => {
     const queued = Array.from({ length: 4 }, (_, index) => ({ ...body('queued', `ABC-${index + 100}`), paused: { failure: 'storage' } }) as Body);
     const opened = await open(browser, { updateAutomatic: false, activeItems: queued });
@@ -2802,7 +2839,7 @@ describe('JAV 用户脚本', () => {
       const layers = await root.locator('.panel > .body').evaluate(body => [...body.children]
         .filter(node => (node as HTMLElement).offsetParent !== null)
         .map(node => ({ top: node.getBoundingClientRect().top,
-          layer: node.classList.contains('notice-group') ? 0 : node.classList.contains('shared-tasks') ? 2 : node.matches('button, a') ? 3 : 1 })));
+          layer: node.classList.contains('notice-group') ? 0 : node.classList.contains('shared-tasks') ? 2 : node.matches('button, a, .action-area') ? 3 : 1 })));
       assert.deepEqual(layers.map(item => item.layer), [...layers].sort((a, b) => a.top - b.top).map(item => item.layer));
       assert.deepEqual(layers.map(item => item.layer), [...layers.map(item => item.layer)].sort((a, b) => a - b));
       assert.deepEqual([...new Set(layers.map(item => item.layer))].filter(layer => layer !== 1), [0, 2, 3]);
@@ -2946,15 +2983,18 @@ describe('JAV 用户脚本', () => {
       await panel.getByRole('button', { name: '订阅新作', exact: true }).waitFor();
       assert.equal(await section.locator('strong').textContent(), '森日向子');
       assert.equal(await section.getByRole('status').textContent(), '订阅后，Peach 会定期查她的新作。');
-      // 提示组最上，其次女优信息，再其他任务，订阅与识别两枚按钮排在最下面。
+      // 提示组最上，其次女优信息，再其他任务，按钮区排在最下面。
       assert.deepEqual(await panel.locator('.body').first().evaluate(body => [...body.children].map(node =>
         node.classList.contains('notice-group') ? 'notices' : node.classList.contains('performer-follow') ? 'performer'
-          : node.classList.contains('shared-tasks') ? 'shared' : node.classList.contains('feed-toggle') ? 'feed'
-            : node.textContent === '识别本页全部番号' ? 'scan' : '').filter(Boolean)),
-        ['notices', 'performer', 'shared', 'feed', 'scan']);
-      // 未订阅时订阅是这张面板的主操作，识别本页番号退成次要按钮。
+          : node.classList.contains('shared-tasks') ? 'shared' : node.classList.contains('action-area') ? 'actions' : '').filter(Boolean)),
+        ['notices', 'performer', 'shared', 'actions']);
+      // 未订阅时订阅是这张面板的主操作、单独一行；识别本页番号缩成下一行行尾的图标键。
       assert.equal(await primary(feed), true);
       assert.equal(await primary(scan), false);
+      assert.deepEqual(await panel.locator('.action-area').evaluate(area => [...area.querySelectorAll(':scope > .action-row')]
+        .map(row => [...row.querySelectorAll('button')].filter(button => button.offsetParent)
+          .map(button => button.getAttribute('aria-label') || button.textContent!.trim()))), [['订阅新作'], ['识别本页全部番号']]);
+      assert.equal(await scan.evaluate(button => button.classList.contains('icon')), true);
       assert.equal(await feed.getAttribute('aria-pressed'), 'false');
       const [lookup] = await page.evaluate(() => window.javMock.performerCalls);
       const asked = new URL(lookup!.url);
