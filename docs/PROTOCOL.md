@@ -50,6 +50,8 @@ SOD 特典版的商品号在通常版后加 `v`（`1sdjs00304v`，官方番号 S
 
 `GET /api/jav-browser?code=SSIS-057` 仅查询状态。首次识别、请求结果不确定和已提交任务的按钮操作均使用查询。查询请求不带来源页面或令牌查询参数。
 
+设置里勾选「浏览记录」后（`peach.jav.record-browsing`，缺省不勾），作品浮卡打开这一页时的那次状态查询或 `identify`，以及女优页查订阅状态的 `GET /api/jav-browser/performer`，加上 `record=1`；Peach 据此把这一页记进本机的口味记录，同一页 30 分钟内只算一次（Peach ADR-0163）。列表面板的逐个查询、进度轮询、任务子页与所有 POST 都不带。旧版 Peach 忽略这个参数，回答不变。
+
 ## 添加任务
 
 `POST /api/jav-browser` 使用 `Content-Type: application/json`，请求体为：

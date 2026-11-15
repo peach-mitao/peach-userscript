@@ -10,7 +10,7 @@
 // @supportURL   https://github.com/peach-mitao/peach-userscript/issues
 // @homepageURL  https://github.com/peach-mitao/peach-userscript
 // @license      AGPL-3.0-or-later
-// @version      0.7.16
+// @version      0.7.17
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -87,6 +87,7 @@
   const PUBLISHED_NAMES = ['Peach Userscript', 'Peach · JAV 入库'];
   const PEACH_LOGO = __PEACH_JAV_LOGO__;
   const STORAGE_SOUND = 'peach.jav.success-sound';
+  const STORAGE_RECORD = 'peach.jav.record-browsing';
   const STORAGE_INSTALLED = 'peach.jav.installed-version';
   const STORAGE_UPDATES = 'peach.jav.updates';
   const STORAGE_CHECKED = 'peach.jav.update-attempted-at';
@@ -1187,6 +1188,11 @@
     return { base: base.origin, token };
   }
 
+  // 设置里勾了「浏览记录」时，作品浮卡与女优页的查询带 `record=1`，Peach 据此记一笔；缺省不记。
+  function recordBrowsing() {
+    try { return GM_getValue(STORAGE_RECORD, false) === true; } catch { return false; }
+  }
+
   function configuration() {
     try {
       return settings(GM_getValue(STORAGE_BASE, ''), GM_getValue(STORAGE_TOKEN, ''));
@@ -1361,7 +1367,8 @@
 
   // 查或改这位女优的「订阅新作」；返回 Peach 认出的名字、是否已订与头像。旧版 Peach 没有这个接口。
   function requestPerformer(config, page, enabled = null) {
-    const query = [`source_url=${encodeURIComponent(page.source)}`, ...page.names.map(name => `names=${encodeURIComponent(name)}`)].join('&');
+    const query = [`source_url=${encodeURIComponent(page.source)}`, ...page.names.map(name => `names=${encodeURIComponent(name)}`),
+      ...(enabled === null && recordBrowsing() ? ['record=1'] : [])].join('&');
     return new Promise((resolve, reject) => {
       try {
         GM_xmlhttpRequest({ method: enabled === null ? 'GET' : 'POST', anonymous: true, timeout: 60_000,
@@ -2075,6 +2082,13 @@
     soundOption.append(soundInput, document.createTextNode('点加入和影片完成入库时播放提示音'));
     sound.append(soundOption);
     body.append(sound);
+    const record = element('fieldset', 'display-scope');
+    record.append(element('legend', '', '浏览记录'));
+    const recordOption = element('label'), recordInput = element('input');
+    Object.assign(recordInput, {type:'checkbox', name:'peach-record-browsing', checked:recordBrowsing()});
+    recordOption.append(recordInput, document.createTextNode('把打开过的作品页、女优页记进 Peach，作推荐参考'));
+    record.append(recordOption, element('p','hint','只记在你的 Peach 里；列表与批量识别不算。'));
+    body.append(record);
     const error = element('p', 'geist-note');
     error.id = 'peach-settings-error';
     error.dataset.variant = 'error';
@@ -2200,6 +2214,7 @@
         if(range !== 'off')GM_setValue(STORAGE_DISPLAY,range);
         GM_setValue(STORAGE_ENABLED,range !== 'off');
         GM_setValue(STORAGE_SOUND,soundInput.checked);
+        GM_setValue(STORAGE_RECORD,recordInput.checked);
       } catch {
         error.textContent = '设置未能保存，请检查脚本管理器的存储权限后重试。';
         error.hidden = false;
@@ -2268,7 +2283,8 @@
     } catch { /* GM 存储不可用时保留原操作的错误反馈。 */ }
   }
 
-  function request(config, code, source, method, resolveIdentity = false, extra = {}) {
+  // record：这次查询是作品浮卡本身打开这一页，按设置请 Peach 记一笔浏览；列表、轮询与提交都不带。
+  function request(config, code, source, method, resolveIdentity = false, extra = {}, record = false) {
     return new Promise((resolve, reject) => {
       const started = performance.now();
       const fail = (kind, message, status = 0) => {
@@ -2281,8 +2297,9 @@
       try {
         GM_xmlhttpRequest({
           method,
-          url: resolveIdentity ? `${config.base}/api/jav-browser/identify?source_url=${encodeURIComponent(source)}`
-            : `${config.base}/api/jav-browser${method === 'GET' ? `?code=${encodeURIComponent(code)}` : ''}`,
+          url: (resolveIdentity ? `${config.base}/api/jav-browser/identify?source_url=${encodeURIComponent(source)}`
+            : `${config.base}/api/jav-browser${method === 'GET' ? `?code=${encodeURIComponent(code)}` : ''}`)
+            + (record && method === 'GET' ? '&record=1' : ''),
           headers,
           ...(method === 'POST' ? { data: JSON.stringify({...(source ? {code, source_url:source} : {code, manual:true}), ...extra}) } : {}),
           anonymous: true,
@@ -3329,7 +3346,8 @@
     const deadline = Date.now() + POLL_LIMIT;
     try {
       let body = await request(config, view.identity.code, view.identity.source, method, Boolean(view.identity.resolve),
-        method === 'POST' ? {...(view.cause === 'magnet' ? {switch:true} : {}), ...(edition ? {edition} : {})} : {});
+        method === 'POST' ? {...(view.cause === 'magnet' ? {switch:true} : {}), ...(edition ? {edition} : {})} : {},
+        method === 'GET' && recordBrowsing());
       if (!alive(view)) return;
       applyState(view, body);
       if (method === 'POST') void sharedTick(true);
