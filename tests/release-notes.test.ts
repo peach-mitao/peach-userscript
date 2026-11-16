@@ -43,6 +43,7 @@ const RELEASE = {
   assets: [{ name: 'peach-jav.user.js', browser_download_url: `https://github.com/${REPOSITORY}/releases/download/v0.7.20/peach-jav.user.js` }],
 };
 const EMPTY_HISTORY = '<ul class="history_versions"></ul>';
+const PRIOR_HISTORY = '<ul class="history_versions"><li><span class="version-number"><a href="?version=0">v0.7.19</a></span></li></ul>';
 const UPDATED_HISTORY = `<ul class="history_versions"><li>
   <span class="version-number"><a href="?version=1">v0.7.20</a></span>
   <span class="version-changelog"><ul><li>Fixed</li></ul><a href="${RELEASE.html_url}">GitHub Release</a></span>
@@ -98,7 +99,7 @@ test('使用既有密钥签署实际 JSON 字节，拒绝重定向和非目标�
 
 test('未来发行依次读取、同步并确认原生历史，重复运行跳过写入', async () => {
   const methods: string[] = [];
-  const responses = [new Response(EMPTY_HISTORY), Response.json(SUCCESS), new Response(UPDATED_HISTORY), new Response(UPDATED_HISTORY)];
+  const responses = [new Response(PRIOR_HISTORY), Response.json(SUCCESS), new Response(UPDATED_HISTORY), new Response(UPDATED_HISTORY)];
   const fetcher = (async (_url, options) => {
     methods.push(options?.method || 'GET');
     return responses.shift()!;
@@ -116,7 +117,7 @@ test('失败与未取得分别报错，写入结果不明时终止供下一次�
     { response: Response.json(SUCCESS), error: /原生历史尚未确认/ },
   ]) {
     const methods: string[] = [];
-    const responses = [new Response(EMPTY_HISTORY), failure.response, new Response(EMPTY_HISTORY)];
+    const responses = [new Response(PRIOR_HISTORY), failure.response, new Response(PRIOR_HISTORY)];
     const fetcher = (async (_url, options) => {
       methods.push(options?.method || 'GET');
       return responses.shift()!;
@@ -124,6 +125,20 @@ test('失败与未取得分别报错，写入结果不明时终止供下一次�
     await assert.rejects(syncNativeHistory(RELEASE, REPOSITORY, WEBHOOK, 'test-only-secret', fetcher), failure.error);
     assert.equal(methods.filter(method => method === 'POST').length, 1);
   }
+});
+
+test('旧运行和同版缺日志的运行停止写入，当前版本未取得时报错', async () => {
+  for (const currentVersion of ['0.7.20', '0.7.21', '0.8.0']) {
+    const methods: string[] = [];
+    const fetcher = (async (_url, options) => {
+      methods.push(options?.method || 'GET');
+      return new Response(PRIOR_HISTORY.replace('v0.7.19', `v${currentVersion}`));
+    }) as typeof fetch;
+    await assert.rejects(syncNativeHistory(RELEASE, REPOSITORY, WEBHOOK, 'test-only-secret', fetcher), /同版或更新版本/);
+    assert.deepEqual(methods, ['GET']);
+  }
+  await assert.rejects(syncNativeHistory(RELEASE, REPOSITORY, WEBHOOK, 'test-only-secret',
+    (async () => new Response(EMPTY_HISTORY)) as typeof fetch), /当前版本未取得/);
 });
 
 test('发行说明汇总到上一个已发布版本，按分组合并，英文在前、中文在折叠区', () => {
