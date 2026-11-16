@@ -1,6 +1,6 @@
 name: 发布用户脚本
 # main 上的版本号还没有对应 Release 时自动发布：核对产物、按 CHANGELOG 生成正文、打标签、上传四个制品。
-# 发布会触发仓库的 release webhook，Sleazy 随即从最新 Release 同步。已发布的版本直接跳过。
+# 发布后通过签名 webhook 将完整 Release 正文写入 Sleazy 原生历史，重跑时先查重。
 on:
   push:
     branches: [main]
@@ -46,3 +46,11 @@ jobs:
           node scripts/release-notes.ts --version "$VERSION" --previous "$previous" --repo "$GITHUB_REPOSITORY" > "$RUNNER_TEMP/notes.md"
           gh release create "v$VERSION" dist/peach-jav.user.js dist/jav-sites.json dist/release.json dist/SHA256SUMS \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "v$VERSION" --notes-file "$RUNNER_TEMP/notes.md"
+      - name: 同步 Sleazy 原生版本历史
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          VERSION: ${{ steps.version.outputs.version }}
+          SLEAZY_WEBHOOK_URL: ${{ vars.SLEAZY_WEBHOOK_URL }}
+          SLEAZY_WEBHOOK_SECRET: ${{ secrets.SLEAZY_WEBHOOK_SECRET }}
+        run: node scripts/sleazy-notes.ts --version "$VERSION" --after 0.7.19
