@@ -4,6 +4,12 @@ Notable changes are grouped by version. English and Chinese describe the same be
 
 Entries are written for users to scan: one sentence each, saying where something changed and what you now see. Reasons, implementation, compatibility conditions and edge cases stay in commits and PRs. Changes to one feature become one entry, and within each group the bigger changes come first. The English part before ` / ` stays within 160 characters including spaces, and the Chinese part after it within 80 characters including punctuation; bold and code marks and link addresses are not counted, only the text they display. / 条目给使用者扫读：每条一句话，只写在哪儿看到了什么变化；原因、实现、兼容条件和边界情况留在提交与 PR。同一功能的几处改动合成一条，每组里影响大的排前面。` / ` 之前的英文部分不超过 160 个字符（含空格），之后的中文部分不超过 80 字（含标点）；加粗、代码标记和链接地址不计，只计显示出来的文字。
 
+## 0.7.19 — 2026-11-16
+
+### Fixed / 修复
+
+- **Floating panels** keep their position and appearance on pages with sidebar styles, and keep their controls separate from page event handlers. / 网页的侧栏样式不再挤压悬浮面板，面板操作也与网页的冒泡事件处理分开。
+
 ## 0.7.18 — 2026-11-16
 
 ### Changed / 变更

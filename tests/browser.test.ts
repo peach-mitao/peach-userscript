@@ -51,7 +51,7 @@ type Mock = {
   wantCalls: string[];
   wantError: string;
 };
-declare global { interface Window { javMock: Mock } }
+declare global { interface Window { javMock: Mock; pageEvents: number } }
 
 function body(state: State, code = 'SSIS-057'): Body {
   return { ok: true, code, state, message: state };
@@ -62,12 +62,19 @@ async function open(browser: Browser, options: {
   activeItems?: Body[];
   performer?: Mock['performer'];
   want?: Mock['want'];
-  now?: string; timezoneId?: string;
+  now?: string; timezoneId?: string; inspectSurfaces?: boolean;
 } = {}) {
   const viewport = options.viewport || VIEWPORTS[0]!;
   const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height },
     ...(options.timezoneId ? { timezoneId: options.timezoneId } : {}) });
   const page = await context.newPage();
+  if (options.inspectSurfaces !== false) await page.addInitScript(() => {
+    // 普通交互检查向选择器开放影子树，隔离用例保持正式 closed 模式并走 DevTools。
+    const attach = Element.prototype.attachShadow;
+    Element.prototype.attachShadow = function (options) {
+      return attach.call(this, { ...options, mode: 'open' });
+    };
+  });
   const problems: string[] = [];
   page.on('pageerror', error => problems.push(error.message));
   // 所有页面均为内存夹具，不访问来源站点或 Peach 服务。
@@ -193,6 +200,29 @@ const button = (page: Page) => page.locator(ROOT).locator('[data-action="add"]')
 // 没在跟踪又要核对状态时，查询是按钮区里的刷新图标键，主按钮隐藏。
 const recheck = (page: Page) => page.locator(ROOT).locator('[data-action="query"]');
 const settingsDialog = (page: Page) => page.locator('#peach-jav-settings').getByRole('dialog');
+async function inspectSurface(page: Page, id: string, inspect: (root: ShadowRoot) => unknown) {
+  // DevTools 可检查闭合树，此路径不向网页暴露 shadowRoot。
+  const session = await page.context().newCDPSession(page);
+  try {
+    const { root } = await session.send('DOM.getDocument', { depth: -1, pierce: true });
+    const nodes = [root];
+    let surface;
+    while (nodes.length) {
+      const node = nodes.pop()!;
+      if (node.attributes?.some((value, index, values) => index % 2 === 0 && value === 'id' && values[index + 1] === id)) {
+        surface = node.shadowRoots?.[0];
+        break;
+      }
+      nodes.push(...node.children || [], ...node.shadowRoots || []);
+    }
+    assert.ok(surface, `${id} 未取得闭合树`);
+    const { object } = await session.send('DOM.resolveNode', { backendNodeId: surface.backendNodeId });
+    const result = await session.send('Runtime.callFunctionOn', { objectId: object.objectId,
+      functionDeclaration: `function () { return (${inspect.toString()})(this); }`, returnByValue: true });
+    assert.equal(result.exceptionDetails, undefined, JSON.stringify(result.exceptionDetails));
+    return result.result.value;
+  } finally { await session.detach(); }
+}
 async function pairingStorage(page: Page) {
   const values = await page.evaluate(() => window.javMock.values);
   const {
@@ -284,6 +314,76 @@ const AUTOMATIC: Record<string, { path: string; title: string; html: string; sou
 describe('JAV 用户脚本', () => {
   let browser: Browser;
   before(async () => { browser = await launch(); });
+  for (const viewport of VIEWPORTS) it(`${viewport.name} 页面样式与冒泡事件在闭合界面边界隔离`, async () => {
+    const opened = await open(browser, { viewport, inspectSurfaces: false,
+      url: 'https://queens-domain.pure-data.wiki/en/grimoire', title: 'Grimoire',
+      updateValues: { 'peach.jav.display': 'always' }, html: `<style>
+        body{display:grid;grid-template-columns:220px 1fr;transform:scale(.5);filter:blur(1px)}
+        aside{position:sticky;top:0;height:100vh;overflow-y:auto;padding:16px;border-right:1px solid red;display:flex}
+        *{font:40px serif!important;direction:rtl!important;--ground:red!important;--color-accent-500:red!important}
+      </style><aside>Wiki navigation</aside><main><h1>Grimoire</h1><button id="page-button">Page action</button></main>` });
+    const { page } = opened;
+    try {
+      await page.locator('#peach-jav-updates').waitFor();
+      await page.addStyleTag({ content: `peach-userscript-surface{all:unset!important;display:none!important;
+        position:static!important;width:100vw!important;height:100vh!important;padding:99px!important;
+        transform:scale(.2)!important;opacity:.1!important;overflow:hidden!important;--panel-right:9000px!important}
+        peach-userscript-surface::before{content:'page decoration'!important;display:block!important}` });
+      const exposed = await page.locator('#peach-jav-updates').evaluate(host => ({
+        shadow: host.shadowRoot, internal: host.querySelector('button'), parent: host.parentElement!.tagName,
+        rect: host.getBoundingClientRect().toJSON(), position: getComputedStyle(host).position,
+        padding: getComputedStyle(host).padding, before: getComputedStyle(host, '::before').content,
+      }));
+      assert.equal(exposed.shadow, null);
+      assert.equal(exposed.internal, null);
+      assert.equal(exposed.parent, 'HTML');
+      assert.equal(exposed.rect.width, 48);
+      assert.equal(exposed.rect.height, 48);
+      assert.equal(exposed.position, 'fixed');
+      assert.equal(exposed.padding, '0px');
+      assert.equal(exposed.before, 'none');
+      assert.ok(exposed.rect.left >= 16 && exposed.rect.right <= viewport.width - 16);
+      assert.ok(exposed.rect.top >= 16 && exposed.rect.bottom <= viewport.height - 16);
+      const internal = await inspectSurface(page, 'peach-jav-updates', root => {
+        const button = root.querySelector<HTMLButtonElement>('.launcher')!;
+        const style = getComputedStyle(button);
+        return { mode: root.mode, width: button.getBoundingClientRect().width, background: style.backgroundColor,
+          font: style.fontSize, direction: style.direction };
+      });
+      assert.equal(internal.mode, 'closed');
+      assert.equal(internal.width, 48);
+      assert.equal(internal.font, '14px');
+      assert.equal(internal.direction, 'ltr');
+      assert.notEqual(internal.background, 'rgb(255, 0, 0)');
+      await page.evaluate(() => {
+        window.pageEvents = 0;
+        for (const type of ['click', 'keydown', 'input']) document.addEventListener(type, () => { window.pageEvents++; });
+      });
+      await inspectSurface(page, 'peach-jav-updates', root => {
+        root.querySelector<HTMLButtonElement>('.launcher')!.click();
+        const target = root.querySelector('.bar')!;
+        target.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', bubbles: true, composed: true }));
+        target.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true }));
+      });
+      assert.equal(await page.evaluate(() => window.pageEvents), 0);
+      assert.equal(await inspectSurface(page, 'peach-jav-updates', root => root.querySelector<HTMLElement>('.panel')!.hidden), false);
+      await page.locator('#page-button').evaluate(button => (button as HTMLButtonElement).click());
+      assert.equal(await page.evaluate(() => window.pageEvents), 1);
+      await page.evaluate(() => window.javMock.menus['设置']!());
+      const settings = await inspectSurface(page, 'peach-jav-settings', root => {
+        const dialog = root.querySelector<HTMLDialogElement>('dialog')!;
+        const rect = dialog.getBoundingClientRect();
+        return { open: dialog.open, width: rect.width, left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom,
+          focus: root.activeElement?.id, mode: root.mode };
+      });
+      assert.equal(settings.mode, 'closed');
+      assert.equal(settings.open, true);
+      assert.equal(settings.focus, 'peach-base');
+      assert.ok(settings.width > 300 && settings.left >= 0 && settings.right <= viewport.width);
+      assert.ok(settings.top >= 0 && settings.bottom <= viewport.height);
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
   after(async () => { await browser?.close(); });
 
   describe('独立更新检查', () => {
@@ -1316,10 +1416,10 @@ describe('JAV 用户脚本', () => {
       await trigger.click();
       // 子页进场时浮卡退场，两者同时进行，不先瞬间隐藏浮卡。
       assert.deepEqual(await settingsDialog(page).evaluate(names), ['board-dialog-in']);
-      assert.deepEqual(await page.locator(ROOT).evaluate(names), ['board-dialog-out']);
+      assert.deepEqual(await page.locator(ROOT).locator('.surface').evaluate(names), ['board-dialog-out']);
       await settingsDialog(page).getByRole('button',{name:'取消',exact:true}).click();
       assert.deepEqual(await settingsDialog(page).evaluate(names), ['board-dialog-out']);
-      assert.deepEqual(await page.locator(ROOT).evaluate(names), ['board-dialog-in']);
+      assert.deepEqual(await page.locator(ROOT).locator('.surface').evaluate(names), ['board-dialog-in']);
       await settingsDialog(page).waitFor({state:'detached'});
       await page.waitForFunction(root=>!document.querySelector(root)!.hasAttribute('data-subpage-return'), ROOT);
       await page.emulateMedia({reducedMotion:'reduce'});
@@ -1368,7 +1468,7 @@ describe('JAV 用户脚本', () => {
         for(let count=0;count<3;count++) {
           await page.locator(ROOT).getByRole('button',{name:'Peach 设置',exact:true}).click();
           const dialog = settingsDialog(page);
-          await page.locator(ROOT).waitFor({state:'hidden'});
+          await page.locator(ROOT).locator('.surface').waitFor({state:'hidden'});
           assert.equal(await dialog.locator('.footer').count(),1);
           const geometry = await dialog.evaluate(node=>({bottom:node.getBoundingClientRect().bottom,
             footer:node.querySelector('.footer')!.getBoundingClientRect().bottom,height:innerHeight}));
@@ -2066,7 +2166,7 @@ describe('JAV 用户脚本', () => {
 
   it('普通网页默认不运行添加界面，常驻模式主动识别后仅提交番号', async () => {
     const hidden = await open(browser,{url:'https://example.org/private',html:'<p>SSIS-057</p>'});
-    try {assert.equal(await hidden.page.locator('aside[id^="peach-jav-"]').count(),0);} finally {await hidden.close();}
+    try {assert.equal(await hidden.page.locator('peach-userscript-surface[id^="peach-jav-"]').count(),0);} finally {await hidden.close();}
     const opened = await open(browser,{url:'https://example.org/private?secret=value',html:'<p>SSIS-057</p>',updateValues:{'peach.jav.display':'always'}});
     const {page} = opened;
     try {
@@ -2083,7 +2183,7 @@ describe('JAV 用户脚本', () => {
     const {page}=opened;
     try{
       assert.deepEqual(await page.evaluate(()=>Object.keys(window.javMock.menus)),['开启','检测更新','设置']);
-      assert.equal(await page.locator('aside[id^="peach-jav-"]').count(),0);
+      assert.equal(await page.locator('peach-userscript-surface[id^="peach-jav-"]').count(),0);
       assert.equal(await page.evaluate(()=>window.javMock.calls.length+window.javMock.updates.length),0);
       await page.evaluate(()=>window.javMock.menus['检测更新']!());
       await settingsDialog(page).waitFor();
@@ -2101,7 +2201,7 @@ describe('JAV 用户脚本', () => {
       await settingsDialog(page).waitFor({state:'detached'});
       const count=await page.evaluate(()=>window.javMock.calls.length);
       await page.clock.fastForward(3000);
-      assert.equal(await page.locator('aside[id^="peach-jav-"]').count(),0);
+      assert.equal(await page.locator('peach-userscript-surface[id^="peach-jav-"]').count(),0);
       assert.equal(await page.evaluate(()=>window.javMock.calls.length),count);
     }finally{await opened.close();}
   });
@@ -2114,7 +2214,7 @@ describe('JAV 用户脚本', () => {
       await settingsDialog(page).getByRole('radio',{name:'彻底关闭图标',exact:true}).check();
       await settingsDialog(page).getByRole('button',{name:'保存设置',exact:true}).click();
       await settingsDialog(page).waitFor({state:'detached'});
-      assert.equal(await page.locator('aside[id^="peach-jav-"]').count(),0);
+      assert.equal(await page.locator('peach-userscript-surface[id^="peach-jav-"]').count(),0);
       assert.equal(await page.evaluate(()=>window.javMock.values['peach.jav.enabled']),false);
       assert.deepEqual(await pairingStorage(page),{});
     }finally{await opened.close();}
@@ -2170,7 +2270,7 @@ describe('JAV 用户脚本', () => {
       try {
         await ready(consumer.page);
         assert.equal(await consumer.page.locator(ROOT).getAttribute('data-theme'),'light');
-        assert.equal(await consumer.page.locator(ROOT).evaluate(node=>getComputedStyle(node).getPropertyValue('--color-accent-500').trim()),'#8b5cf6');
+        assert.equal(await consumer.page.locator(ROOT).locator('.surface').evaluate(node=>getComputedStyle(node).getPropertyValue('--color-accent-500').trim()),'#8b5cf6');
         await consumer.page.evaluate(()=>window.javMock.changed('peach.jav.appearance',JSON.stringify({base:'https://other.invalid',theme:'dark',accent:'violet',colors:{400:'#fff',500:'#fff',600:'#fff',700:'#fff'}}),true));
         assert.equal(await consumer.page.locator(ROOT).getAttribute('data-theme'),null);
       } finally {await consumer.close();}
