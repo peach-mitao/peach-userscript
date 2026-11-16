@@ -67,7 +67,14 @@ export async function signedWebhook(url: string, secret: string, event: string, 
 
 export async function syncNativeHistory(release: any, repository: string, url: string, secret: string, fetcher: typeof fetch = fetch) {
   const payload = releasePayload(release, repository);
-  if (historyContains(await history(fetcher), release)) return 'current';
+  const before = await history(fetcher);
+  if (historyContains(before, release)) return 'current';
+  const latest = before.split('<span class="version-number">')[1]?.split('</span>')[0]
+    ?.match(/>v(\d+\.\d+\.\d+)<\/a>/)?.[1];
+  if (!latest) throw new Error('Sleazy 当前版本未取得，停止同步');
+  if (!newerThan(release.tag_name.slice(1), latest)) {
+    throw new Error('Sleazy 已存在同版或更新版本且未找到发行日志，请核对原生历史');
+  }
   const result = await signedWebhook(url, secret, 'release', payload, fetcher);
   if (!Array.isArray(result.updated_failed) || result.updated_failed.length || !Array.isArray(result.updated_scripts)
       || !result.updated_scripts.some((value: unknown) => typeof value === 'string'
@@ -89,8 +96,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     console.log(`Sleazy 签名验证通过，后续从 ${values.after} 之后的版本自动写入原生历史`);
   } else {
     const repository = process.env.GITHUB_REPOSITORY || '';
-    const release = JSON.parse(execFileSync('gh', ['api', `repos/${repository}/releases/tags/v${values.version}`], { encoding: 'utf8' }));
-    if (release.tag_name !== `v${values.version}`) throw new Error('GitHub Release 版本不一致');
+    const release = JSON.parse(execFileSync('gh', ['api', `repos/${repository}/releases/latest`], { encoding: 'utf8' }));
+    if (release.tag_name !== `v${values.version}`) throw new Error('当前运行的版本与 GitHub 最新发行版不一致，停止同步');
     const result = await syncNativeHistory(release, repository, url, secret);
     console.log(`Sleazy 原生历史 ${release.tag_name}：${result}`);
   }

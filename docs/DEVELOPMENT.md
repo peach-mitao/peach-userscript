@@ -50,7 +50,7 @@ Sleazy 的中英文附加说明分别填写，按访客语言显示。原生历�
 
 Sleazy 的 GitHub Release webhook 从事件的 `release.name` 读取原生历史日志。`scripts/sleazy-notes.ts` 取得实际 GitHub Release，把完整正文和发行链接放入发送事件的 `release.name`，使用既有签名密钥计算 `X-Hub-Signature`。工作流从 `0.7.19` 之后的新版本开始写入，既有版本运行时通过 `ping` 验证配置。平台缺少作者修改旧历史行的入口，历史补录由平台管理员处理。
 
-GitHub 中现有的 Sleazy webhook 订阅 `push`，用于将 `main` 上修改的 `docs/SLEAZY.md` 和 `docs/SLEAZY.zh-CN.md` 同步为附加说明。发行同步由 `release.yml` 的签名步骤负责，仓库变量 `SLEAZY_WEBHOOK_URL` 保存账号 webhook 地址，Actions Secret `SLEAZY_WEBHOOK_SECRET` 保存既有签名密钥。脚本发送前按版本和发行链接查重，收到成功应答后再次核对原生历史。请求失败或结果未确认时工作流报错，可重跑该次工作流继续核对。
+GitHub 中现有的 Sleazy webhook 订阅 `push`，用于将 `main` 上修改的 `docs/SLEAZY.md` 和 `docs/SLEAZY.zh-CN.md` 同步为附加说明。发行同步由 `release.yml` 的签名步骤负责，仓库变量 `SLEAZY_WEBHOOK_URL` 保存账号 webhook 地址，Actions Secret `SLEAZY_WEBHOOK_SECRET` 保存既有签名密钥。脚本发送前按版本和发行链接查重，确认本次运行对应 GitHub 最新发行版，并要求新版本高于 Sleazy 当前版本。收到成功应答后再次核对原生历史。请求失败或结果未确认时工作流报错，可重跑该次工作流继续核对。同版已经存在而缺少日志时，工作流报错提示核对原生历史。
 
 对外名称以英文优先：默认 `@name` 与 `@description` 使用英文 `Peach Userscript`，`zh-CN`、`zh-TW` 由本地化元数据提供。Sleazy 会忽略与脚本默认语言相同的本地化名称，因此发布页的默认语言须保持英语，否则对应语言页面显示默认名。namespace 是安装身份，保持不变。0.6.3 之前的更新检查只接受旧名 `Peach · JAV 入库`；这些安装在脚本管理器按 `@updateURL` 升级前，Sleazy 来源显示未取得，升级后同时接受新旧两个名称。
 
