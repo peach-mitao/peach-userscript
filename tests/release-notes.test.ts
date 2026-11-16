@@ -64,6 +64,24 @@ test('Sleazy 页面生成保留说明正文，重复生成不重复追加版本'
   assert.doesNotMatch(updated, /Retry failed/);
 });
 
+test('CHANGELOG 新增版本后两种语言自动补齐，并保留全部旧版本', () => {
+  const updated = SAMPLE.replace('## 1.2.0', `## 1.2.1 — 2026-11-16
+
+### Fixed / 修复
+
+- **Panels** keep their position. / 面板保持原来的位置。
+
+## 1.2.0`);
+  for (const side of [0, 1] as const) {
+    const previous = descriptionWithHistory('# Peach', SAMPLE, side);
+    const current = descriptionWithHistory(previous, updated, side);
+    assert.equal((current.match(/^### \d/gm) || []).length, 4);
+    assert.ok(current.indexOf('### 1.2.1') < current.indexOf('### 1.2.0'));
+    assert.ok(current.includes(side === 0 ? '**Panels** keep their position.' : '面板保持原来的位置。'));
+    assert.match(current, /### 1\.1\.0/);
+  }
+});
+
 test('发行说明汇总到上一个已发布版本，按分组合并，英文在前、中文在折叠区', () => {
   assert.equal(releaseNotes(SAMPLE, { version: '1.2.0', previous: 'v1.1.0', repo: 'o/r' }), [
     'Includes the changes recorded below for source-only versions 1.1.1.',
