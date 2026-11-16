@@ -1,5 +1,13 @@
 # 复用记录
 
+## 宿主页面隔离
+
+脚本声明 Tampermonkey 的 `@sandbox DOM`，通过脚本管理器隔离执行环境。界面使用专用宿主和闭合 Shadow DOM，脚本保留私有引用管理焦点、主题和弹窗。宿主以内部 `!important` 重置样式并固定布局，颜色、字体和主题变量在内部容器定义，拖动位置通过宿主上的专用变量传入。宿主直接挂在 `document.documentElement`，避开 `body` 的网格、变换和裁切；交互事件在宿主边界停止冒泡，浏览器默认操作与内部监听保留。
+
+实现依据 [Tampermonkey 沙箱文档](https://www.tampermonkey.net/documentation.php?locale=en#meta:sandbox) 和 [Shadow DOM 封装机制](https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_shadow_DOM)，无新增运行依赖。共享文档仍允许网页移除宿主、改变根元素或在捕获阶段拦截事件，闭合树提供封装边界。更新脚本后刷新页面即可生效，原配对、显示偏好和保存位置沿用已有存储。
+
+浏览器隔离回归使用原始闭合模式，经 DevTools 检查内部布局与交互，同时确认网页取得的 `shadowRoot` 为 `null`。既有交互回归仅在测试初始化时将影子树向 Playwright 选择器开放；模拟 GM API 验证与真实脚本管理器的沙箱验收分别记录。
+
 ## 阶段动画、页面识别与外观
 
 默认密度恢复 Peach 表格采用档：14/20、500，10px 12px 单元格间距；状态文字为 14/20、400，不使用 `bui-table-sm`。头像复用 Peach 已登记的暗色例外：`avatar-neutral-background` 为主文字色 10% 混入 primary 面，前景取主文字色，24px 首字母使用 Avatar `sm` 的 12/16、600。正常、悬停和选中态均检查前景对比度；字段、表格正文、提示分别使用完整的 Body、Caption 字阶。设置与番号列表为左返回子页，沿用 Remix Icon 4.9.0 `RiArrowLeftLine`，仅主浮卡保留关闭。

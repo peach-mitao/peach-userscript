@@ -25,6 +25,7 @@ test('安装产物可解析，元数据匹配清单且每个域名覆盖 HTTPS �
   const metadata = new Map([...script.matchAll(/^\/\/ @(\w+)\s+(.+)$/gm)]
     .filter(match => match[1] !== 'match').map(match => [match[1], match[2]]));
   assert.equal(metadata.get('version'), VERSION);
+  assert.equal(metadata.get('sandbox'), 'DOM');
   assert.equal(metadata.get('namespace'), 'https://github.com/peach-mitao/peach-userscript');
   assert.equal(metadata.get('source'), metadata.get('namespace'));
   assert.equal(metadata.get('supportURL'), metadata.get('namespace') + '/issues');

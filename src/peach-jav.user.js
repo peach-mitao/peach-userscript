@@ -10,7 +10,7 @@
 // @supportURL   https://github.com/peach-mitao/peach-userscript/issues
 // @homepageURL  https://github.com/peach-mitao/peach-userscript
 // @license      AGPL-3.0-or-later
-// @version      0.7.18
+// @version      0.7.19
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -33,6 +33,7 @@
 // @connect      *
 // @connect      update.sleazyfork.org
 // @run-at       document-idle
+// @sandbox      DOM
 // @downloadURL https://update.sleazyfork.org/scripts/600821/Peach%20%E7%94%A8%E6%88%B7%E8%84%9A%E6%9C%AC.user.js
 // @updateURL https://update.sleazyfork.org/scripts/600821/Peach%20%E7%94%A8%E6%88%B7%E8%84%9A%E6%9C%AC.meta.js
 // ==/UserScript==
@@ -214,6 +215,7 @@
   const updateContainers = new Set();
   const updateListeners = [];
   const surfaces = new Set();
+  const surfaceTrees = new WeakMap();
 
   function pageInterfaceAllowed() {
     return GM_getValue(STORAGE_ENABLED,true) !== false && configuration()?.base !== location.origin
@@ -263,7 +265,13 @@
       --elevation-xs:0 1px 2px 0 rgb(0 0 0 / .18);--elevation-dropdown:0 1px 1px 0 rgb(0 0 0 / .14),0 4px 4px 0 rgb(0 0 0 / .10);`;
   // Peach BoardUI DOM 控件快照：来源与适配范围见 docs/REUSE.md。
   const UI_STYLE = `
-    :host{all:initial;--color-text-primary:oklch(14.5% 0 0);--color-text-secondary:oklch(55.6% 0 0);--color-text-tertiary:oklch(70.8% 0 0);
+    :host{all:initial!important;direction:ltr!important;unicode-bidi:normal!important;display:block!important;
+      position:fixed!important;inset:auto var(--peach-surface-right) var(--peach-surface-bottom) auto!important;
+      z-index:2147483647!important;width:min(320px,calc(100% - 32px))!important}
+    :host::before,:host::after{display:none!important;content:none!important}
+    :host([data-panel-mode="minimized"]){width:48px!important}
+    .surface{all:initial;direction:ltr;--panel-right:var(--peach-surface-right);--panel-bottom:var(--peach-surface-bottom);
+      --color-text-primary:oklch(14.5% 0 0);--color-text-secondary:oklch(55.6% 0 0);--color-text-tertiary:oklch(70.8% 0 0);
       --color-border-checkbox-default:oklch(87% 0 0);--color-border-checkbox-hover:oklch(70.8% 0 0);
       --color-background-full:#fff;--color-background-primary-default:#fff;--color-background-primary-hover:#f7f7f7;
       --color-background-secondary-default:#f7f7f7;--color-background-tertiary-default:#ebebeb;
@@ -288,19 +296,17 @@
       --color-status-rose-background:oklch(89.2% .058 10.001);--color-status-rose-text:oklch(45.5% .188 13.697);
       --color-status-blue-background:oklch(88.2% .059 254.128);--color-status-blue-text:oklch(42.4% .199 265.638);--pill-radius:999px;--control-radius:10px;--surface-radius:16px;--floating-radius:20px;--control-h:36px;
       --fs-sm:13px;--fs-md:14px;--fs-lg:16px;--fs-xl:20px;--fieldset-bar-h:52px;
-      position:fixed;inset:auto max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) auto;
-      z-index:2147483647;width:min(320px,calc(100% - 32px));font:var(--board-body);color:var(--ink);color-scheme:light;text-align:left;-webkit-font-smoothing:antialiased}
-    @media(prefers-color-scheme:dark){:host(:not([data-theme=light])){${DARK_STYLE}}}
-    :host([data-theme=dark]){${DARK_STYLE}}
+      display:block;width:100%;font:var(--board-body);color:var(--ink);color-scheme:light;text-align:left;-webkit-font-smoothing:antialiased}
+    @media(prefers-color-scheme:dark){:host(:not([data-theme=light])) .surface{${DARK_STYLE}}}
+    :host([data-theme=dark]) .surface{${DARK_STYLE}}
     *,*::before,*::after{box-sizing:border-box} [hidden]{display:none!important}
-    :host([data-panel-mode="minimized"]){width:48px}
     /* 浮卡与子页同在右下角，切换时同时播 Peach 设置面板的进出场（web/board.css 的
        board-dialog-in／out，BoardUI 设置弹层动效）：子页进场时浮卡退场，子页退场时浮卡进场。
        先隐藏再让子页从 0 进场会露出两层都看不见的空档，读起来就是一闪。缩放原点按
        BoardUI 下拉菜单随停靠位置取的规则，右下停靠取右下角。 */
-    :host{transform-origin:bottom right}
-    :host([data-settings-open]){visibility:hidden;pointer-events:none;transition:visibility 0s .3s;animation:board-dialog-out var(--board-dialog-motion) both}
-    :host([data-subpage-return]){animation:board-dialog-in var(--board-dialog-motion) backwards}
+    .surface{transform-origin:bottom right}
+    :host([data-settings-open]) .surface{visibility:hidden;pointer-events:none;transition:visibility 0s .3s;animation:board-dialog-out var(--board-dialog-motion) both}
+    :host([data-subpage-return]) .surface{animation:board-dialog-in var(--board-dialog-motion) backwards}
     @keyframes board-dialog-in{from{opacity:0;transform:scale(.85);filter:blur(4px)}to{opacity:1;transform:scale(1);filter:blur(0)}}
     @keyframes board-dialog-out{from{opacity:1;transform:scale(1);filter:blur(0)}to{opacity:0;transform:scale(.85);filter:blur(4px)}}
     @keyframes settings-backdrop-in{from{opacity:0}to{opacity:1}}
@@ -717,8 +723,9 @@
     root.toggleAttribute('data-peach-appearance', Boolean(value));
     if (value && value.theme !== 'system') root.dataset.theme = value.theme; else delete root.dataset.theme;
     for (const step of [400, 500, 600, 700]) {
-      if (value) root.style.setProperty(`--color-accent-${step}`, value.colors[step]);
-      else root.style.removeProperty(`--color-accent-${step}`);
+      const style = surfaceTrees.get(root).content.style;
+      if (value) style.setProperty(`--color-accent-${step}`, value.colors[step]);
+      else style.removeProperty(`--color-accent-${step}`);
     }
   }
 
@@ -746,12 +753,13 @@
     const viewportWidth=document.documentElement.clientWidth;
     const width = root.id === 'peach-jav-settings' || root.id === 'peach-jav-batch' ? Math.min(400, viewportWidth - 32)
       : root.dataset.panelMode === 'minimized' ? 48 : Math.min(320, viewportWidth - 32);
-    const dialog = (root.shadowRoot || root).querySelector('dialog[open]');
+    const dialog = surfaceTrees.get(root).content.querySelector('dialog[open]');
     const height = Math.min((dialog || root).getBoundingClientRect().height || 48, innerHeight - 32);
     const right = Math.max(16, Math.min(value.right, viewportWidth - width - 16));
     const bottom = Math.max(16, Math.min(value.bottom, innerHeight - height - 16));
     root.style.right = `${right}px`; root.style.bottom = `${bottom}px`;
-    root.style.setProperty('--panel-right', `${right}px`); root.style.setProperty('--panel-bottom', `${bottom}px`);
+    root.style.setProperty('--peach-surface-right', `${right}px`, 'important');
+    root.style.setProperty('--peach-surface-bottom', `${bottom}px`, 'important');
   }
 
   // 收成图标时拖图标；展开或折叠时按住面板空白处拖，按钮、链接与表单控件照常点击。
@@ -783,6 +791,8 @@
       drag.moved = true;
       root.style.right = `${Math.max(16, Math.min(document.documentElement.clientWidth-drag.width-16, drag.right-x))}px`;
       root.style.bottom = `${Math.max(16, Math.min(innerHeight-drag.height-16, drag.bottom-y))}px`;
+      root.style.setProperty('--peach-surface-right', root.style.right, 'important');
+      root.style.setProperty('--peach-surface-bottom', root.style.bottom, 'important');
     };
     const finish = event => {
       if (!drag || event.pointerId !== drag.id) return;
@@ -848,14 +858,26 @@
   }
 
   function surface(id, label) {
-    const root = element('aside');
+    const root = element('peach-userscript-surface');
     root.id = id;
+    root.setAttribute('role', 'complementary');
     root.setAttribute('aria-label', label);
-    const shadow = root.attachShadow({ mode: 'open' });
-    shadow.append(element('style', '', UI_STYLE));
-    document.body.append(root);
+    root.style.setProperty('--peach-surface-right', 'max(16px,env(safe-area-inset-right))', 'important');
+    root.style.setProperty('--peach-surface-bottom', 'max(16px,env(safe-area-inset-bottom))', 'important');
+    const shadow = root.attachShadow({ mode: 'closed' });
+    const content = element('div', 'surface');
+    shadow.append(element('style', '', UI_STYLE), content);
+    surfaceTrees.set(root, { shadow, content });
+    // 冒泡委托事件止于界面边界，内部控件与浏览器默认行为照常处理。
+    for (const type of ['click', 'dblclick', 'auxclick', 'contextmenu', 'pointerdown', 'pointerup', 'pointermove',
+      'pointercancel', 'mousedown', 'mouseup', 'mousemove', 'touchstart', 'touchmove', 'touchend', 'touchcancel',
+      'keydown', 'keyup', 'keypress', 'input', 'beforeinput', 'change', 'submit', 'focusin', 'focusout',
+      'copy', 'cut', 'paste', 'wheel', 'dragstart']) {
+      root.addEventListener(type, event => event.stopPropagation());
+    }
+    document.documentElement.append(root);
     surfaces.add(root); applyAppearance(root); placeSurface(root);
-    return { root, shadow };
+    return { root, shadow: content };
   }
 
   function showNotice(message) {
@@ -1862,7 +1884,7 @@
     for (const root of [current?.root, updateEntry?.root]) {
       if (!root?.hasAttribute('data-settings-open')) continue;
       root.removeAttribute('data-settings-open'); root.setAttribute('data-subpage-return', '');
-      root.addEventListener('animationend', () => root.removeAttribute('data-subpage-return'), {once:true});
+      surfaceTrees.get(root).content.addEventListener('animationend', () => root.removeAttribute('data-subpage-return'), {once:true});
     }
   }
 
@@ -1886,7 +1908,7 @@
     const switching = Boolean(settingsView?.dialog.open);
     if (switching) settingsView.dialog.close();
     if (!current) entryOpen = true;
-    const previousFocus=current?.root.shadowRoot?.activeElement || updateEntry?.root.shadowRoot?.activeElement || document.activeElement;
+    const previousFocus=surfaceTrees.get(current?.root)?.shadow.activeElement || surfaceTrees.get(updateEntry?.root)?.shadow.activeElement || document.activeElement;
     const {root, shadow} = surface('peach-jav-batch', 'Peach 页面番号');
     const dialog = element('dialog'); dialog.setAttribute('aria-label', '本页番号');
     const form = element('div'); form.style.display='flex'; form.style.flexDirection='column'; form.style.maxHeight='calc(100dvh - 34px)';
@@ -2019,7 +2041,7 @@
     const switching = Boolean(batchView?.dialog.open);
     if (switching) batchView.dialog.close();
     if (settingsView?.dialog.open) { settingsView.reopen(); return; }
-    const previousFocus = current?.root.shadowRoot?.activeElement || updateEntry?.root.shadowRoot?.activeElement || document.activeElement;
+    const previousFocus = surfaceTrees.get(current?.root)?.shadow.activeElement || surfaceTrees.get(updateEntry?.root)?.shadow.activeElement || document.activeElement;
     const saved = configuration();
     const { root, shadow } = surface('peach-jav-settings', 'Peach 设置');
     const dialog = element('dialog');

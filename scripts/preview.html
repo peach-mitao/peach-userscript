@@ -260,8 +260,18 @@
     previewScript.src = '/preview.user.js?site=' + encodeURIComponent(new URLSearchParams(location.search).get('site') || 'missav');
     // 状态总览用：auto=list 自动打开本页番号，auto=submit 再点全部加入。
     const previewAuto = new URLSearchParams(location.search).get('auto');
+    const previewTrees = new WeakMap();
+    if (previewAuto) {
+      // 仅预览自动操作保留创建时的引用，正式闭合树保持原样。
+      const attach = Element.prototype.attachShadow;
+      Element.prototype.attachShadow = function (options) {
+        const root = attach.call(this, options);
+        previewTrees.set(this, root);
+        return root;
+      };
+    }
     if (previewAuto) previewScript.addEventListener('load', async () => {
-      const shadow = id => document.getElementById(id)?.shadowRoot;
+      const shadow = id => previewTrees.get(document.getElementById(id));
       const until = async test => { for (let i = 0; i < 100 && !test(); i++) await new Promise(r => setTimeout(r, 100)); };
       await until(() => shadow('peach-jav-action')?.querySelector('.bar'));
       if (previewAuto === 'settings') { previewMenus['设置'](); return; }
