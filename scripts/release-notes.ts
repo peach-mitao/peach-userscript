@@ -7,7 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {parseArgs} from 'node:util';
 
 type Bilingual = [english: string, chinese: string];
-type Section = {version: string; heading: string; lines: string[]};
+type Section = {version: string; lines: string[]};
 type Group = {names: Bilingual; items: Bilingual[]};
 
 const SEPARATOR = ' / ';
@@ -22,9 +22,9 @@ function split(text: string): Bilingual {
 function sections(changelog: string): Section[] {
   const found: Section[] = [];
   for (const line of changelog.replace(/\r\n/g, '\n').split('\n')) {
-    const heading = line.match(/^## (\d+\.\d+\.\d+)\b(.*)/);
-    if (heading) found.push({version: heading[1]!, heading: heading[2]!, lines: []});
-    else if (line.startsWith('## ')) found.push({version: '', heading: '', lines: []});
+    const heading = line.match(/^## (\d+\.\d+\.\d+)\b/);
+    if (heading) found.push({version: heading[1]!, lines: []});
+    else if (line.startsWith('## ')) found.push({version: '', lines: []});
     else found.at(-1)?.lines.push(line);
   }
   return found.filter(section => section.version);
@@ -77,23 +77,6 @@ export function releaseNotes(changelog: string, {version, previous = '', repo}: 
     ? `[Full Changelog](https://github.com/${repo}/compare/${previous}...${tag})`
     : `Initial release / 初始发布：[commits](https://github.com/${repo}/commits/${tag})`;
   return `${render(0)}\n\n<details>\n<summary>简体中文</summary>\n\n${render(1)}\n\n</details>\n\n${link}\n`;
-}
-
-export function versionHistory(changelog: string, side: 0 | 1): string {
-  const all = sections(changelog);
-  if (!all.length) throw new Error('CHANGELOG.md 没有版本记录');
-  return all.map(section => {
-    const {notes, groups} = parse(section.lines);
-    const label = section.heading.replace(/^ — /, '');
-    const dated = label.match(/^(\d{4}-\d{2}-\d{2})(?: — (.*))?$/);
-    const heading = dated ? dated[1]! + (dated[2] ? ` — ${split(dated[2])[side]}` : '') : split(label)[side];
-    return [
-      `### ${section.version}${heading ? ` — ${heading}` : ''}`,
-      ...notes.map(note => note[side]),
-      ...[...groups.values()].filter(group => group.items.length).map(group =>
-        `#### ${group.names[side]}\n\n${group.items.map(item => `- ${item[side]}`).join('\n')}`),
-    ].join('\n\n');
-  }).join('\n\n') + '\n';
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
