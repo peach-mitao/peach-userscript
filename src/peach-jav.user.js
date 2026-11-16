@@ -10,7 +10,7 @@
 // @supportURL   https://github.com/peach-mitao/peach-userscript/issues
 // @homepageURL  https://github.com/peach-mitao/peach-userscript
 // @license      AGPL-3.0-or-later
-// @version      0.7.17
+// @version      0.7.18
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -2482,8 +2482,25 @@
     if (typeof body.retry_at !== 'string' || !Number.isFinite(Date.parse(body.retry_at))
         || !Number.isSafeInteger(body.retry_attempt) || !Number.isSafeInteger(body.retry_limit)
         || body.retry_attempt < 1 || body.retry_limit < body.retry_attempt || body.retry_limit > 10) return '';
-    const time = new Date(body.retry_at).toLocaleString([], {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'});
-    return `${body.state === 'ingested' ? '影片已入库，整理暂时失败' : '搜索暂时不可用'}，等待 ${time} 自动重试（${body.retry_attempt}/${body.retry_limit}）`;
+    const when = `${retryMoment(Date.parse(body.retry_at))}，第 ${body.retry_attempt}/${body.retry_limit} 次`;
+    if (body.state === 'ingested') return `影片已入库，整理暂时失败，等待自动重试（${when}）`;
+    // 搜索等待用 Peach 写的那句：它点名是哪个来源、为什么停；旧版 Peach 没写时才用通用说法。
+    const said = typeof body.message === 'string' && body.message.trim() && body.message !== LABELS.queued
+      ? body.message.trim().slice(0, 120) : '搜索暂时不可用，等待自动重试';
+    return `${said}（${when}）`;
+  }
+
+  // 自动重试的时刻按本地时间说成「今晚 21:39」「明天 09:00」，再远才带日期。
+  function retryMoment(at, now = Date.now()) {
+    if (at - now < 60_000) return '即将重试';
+    const date = new Date(at), hour = date.getHours();
+    const clock = `${String(hour).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+    const day = value => { const d = new Date(value); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()); };
+    const days = Math.round((day(at) - day(now)) / 86_400_000);
+    if (days === 0) return `${hour < 6 ? '今天凌晨' : hour >= 18 ? '今晚' : '今天'} ${clock}`;
+    if (days === 1) return `${hour < 6 ? '明天凌晨' : hour >= 18 ? '明晚' : '明天'} ${clock}`;
+    if (days === 2) return `后天 ${clock}`;
+    return `${date.getMonth() + 1}月${date.getDate()}日 ${clock}`;
   }
 
   function organizeFailed(body) {
