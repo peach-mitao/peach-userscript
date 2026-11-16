@@ -12,9 +12,9 @@
     "node": ">=24 <25"
   },
   "scripts": {
-    "build": "node scripts/build.ts",
+    "build": "node scripts/build.ts && node scripts/sleazy-notes.ts",
     "preview": "node scripts/preview.ts",
-    "check": "node scripts/build.ts --check",
+    "check": "node scripts/build.ts --check && node scripts/sleazy-notes.ts --check",
     "export": "node scripts/export.ts",
     "test": "node --test tests/build.test.ts tests/candidates.test.ts tests/export-peach.test.ts tests/release-notes.test.ts tests/ci_plan.test.ts",
     "test:browser": "node --test tests/browser.test.ts",
