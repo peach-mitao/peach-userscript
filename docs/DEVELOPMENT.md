@@ -48,6 +48,10 @@ npm run verify
 
 Sleazy 的中英文附加说明分别填写，按访客语言显示；历史更新日志只有一个字段，英文在前、中文在后，使用短双语摘要并链接完整记录，不重复粘贴两篇说明。GitHub Release 标题只写版本号（如 `v0.7.1`），默认展示完整英文正文，中文放入 `details` 折叠区，两部分共同引用同一变更范围。
 
+Sleazy 的 GitHub Release webhook 将 Release 的标题写进原生历史日志，当前平台实现没有读取 Release 正文，也没有作者修改旧历史行的入口。因此逐版日志同时生成到中英文附加说明，从 `0.3.0` 起保留完整记录与仅源码、补录发布等说明。`npm run build` 通过 `scripts/sleazy-notes.ts` 从同一份 `CHANGELOG.md` 生成两种语言的版本历史，`npm run check` 拒绝过期内容；生成标记前的介绍、配置与隐私正文继续手工维护。
+
+GitHub 中现有的 Sleazy webhook 同时订阅 `push` 与 `release`。`push` 用于将 `main` 上修改的 `docs/SLEAZY.md` 和 `docs/SLEAZY.zh-CN.md` 同步为附加说明，`release` 继续同步发布的安装脚本。原生历史字段收到版本标题，完整中英文逐版日志展示在对应语言的脚本说明页。此机制复用现有签名配置与公开源文件。
+
 对外名称以英文优先：默认 `@name` 与 `@description` 使用英文 `Peach Userscript`，`zh-CN`、`zh-TW` 由本地化元数据提供。Sleazy 会忽略与脚本默认语言相同的本地化名称，因此发布页的默认语言须保持英语，否则对应语言页面显示默认名。namespace 是安装身份，保持不变。0.6.3 之前的更新检查只接受旧名 `Peach · JAV 入库`；这些安装在脚本管理器按 `@updateURL` 升级前，Sleazy 来源显示未取得，升级后同时接受新旧两个名称。
 
 Sleazy 从 GitHub 同步：源码取 [最新 Release 的安装脚本](https://github.com/peach-mitao/peach-userscript/releases/latest/download/peach-jav.user.js)，默认附加信息取 `main` 分支的 `docs/SLEAZY.md`，`zh-CN` 附加信息取 `docs/SLEAZY.zh-CN.md`。因此发布即创建带四个制品的 GitHub Release。

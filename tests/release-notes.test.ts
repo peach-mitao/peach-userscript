@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { releaseNotes, versionSection } from '../scripts/release-notes.ts';
+import { releaseNotes, versionSection, versionHistory } from '../scripts/release-notes.ts';
+import { descriptionWithHistory } from '../scripts/sleazy-notes.ts';
 
 const SAMPLE = `# Changelog / 更新日志
 
@@ -31,6 +32,37 @@ Source only; release assets are not published yet. / 仅源码更新，尚未发
 
 - **Already released** entry. / 已经发布过的条目。
 `;
+
+test('Sleazy 逐版历史保留两种语言的全部条目与仅源码标记', () => {
+  const english = versionHistory(SAMPLE, 0), chinese = versionHistory(SAMPLE, 1);
+  assert.equal((english.match(/^### \d/gm) || []).length, 3);
+  assert.equal((chinese.match(/^### \d/gm) || []).length, 3);
+  assert.match(english, /### 1\.1\.1 — 2026-11-09\n\nSource only/);
+  assert.match(chinese, /### 1\.1\.1 — 2026-11-09\n\n仅源码更新/);
+  assert.match(english, /\*\*Already released\*\* entry/);
+  assert.match(chinese, /已经发布过的条目/);
+  assert.doesNotMatch(english, /排队中的任务/);
+  assert.doesNotMatch(chinese, /\*\*Queued tasks\*\*/);
+  assert.throws(() => versionHistory('# Empty', 0), /没有版本记录/);
+});
+
+test('Sleazy 历史标题保留日期、初始发行与源码版本的语言', () => {
+  const sample = SAMPLE.replace('1.2.0 — 2026-11-13', '1.2.0 — Source-only version / 源码版本')
+    .replace('1.1.0 — 2026-11-06', '1.1.0 — 2026-11-06 — Initial release / 初始发布');
+  assert.match(versionHistory(sample, 0), /^### 1\.2\.0 — Source-only version/);
+  assert.match(versionHistory(sample, 1), /^### 1\.2\.0 — 源码版本/);
+  assert.match(versionHistory(sample, 1), /### 1\.1\.0 — 2026-11-06 — 初始发布/);
+});
+
+test('Sleazy 页面生成保留说明正文，重复生成不重复追加版本', () => {
+  const description = '# Peach\n\nSetup and privacy.\n';
+  const generated = descriptionWithHistory(description, SAMPLE, 0);
+  assert.ok(generated.startsWith(description.trimEnd() + '\n\n<!-- generated:version-history -->'));
+  assert.equal(descriptionWithHistory(generated, SAMPLE, 0), generated);
+  const updated = descriptionWithHistory(generated, SAMPLE.replace('Retry failed', 'Retry pending'), 0);
+  assert.match(updated, /Retry pending/);
+  assert.doesNotMatch(updated, /Retry failed/);
+});
 
 test('发行说明汇总到上一个已发布版本，按分组合并，英文在前、中文在折叠区', () => {
   assert.equal(releaseNotes(SAMPLE, { version: '1.2.0', previous: 'v1.1.0', repo: 'o/r' }), [
