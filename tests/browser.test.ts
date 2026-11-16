@@ -62,9 +62,11 @@ async function open(browser: Browser, options: {
   activeItems?: Body[];
   performer?: Mock['performer'];
   want?: Mock['want'];
+  now?: string; timezoneId?: string;
 } = {}) {
   const viewport = options.viewport || VIEWPORTS[0]!;
-  const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
+  const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height },
+    ...(options.timezoneId ? { timezoneId: options.timezoneId } : {}) });
   const page = await context.newPage();
   const problems: string[] = [];
   page.on('pageerror', error => problems.push(error.message));
@@ -182,7 +184,7 @@ async function open(browser: Browser, options: {
     activeItems: options.activeItems || null, performer: options.performer || null,
     hasWant: Object.hasOwn(options, 'want'), want: options.want ?? null });
   await page.goto(options.url || 'https://missav.ws/en/ssis-057?private=value#player');
-  await page.clock.install();
+  await page.clock.install(options.now ? { time: options.now } : undefined);
   await page.addScriptTag({ content: options.script ?? SCRIPT });
   return { page, problems, close: () => context.close() };
 }
@@ -2752,9 +2754,9 @@ describe('JAV 用户脚本', () => {
       if (await heading.getAttribute('aria-expanded') === 'false') await heading.click();
       assert.equal(await row.locator('.chip').textContent(), '待自动重试');
       assert.equal(await row.locator('.chip').getAttribute('data-chip'), 'blue');
-      assert.match(await row.locator('.chip').getAttribute('title') || '', /自动重试（1\/3）/);
+      assert.match(await row.locator('.chip').getAttribute('title') || '', /^影片已入库，整理暂时失败，等待自动重试（.+，第 1\/3 次）$/);
       await row.click();
-      assert.match(await root.locator('.task-page [role=status]').textContent() || '', /等待.*自动重试（1\/3）/);
+      assert.match(await root.locator('.task-page [role=status]').textContent() || '', /等待自动重试（.+，第 1\/3 次）/);
       assert.equal(await root.locator('.task-page').getByRole('button', { name:'重试整理' }).count(), 0);
       await page.evaluate(value => { window.javMock.activeItems = [{...value, retry_at:undefined, retry_exhausted:true, retry_attempt:3,
         download:{...value.download!, postprocess_state:'failed', postprocess_label:'整理失败'}}]; }, waiting);
@@ -2764,6 +2766,31 @@ describe('JAV 用户脚本', () => {
       await root.locator('.task-page').getByRole('button', { name:'返回 Peach 主页' }).click();
       assert.equal(await row.locator('.chip').getAttribute('data-chip'), 'rose');
       assert.equal(await row.locator('.chip').textContent(), '整理失败');
+    } finally { await opened.close(); }
+  });
+
+  it('搜索等待自动重试时显示 Peach 点名来源的那句，时刻说成今晚、明天；Peach 没写时用通用说法', async () => {
+    const retry = (code: string, message: string, at: string, attempt: number): Body =>
+      ({ ...body('queued', code), message, retry_at:at, retry_attempt:attempt, retry_limit:3 });
+    const opened = await open(browser, { initial:'owned', now:'2026-11-16T12:00:00Z', timezoneId:'Asia/Shanghai', activeItems:[
+      retry('ABP-616', 'JavDB 未取得，等待自动重试', '2026-11-16T13:39:00Z', 1),
+      retry('ABP-617', '', '2026-11-17T01:00:00Z', 2),
+      retry('ABP-618', '资源搜索暂不可用，已暂停；到时自动继续', '2026-11-16T12:00:30Z', 1),
+      retry('ABP-619', 'JavDB 未取得，等待自动重试', '2026-11-19T02:05:00Z', 3)] });
+    const { page } = opened;
+    try {
+      const root = page.locator(ROOT), title = (code: string) => root.locator(`.shared-row[data-code="${code}"] .chip`).getAttribute('title');
+      await root.locator('.shared-row[data-code="ABP-616"]').waitFor({ state:'attached' });
+      const heading = root.locator('.shared-heading');
+      if (await heading.getAttribute('aria-expanded') === 'false') await heading.click();
+      assert.equal(await root.locator('.shared-row[data-code="ABP-616"] .chip').textContent(), '待自动重试');
+      assert.equal(await title('ABP-616'), 'JavDB 未取得，等待自动重试（今晚 21:39，第 1/3 次）');
+      assert.equal(await title('ABP-617'), '搜索暂时不可用，等待自动重试（明天 09:00，第 2/3 次）');
+      assert.equal(await title('ABP-618'), '资源搜索暂不可用，已暂停；到时自动继续（即将重试，第 1/3 次）');
+      assert.equal(await title('ABP-619'), 'JavDB 未取得，等待自动重试（11月19日 10:05，第 3/3 次）');
+      await root.locator('.shared-row[data-code="ABP-616"]').click();
+      assert.equal(await root.locator('.task-page [role=status]').textContent(), 'JavDB 未取得，等待自动重试（今晚 21:39，第 1/3 次）');
+      assert.deepEqual(opened.problems, []);
     } finally { await opened.close(); }
   });
 
