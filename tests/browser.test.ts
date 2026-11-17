@@ -233,10 +233,12 @@ async function pairingStorage(page: Page) {
     'peach.jav.enabled': enabled,
     'peach.jav.success-sound': sound,
     'peach.jav.record-browsing': recording,
+    'peach.jav.theme': theme,
     ...pairing
   } = values;
   if (sound !== undefined) assert.equal(typeof sound, 'boolean');
   if (recording !== undefined) assert.equal(typeof recording, 'boolean');
+  if (theme !== undefined) assert.ok(['peach', 'light', 'dark'].includes(String(theme)));
   if (installed !== undefined) assert.equal(installed, VERSION);
   if (attempted !== undefined) assert.match(String(attempted), /^\d+$/);
   if (updates !== undefined) assert.deepEqual(JSON.parse(String(updates)), { script: { version: VERSION } });
@@ -246,9 +248,15 @@ async function pairingStorage(page: Page) {
 }
 async function fillSettings(page: Page, base: string, token: string) {
   const dialog = settingsDialog(page);
+  if (!await dialog.getByLabel('Peach 地址', { exact: true }).isVisible()) await dialog.locator('summary').click();
   await dialog.getByLabel('Peach 地址', { exact: true }).fill(base);
   await dialog.getByLabel('专用令牌', { exact: true }).fill(token);
   await dialog.getByRole('button', { name: '保存设置', exact: true }).click();
+}
+async function chooseSetting(page: Page, label: string, option: string) {
+  const dialog = settingsDialog(page);
+  await dialog.getByRole('combobox', { name: label, exact: true }).click();
+  await dialog.getByRole('option', { name: option, exact: true }).click();
 }
 async function ready(page: Page, name = '加入 Peach 馆藏') {
   await page.waitForFunction(({ root, label }) => {
@@ -378,7 +386,7 @@ describe('JAV 用户脚本', () => {
       });
       assert.equal(settings.mode, 'closed');
       assert.equal(settings.open, true);
-      assert.equal(settings.focus, 'peach-base');
+      assert.equal(settings.focus, 'peach-connection-summary');
       assert.ok(settings.width > 300 && settings.left >= 0 && settings.right <= viewport.width);
       assert.ok(settings.top >= 0 && settings.bottom <= viewport.height);
       assert.deepEqual(opened.problems, []);
@@ -1564,6 +1572,8 @@ describe('JAV 用户脚本', () => {
           const trigger = page.locator(ROOT).getByRole('button', { name: 'Peach 设置', exact: true });
           await trigger.click();
           const dialog = settingsDialog(page);
+          assert.equal(await dialog.getByLabel('Peach 地址', { exact: true }).isVisible(), false);
+          await dialog.locator('summary').click();
           const token = dialog.getByLabel('专用令牌', { exact: true });
           assert.equal(await token.inputValue(), '');
           assert.equal(await token.getAttribute('type'), 'password');
@@ -1577,6 +1587,7 @@ describe('JAV 用户脚本', () => {
           assert.equal(await trigger.evaluate(node => node.getRootNode() instanceof ShadowRoot && (node.getRootNode() as ShadowRoot).activeElement === node), true);
           assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.token']), TOKEN);
           await trigger.click();
+          await dialog.locator('summary').click();
           assert.equal(await token.inputValue(), '');
           await dialog.getByLabel('Peach 地址', { exact: true }).fill('https://other-peach.example.invalid');
           await dialog.getByRole('button', { name: '保存设置' }).click();
@@ -2187,7 +2198,7 @@ describe('JAV 用户脚本', () => {
       assert.equal(await page.evaluate(()=>window.javMock.calls.length+window.javMock.updates.length),0);
       await page.evaluate(()=>window.javMock.menus['检测更新']!());
       await settingsDialog(page).waitFor();
-      assert.equal(await settingsDialog(page).getByRole('radio',{name:'彻底关闭图标',exact:true}).isChecked(),true);
+      assert.equal(await settingsDialog(page).getByRole('combobox',{name:'显示范围',exact:true}).innerText(),'关闭图标');
       await page.waitForFunction(()=>window.javMock.updates.length===2);
       await settingsDialog(page).getByRole('button',{name:'返回 Peach 主界面',exact:true}).click();
       await settingsDialog(page).waitFor({state:'detached'});
@@ -2196,7 +2207,7 @@ describe('JAV 用户脚本', () => {
       await ready(page);
       assert.equal(await page.evaluate(()=>window.javMock.values['peach.jav.enabled']),true);
       await page.locator(ROOT).getByRole('button',{name:'Peach 设置',exact:true}).click();
-      await settingsDialog(page).getByRole('radio',{name:'彻底关闭图标',exact:true}).check();
+      await chooseSetting(page, '显示范围', '关闭图标');
       await settingsDialog(page).getByRole('button',{name:'保存设置',exact:true}).click();
       await settingsDialog(page).waitFor({state:'detached'});
       const count=await page.evaluate(()=>window.javMock.calls.length);
@@ -2211,7 +2222,7 @@ describe('JAV 用户脚本', () => {
     const {page}=opened;
     try{
       await page.evaluate(()=>window.javMock.menus['设置']!());
-      await settingsDialog(page).getByRole('radio',{name:'彻底关闭图标',exact:true}).check();
+      await chooseSetting(page, '显示范围', '关闭图标');
       await settingsDialog(page).getByRole('button',{name:'保存设置',exact:true}).click();
       await settingsDialog(page).waitFor({state:'detached'});
       assert.equal(await page.locator('peach-userscript-surface[id^="peach-jav-"]').count(),0);
@@ -2249,6 +2260,7 @@ describe('JAV 用户脚本', () => {
       await list.waitFor({state:'detached'});
       await page.evaluate(()=>window.javMock.menus['设置']!());
       const dialog=settingsDialog(page);
+      await dialog.locator('summary').click();
       await dialog.getByLabel('专用令牌',{exact:true}).fill('unsaved-draft');
       const order=await dialog.locator('header').evaluate(node=>[...node.children].map(child=>child.tagName));
       assert.deepEqual(order,['BUTTON','H2']);
@@ -2277,6 +2289,102 @@ describe('JAV 用户脚本', () => {
     } finally {await producer.close();}
   });
 
+  it('独立明暗主题保存后覆盖 Peach，同步切回跟随时应用最新外观', async () => {
+    const snapshot = JSON.stringify({base: BASE, theme: 'dark', accent: 'blue',
+      colors: {400: '#60a5fa', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8'}});
+    const opened = await open(browser, { updateValues: {'peach.jav.appearance': snapshot} });
+    const { page } = opened;
+    try {
+      await ready(page);
+      const root = page.locator(ROOT);
+      assert.equal(await root.getAttribute('data-theme'), 'dark');
+      await root.getByRole('button', { name: 'Peach 设置', exact: true }).click();
+      let dialog = settingsDialog(page);
+      assert.equal(await dialog.getByRole('combobox', { name: '主题', exact: true }).innerText(), '跟随 Peach');
+      assert.equal(await dialog.getByLabel('Peach 地址', { exact: true }).isVisible(), false);
+      await chooseSetting(page, '主题', '浅色');
+      await dialog.getByRole('button', { name: '取消', exact: true }).click();
+      await dialog.waitFor({state:'detached'});
+      assert.equal(await root.getAttribute('data-theme'), 'dark');
+      await root.getByRole('button', { name: 'Peach 设置', exact: true }).click();
+      dialog = settingsDialog(page);
+      await chooseSetting(page, '主题', '浅色');
+      await dialog.getByRole('button', { name: '保存设置', exact: true }).click();
+      await dialog.waitFor({state:'detached'});
+      assert.equal(await root.getAttribute('data-theme'), 'light');
+      assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.theme']), 'light');
+      await page.evaluate(value => window.javMock.changed('peach.jav.appearance', value, true), snapshot);
+      assert.equal(await root.getAttribute('data-theme'), 'light');
+      await root.getByRole('button', { name: '展开 Peach 面板', exact: true }).click();
+      await root.getByRole('button', { name: 'Peach 设置', exact: true }).click();
+      dialog = settingsDialog(page);
+      assert.equal(await dialog.getByRole('combobox', { name: '主题', exact: true }).innerText(), '浅色');
+      await chooseSetting(page, '主题', '跟随 Peach');
+      await dialog.getByRole('button', { name: '保存设置', exact: true }).click();
+      await dialog.waitFor({state:'detached'});
+      assert.equal(await root.getAttribute('data-theme'), 'dark');
+      await page.evaluate(() => window.javMock.changed('peach.jav.theme', 'light', true));
+      assert.equal(await root.getAttribute('data-theme'), 'light');
+      assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.token']), TOKEN);
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
+  for (const viewport of VIEWPORTS) it(`${viewport.name} 设置下拉支持键盘与 Escape，开关保存后保留`, async () => {
+    const opened = await open(browser, {viewport});
+    const {page} = opened;
+    try {
+      await ready(page);
+      await page.locator(ROOT).getByRole('button', {name:'Peach 设置', exact:true}).click();
+      const dialog = settingsDialog(page);
+      const theme = dialog.getByRole('combobox', {name:'主题', exact:true});
+      await theme.press('ArrowDown');
+      const options = dialog.getByRole('listbox', {name:'主题', exact:true});
+      await options.waitFor({state:'visible'});
+      await page.keyboard.press('End');
+      await page.keyboard.press('Enter');
+      assert.equal(await theme.innerText(), '深色');
+      await theme.click();
+      await page.keyboard.press('Escape');
+      assert.equal(await theme.getAttribute('aria-expanded'), 'false');
+      assert.equal(await dialog.isVisible(), true);
+      const sound = dialog.getByRole('switch', {name:'提示音', exact:true});
+      const record = dialog.getByRole('switch', {name:'浏览记录', exact:true});
+      await sound.uncheck();
+      await record.check();
+      await dialog.getByRole('button', {name:'保存设置', exact:true}).click();
+      await dialog.waitFor({state:'detached'});
+      assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.success-sound']), false);
+      assert.equal(await page.evaluate(() => window.javMock.values['peach.jav.record-browsing']), true);
+      await page.locator(ROOT).getByRole('button', {name:'展开 Peach 面板', exact:true}).click();
+      await page.locator(ROOT).getByRole('button', {name:'Peach 设置', exact:true}).click();
+      assert.equal(await sound.isChecked(), false);
+      assert.equal(await record.isChecked(), true);
+      await theme.click();
+      const box = await options.boundingBox();
+      assert.ok(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= viewport.width && box.y + box.height <= viewport.height);
+      assert.deepEqual(opened.problems, []);
+    } finally {await opened.close();}
+  });
+
+  it('已入库卡片将识别番号与打开馆藏放在同一行', async () => {
+    const opened = await open(browser, { automatic: false });
+    const { page } = opened;
+    try {
+      await pending(page, 1);
+      await reply(page, 0, { ...body('owned'), asset_id: 4321 } as Body);
+      await ready(page, '在 Peach 中打开');
+      const area = page.locator(ROOT).locator('.action-area');
+      assert.equal(await area.locator(':scope > .action-row').count(), 1);
+      const openButton = await button(page).boundingBox();
+      const scan = await area.getByRole('button', { name: '识别本页全部番号', exact: true }).boundingBox();
+      assert.ok(openButton && scan);
+      assert.equal(openButton.y, scan.y);
+      assert.ok(scan.x >= openButton.x + openButton.width);
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
   it('保存设置后收为图标，拖动只保存位置，不添加任务', async () => {
     const opened=await open(browser);
     const {page}=opened;
@@ -2300,13 +2408,13 @@ describe('JAV 用户脚本', () => {
     } finally {await opened.close();}
   });
 
-  it('设置里勾选浏览记录后，作品浮卡与女优页的查询带 record=1，列表批量查询不带', async () => {
+  it('设置里开启浏览记录后，作品浮卡与女优页的查询带 record=1，列表批量查询不带', async () => {
     const settings = await open(browser);
     try {
       await ready(settings.page);
       assert.equal(new URL(await settings.page.evaluate(() => window.javMock.calls[0]!.url)).searchParams.get('record'), null);
       await settings.page.locator(ROOT).getByRole('button', { name: 'Peach 设置', exact: true }).click();
-      const option = settingsDialog(settings.page).getByRole('checkbox', { name: '把打开过的作品页、女优页记进 Peach，作推荐参考' });
+      const option = settingsDialog(settings.page).getByRole('switch', { name: '浏览记录', exact: true });
       assert.equal(await option.isChecked(), false);
       await option.check();
       await settingsDialog(settings.page).getByRole('button', { name: '保存设置', exact: true }).click();
@@ -2642,6 +2750,44 @@ describe('JAV 用户脚本', () => {
       await reply(page, 1, { ...body('queued', 'JUL-500'), queue_position: 1 } as Body);
       await task.getByRole('status').filter({ hasText: /^已排队$/ }).waitFor();
       assert.equal(await task.getByRole('button', { name: '提前处理' }).isHidden(), true);
+      assert.deepEqual(opened.problems, []);
+    } finally { await opened.close(); }
+  });
+
+  it('悬浮按钮悬停与数量角标在深浅主题下都有不透明底色', async () => {
+    const opened = await open(browser, { initial: 'owned', activeItems: [body('submitted', 'MIDV-339')] });
+    const { page } = opened;
+    try {
+      const root = page.locator(ROOT);
+      await root.getByRole('button', { name: '隐藏 Peach 面板' }).click();
+      const launcher = root.locator('.launcher');
+      for (const theme of ['dark', 'light']) {
+        await root.evaluate((host, value) => { (host as HTMLElement).dataset.theme = value; }, theme);
+        await launcher.hover();
+        const hoverAlpha = await launcher.evaluate(node => {
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d')!;
+          context.fillStyle = getComputedStyle(node).backgroundColor;
+          context.fillRect(0, 0, 1, 1);
+          return context.getImageData(0, 0, 1, 1).data[3];
+        });
+        assert.equal(hoverAlpha, 255, `${theme} launcher hover base is opaque`);
+        for (const tone of ['active', 'ended', 'failed']) {
+          const style = await launcher.evaluate((node, value) => {
+            const button = node as HTMLElement;
+            button.dataset.count = '2';
+            button.dataset.countTone = value;
+            const badge = getComputedStyle(button, '::after');
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d')!;
+            context.fillStyle = badge.backgroundColor;
+            context.fillRect(0, 0, 1, 1);
+            return { alpha: context.getImageData(0, 0, 1, 1).data[3], image: badge.backgroundImage };
+          }, tone);
+          assert.equal(style.alpha, 255, `${theme}/${tone} badge base is opaque`);
+          assert.match(style.image, /^linear-gradient\(/);
+        }
+      }
       assert.deepEqual(opened.problems, []);
     } finally { await opened.close(); }
   });

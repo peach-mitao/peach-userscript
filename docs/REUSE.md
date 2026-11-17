@@ -10,6 +10,8 @@
 
 ## 阶段动画、页面识别与外观
 
+设置下拉与开关按 Peach revision `ad972f193b4b5359cd3d56533d3bcc224a78aead` 的 BoardUI `select.tsx`、`menu-styles.ts`、`switch.tsx` 适配为现有 DOM 控件。Select 使用同一 36px 触发器、10px 圆角、菜单表面及选中行配方，定位与键盘沿用 `ui-kit/select-field.ts`、`anchored-menu.ts` 的规则，原生 Popover 承接顶层显示、外点和 Escape 关闭。Switch 复用 md 档 42×24 轨道、18px 拇指及内嵌标记，用原生输入提供开关语义，无新增运行依赖。
+
 默认密度恢复 Peach 表格采用档：14/20、500，10px 12px 单元格间距；状态文字为 14/20、400，不使用 `bui-table-sm`。头像复用 Peach 已登记的暗色例外：`avatar-neutral-background` 为主文字色 10% 混入 primary 面，前景取主文字色，24px 首字母使用 Avatar `sm` 的 12/16、600。正常、悬停和选中态均检查前景对比度；字段、表格正文、提示分别使用完整的 Body、Caption 字阶。设置与番号列表为左返回子页，沿用 Remix Icon 4.9.0 `RiArrowLeftLine`，仅主浮卡保留关闭。
 
 无人物资料时的默认头像使用同一 Remix Icon 4.9.0 的 `RiUserLine`，保留原始 SVG 路径与现有许可；图形 16px，外框与照片、首字母同为 24px，使用中性灰色。资料读取期间也使用此占位，取得人物名后替换为照片或首字母，不发起额外查询。
@@ -28,7 +30,7 @@
 
 列表初次识别和重新识别均复用同一只读状态接口与行状态渲染，再开放加入操作。已有影片、已入库和进行中任务不计入可加入数量；未加入与可重试项保留操作，查询失败显示「未取得」。列表打开时即跟踪已有任务，返回后不继续查询后续番号；页面显示范围沿用 `pageInterfaceAllowed`，未登记站点默认不发状态查询。
 
-外观复用 Peach 的 `peach.settings.v1` 和页面实际 `--color-accent-400` 至 `700`，只在已配对 origin 读取主题与强调色。GM 存储快照和既有跨标签监听承接同步；未取得时随系统。图标拖动使用原生 Pointer Events、指针捕获和比例位置存储，打开浮卡、设置与窗口缩放时按视口约束位置。
+外观复用 Peach 的 `peach.settings.v1` 和页面实际 `--color-accent-400` 至 `700`，只在已配对 origin 读取主题与强调色。GM 存储快照和既有跨标签监听承接同步，用户脚本通过 `peach.jav.theme` 独立保存跟随 Peach、浅色或深色偏好。默认跟随 Peach，未取得快照时随系统，强调色继续同步。图标拖动使用原生 Pointer Events、指针捕获和比例位置存储，打开浮卡、设置与窗口缩放时按视口约束位置。
 
 ## 更新状态与安装感知
 
