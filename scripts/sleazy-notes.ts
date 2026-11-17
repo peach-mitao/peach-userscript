@@ -32,6 +32,13 @@ export function releasePayload(release: any, repository: string) {
   };
 }
 
+export function renderedRelease(release: any, repository: string, render: (body: string) => string) {
+  releasePayload(release, repository);
+  const body = render(release.body);
+  if (typeof body !== 'string' || !body.trim()) throw new Error('Sleazy 发行正文 HTML 未取得');
+  return { ...release, body };
+}
+
 async function history(fetcher: typeof fetch): Promise<string[]> {
   const response = await fetcher(HISTORY, {
     redirect: 'error', signal: AbortSignal.timeout(60_000), headers: { Accept: 'application/json' },
@@ -98,7 +105,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const repository = process.env.GITHUB_REPOSITORY || '';
     const release = JSON.parse(execFileSync('gh', ['api', `repos/${repository}/releases/latest`], { encoding: 'utf8' }));
     if (release.tag_name !== `v${values.version}`) throw new Error('当前运行的版本与 GitHub 最新发行版不一致，停止同步');
-    const result = await syncNativeHistory(release, repository, url, secret);
+    const rendered = renderedRelease(release, repository, text => execFileSync('gh', ['api', 'markdown', '--input', '-'], {
+      input: JSON.stringify({ text, mode: 'gfm', context: repository }), encoding: 'utf8',
+    }));
+    const result = await syncNativeHistory(rendered, repository, url, secret);
     console.log(`Sleazy 原生历史 ${release.tag_name}：${result}`);
   }
 }
