@@ -2,7 +2,7 @@ import { createHmac } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-const HISTORY = 'https://sleazyfork.org/zh-CN/scripts/600821-peach-userscript/versions?show_all_versions=1&list_all=1';
+const HISTORY = 'https://api.sleazyfork.org/zh-CN/scripts/600821-peach-userscript/versions.json?show_all_versions=1&list_all=1';
 
 export function newerThan(version: string, boundary: string): boolean {
   if (![version, boundary].every(value => /^\d+\.\d+\.\d+$/.test(value))) throw new Error('版本格式无效');
@@ -32,17 +32,17 @@ export function releasePayload(release: any, repository: string) {
   };
 }
 
-export function historyContains(html: string, release: any): boolean {
-  if (!html.includes('class="history_versions"')) throw new Error('Sleazy 原生历史页面未取得');
-  return html.split('<span class="version-number">').slice(1).some(part =>
-    part.slice(0, part.indexOf('</span>')).includes(`>${release.tag_name}</a>`)
-      && part.includes(`href="${release.html_url}"`));
-}
-
-async function history(fetcher: typeof fetch): Promise<string> {
-  const response = await fetcher(HISTORY, { redirect: 'error', signal: AbortSignal.timeout(60_000) });
+async function history(fetcher: typeof fetch): Promise<string[]> {
+  const response = await fetcher(HISTORY, {
+    redirect: 'error', signal: AbortSignal.timeout(60_000), headers: { Accept: 'application/json' },
+  });
   if (!response.ok) throw new Error(`Sleazy 原生历史读取失败，HTTP ${response.status}`);
-  return response.text();
+  const entries: unknown = await response.json();
+  if (!Array.isArray(entries) || !entries.every(entry => typeof entry?.version === 'string'
+      && /^\d+\.\d+\.\d+$/.test(entry.version))) {
+    throw new Error('Sleazy 原生历史 JSON 格式无效');
+  }
+  return entries.map(entry => entry.version);
 }
 
 export async function signedWebhook(url: string, secret: string, event: string, payload: unknown, fetcher: typeof fetch = fetch) {
@@ -67,13 +67,13 @@ export async function signedWebhook(url: string, secret: string, event: string, 
 
 export async function syncNativeHistory(release: any, repository: string, url: string, secret: string, fetcher: typeof fetch = fetch) {
   const payload = releasePayload(release, repository);
+  const version = release.tag_name.slice(1);
   const before = await history(fetcher);
-  if (historyContains(before, release)) return 'current';
-  const latest = before.split('<span class="version-number">')[1]?.split('</span>')[0]
-    ?.match(/>v(\d+\.\d+\.\d+)<\/a>/)?.[1];
+  if (before.includes(version)) return 'current';
+  const latest = before[0];
   if (!latest) throw new Error('Sleazy 当前版本未取得，停止同步');
-  if (!newerThan(release.tag_name.slice(1), latest)) {
-    throw new Error('Sleazy 已存在同版或更新版本且未找到发行日志，请核对原生历史');
+  if (!newerThan(version, latest)) {
+    throw new Error('Sleazy 已存在更新版本，请核对原生历史');
   }
   const result = await signedWebhook(url, secret, 'release', payload, fetcher);
   if (!Array.isArray(result.updated_failed) || result.updated_failed.length || !Array.isArray(result.updated_scripts)
@@ -81,7 +81,7 @@ export async function syncNativeHistory(release: any, repository: string, url: s
         && /^https:\/\/api\.sleazyfork\.org\/(?:zh-CN|en)\/scripts\/600821(?:-|$)/.test(value))) {
     throw new Error('Sleazy 未确认目标脚本同步成功，请核对原生历史后继续');
   }
-  if (!historyContains(await history(fetcher), release)) throw new Error('Sleazy 已应答成功，原生历史尚未确认，请核对后继续');
+  if (!(await history(fetcher)).includes(version)) throw new Error('Sleazy 已应答成功，原生历史尚未确认，请核对后继续');
   return 'synced';
 }
 
