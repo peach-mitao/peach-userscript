@@ -3,7 +3,7 @@ import { createHmac } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { releaseNotes, versionSection } from '../scripts/release-notes.ts';
-import { historyContains, newerThan, releasePayload, signedWebhook, syncNativeHistory } from '../scripts/sleazy-notes.ts';
+import { newerThan, releasePayload, signedWebhook, syncNativeHistory } from '../scripts/sleazy-notes.ts';
 
 const SAMPLE = `# Changelog / 更新日志
 
@@ -42,12 +42,8 @@ const RELEASE = {
   html_url: `https://github.com/${REPOSITORY}/releases/tag/v0.7.20`,
   assets: [{ name: 'peach-jav.user.js', browser_download_url: `https://github.com/${REPOSITORY}/releases/download/v0.7.20/peach-jav.user.js` }],
 };
-const EMPTY_HISTORY = '<ul class="history_versions"></ul>';
-const PRIOR_HISTORY = '<ul class="history_versions"><li><span class="version-number"><a href="?version=0">v0.7.19</a></span></li></ul>';
-const UPDATED_HISTORY = `<ul class="history_versions"><li>
-  <span class="version-number"><a href="?version=1">v0.7.20</a></span>
-  <span class="version-changelog"><ul><li>Fixed</li></ul><a href="${RELEASE.html_url}">GitHub Release</a></span>
-</li></ul>`;
+const PRIOR_HISTORY = [{ version: '0.7.19' }];
+const UPDATED_HISTORY = [{ version: '0.7.20' }, ...PRIOR_HISTORY];
 const SUCCESS = { updated_scripts: ['https://api.sleazyfork.org/zh-CN/scripts/600821-peach-userscript'], updated_failed: [] };
 
 test('原生历史使用完整 Release 双语正文，保留 GitHub 版本标题', () => {
@@ -70,12 +66,21 @@ test('未来版本按数值比较，既有版本只验证签名', () => {
   assert.throws(() => newerThan('v0.7.20', '0.7.19'), /版本格式/);
 });
 
-test('原生历史查重绑定版本与 Release 链接，兼容正文中的嵌套列表', () => {
-  assert.equal(historyContains(UPDATED_HISTORY, RELEASE), true);
-  assert.equal(historyContains(EMPTY_HISTORY, RELEASE), false);
-  assert.equal(historyContains(UPDATED_HISTORY.replace('>v0.7.20</a>', '>v0.7.19</a>'), RELEASE), false);
-  assert.equal(historyContains(UPDATED_HISTORY.replace(RELEASE.html_url, `${RELEASE.html_url}-other`), RELEASE), false);
-  assert.throws(() => historyContains('<html>Unavailable</html>', RELEASE), /页面未取得/);
+test('官方历史 API 未取得或格式无效时停止写入', async () => {
+  for (const response of [
+    new Response('Cloudflare challenge', { status: 403 }),
+    new Response('<html>Unavailable</html>'),
+    Response.json({ error: 'Unavailable' }),
+    Response.json([{ version: 'unknown' }]),
+    Response.json([null]),
+    Response.json([]),
+  ]) {
+    const fetcher = (async (_url, options) => {
+      assert.notEqual(options?.method, 'POST');
+      return response;
+    }) as typeof fetch;
+    await assert.rejects(syncNativeHistory(RELEASE, REPOSITORY, WEBHOOK, 'test-only-secret', fetcher));
+  }
 });
 
 test('使用既有密钥签署实际 JSON 字节，拒绝重定向和非目标地址', async () => {
@@ -99,9 +104,14 @@ test('使用既有密钥签署实际 JSON 字节，拒绝重定向和非目标�
 
 test('未来发行依次读取、同步并确认原生历史，重复运行跳过写入', async () => {
   const methods: string[] = [];
-  const responses = [new Response(PRIOR_HISTORY), Response.json(SUCCESS), new Response(UPDATED_HISTORY), new Response(UPDATED_HISTORY)];
-  const fetcher = (async (_url, options) => {
+  const responses = [Response.json(PRIOR_HISTORY), Response.json(SUCCESS), Response.json(UPDATED_HISTORY), Response.json(UPDATED_HISTORY)];
+  const fetcher = (async (url, options) => {
     methods.push(options?.method || 'GET');
+    if (options?.method !== 'POST') {
+      assert.equal(String(url), 'https://api.sleazyfork.org/zh-CN/scripts/600821-peach-userscript/versions.json?show_all_versions=1&list_all=1');
+      assert.equal(new Headers(options?.headers).get('Accept'), 'application/json');
+      assert.equal(options?.redirect, 'error');
+    }
     return responses.shift()!;
   }) as typeof fetch;
   assert.equal(await syncNativeHistory(RELEASE, REPOSITORY, WEBHOOK, 'test-only-secret', fetcher), 'synced');
@@ -117,7 +127,7 @@ test('失败与未取得分别报错，写入结果不明时终止供下一次�
     { response: Response.json(SUCCESS), error: /原生历史尚未确认/ },
   ]) {
     const methods: string[] = [];
-    const responses = [new Response(PRIOR_HISTORY), failure.response, new Response(PRIOR_HISTORY)];
+    const responses = [Response.json(PRIOR_HISTORY), failure.response, Response.json(PRIOR_HISTORY)];
     const fetcher = (async (_url, options) => {
       methods.push(options?.method || 'GET');
       return responses.shift()!;
@@ -127,18 +137,21 @@ test('失败与未取得分别报错，写入结果不明时终止供下一次�
   }
 });
 
-test('旧运行和同版缺日志的运行停止写入，当前版本未取得时报错', async () => {
-  for (const currentVersion of ['0.7.20', '0.7.21', '0.8.0']) {
+test('旧运行停止写入，已有版本及其重复历史行跳过写入', async () => {
+  for (const currentVersion of ['0.7.21', '0.8.0']) {
     const methods: string[] = [];
     const fetcher = (async (_url, options) => {
       methods.push(options?.method || 'GET');
-      return new Response(PRIOR_HISTORY.replace('v0.7.19', `v${currentVersion}`));
+      return Response.json([{ version: currentVersion }]);
     }) as typeof fetch;
-    await assert.rejects(syncNativeHistory(RELEASE, REPOSITORY, WEBHOOK, 'test-only-secret', fetcher), /同版或更新版本/);
+    await assert.rejects(syncNativeHistory(RELEASE, REPOSITORY, WEBHOOK, 'test-only-secret', fetcher), /更新版本/);
     assert.deepEqual(methods, ['GET']);
   }
-  await assert.rejects(syncNativeHistory(RELEASE, REPOSITORY, WEBHOOK, 'test-only-secret',
-    (async () => new Response(EMPTY_HISTORY)) as typeof fetch), /当前版本未取得/);
+  const fetcher = (async (_url, options) => {
+    assert.notEqual(options?.method, 'POST');
+    return Response.json([{ version: '0.7.21' }, ...UPDATED_HISTORY, ...UPDATED_HISTORY]);
+  }) as typeof fetch;
+  assert.equal(await syncNativeHistory(RELEASE, REPOSITORY, WEBHOOK, 'test-only-secret', fetcher), 'current');
 });
 
 test('发行说明汇总到上一个已发布版本，按分组合并，英文在前、中文在折叠区', () => {
