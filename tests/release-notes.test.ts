@@ -3,7 +3,7 @@ import { createHmac } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { releaseNotes, versionSection } from '../scripts/release-notes.ts';
-import { newerThan, releasePayload, signedWebhook, syncNativeHistory } from '../scripts/sleazy-notes.ts';
+import { newerThan, releasePayload, renderedRelease, signedWebhook, syncNativeHistory } from '../scripts/sleazy-notes.ts';
 
 const SAMPLE = `# Changelog / 更新日志
 
@@ -64,6 +64,28 @@ test('未来版本按数值比较，既有版本只验证签名', () => {
   assert.equal(newerThan('0.8.0', '0.7.19'), true);
   assert.equal(newerThan('1.0.0', '0.7.19'), true);
   assert.throws(() => newerThan('v0.7.20', '0.7.19'), /版本格式/);
+});
+
+test('Sleazy 发行正文先渲染为 HTML，折叠区使用标题和列表元素', async () => {
+  const html = '<h3>Fixed</h3><ul><li>Retry failed</li></ul>\n<details><summary>简体中文</summary>\n<h3>修复</h3><ul><li>重试失败项</li></ul>\n</details>';
+  const rendered = renderedRelease(RELEASE, REPOSITORY, body => {
+    assert.equal(body, RELEASE.body);
+    assert.match(body, /<details>[\s\S]*### 修复/);
+    return html;
+  });
+  assert.equal(RELEASE.body.includes('<h3>'), false);
+  assert.equal(rendered.body, html);
+  const responses = [Response.json(PRIOR_HISTORY), Response.json(SUCCESS), Response.json(UPDATED_HISTORY)];
+  const fetcher = (async (_url, options) => {
+    if (options?.method === 'POST') {
+      const payload = JSON.parse(String(options.body));
+      assert.equal(payload.release.name, `${html}\n\n[GitHub Release](${RELEASE.html_url})`);
+    }
+    return responses.shift()!;
+  }) as typeof fetch;
+  assert.equal(await syncNativeHistory(rendered, REPOSITORY, WEBHOOK, 'test-only-secret', fetcher), 'synced');
+  assert.throws(() => renderedRelease(RELEASE, REPOSITORY, () => ''), /HTML 未取得/);
+  assert.throws(() => renderedRelease({ ...RELEASE, body: '' }, REPOSITORY, () => html), /正文或安装制品/);
 });
 
 test('官方历史 API 未取得或格式无效时停止写入', async () => {

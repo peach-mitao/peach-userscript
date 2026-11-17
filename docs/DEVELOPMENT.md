@@ -48,7 +48,7 @@ npm run verify
 
 Sleazy 的中英文附加说明分别填写，按访客语言显示。原生历史使用一个字段，展示与 GitHub Release 一致的完整双语正文和发行链接。GitHub Release 标题只写版本号（如 `v0.7.1`），默认展示完整英文正文，中文放入 `details` 折叠区，两部分共同引用同一变更范围。
 
-Sleazy 的 GitHub Release webhook 从事件的 `release.name` 读取原生历史日志。`scripts/sleazy-notes.ts` 取得实际 GitHub Release，把完整正文和发行链接放入发送事件的 `release.name`，使用既有签名密钥计算 `X-Hub-Signature`。工作流从 `0.7.19` 之后的新版本开始写入，既有版本运行时通过 `ping` 验证配置。平台缺少作者修改旧历史行的入口，历史补录由平台管理员处理。
+Sleazy 的 GitHub Release webhook 从事件的 `release.name` 读取原生历史日志。`scripts/sleazy-notes.ts` 取得实际 GitHub Release，通过 GitHub Markdown API 将完整正文渲染为 HTML，再把正文和发行链接放入发送事件的 `release.name`，使用既有签名密钥计算 `X-Hub-Signature`。Sleazy 使用 Redcarpet，折叠区内的标题、列表等内容须转换为 HTML 才能正常显示。两端展示同一份双语内容。工作流从 `0.7.19` 之后的新版本开始写入，既有版本运行时通过 `ping` 验证配置。平台缺少作者修改旧历史行的入口，历史补录和格式修正由平台管理员处理。
 
 GitHub 中现有的 Sleazy webhook 订阅 `push`，用于将 `main` 上修改的 `docs/SLEAZY.md` 和 `docs/SLEAZY.zh-CN.md` 同步为附加说明。发行同步由 `release.yml` 的签名步骤负责，仓库变量 `SLEAZY_WEBHOOK_URL` 保存账号 webhook 地址，Actions Secret `SLEAZY_WEBHOOK_SECRET` 保存既有签名密钥。脚本通过官方 `api.sleazyfork.org` 的 `versions.json` 读取完整版本历史，发送前按版本查重，确认本次运行对应 GitHub 最新发行版，并要求新版本高于 Sleazy 当前版本。收到目标脚本的成功应答后，再通过该 API 核对版本已经发布。请求失败或结果未确认时工作流报错，可重跑该次工作流继续核对。JSON API 仅提供版本记录，发行正文由签名请求传递，页面上的正文展示另行核验。
 
