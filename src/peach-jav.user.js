@@ -10,7 +10,7 @@
 // @supportURL   https://github.com/peach-mitao/peach-userscript/issues
 // @homepageURL  https://github.com/peach-mitao/peach-userscript
 // @license      AGPL-3.0-or-later
-// @version      0.7.19
+// @version      0.7.20
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -81,6 +81,7 @@
   const STORAGE_ENABLED = 'peach.jav.enabled';
   const STORAGE_POSITION = 'peach.jav.position';
   const STORAGE_APPEARANCE = 'peach.jav.appearance';
+  const STORAGE_THEME = 'peach.jav.theme';
   const STORAGE_BATCH_ORDER = 'peach.jav.batch-order';
   const ROOT_ID = 'peach-jav-action';
   const SCRIPT_VERSION = __PEACH_JAV_VERSION__;
@@ -252,6 +253,7 @@
   }
 
   const DARK_STYLE = `color-scheme:dark;--field-ring-hover:rgba(255,255,255,.24);
+      --color-switch-off-chip-start:var(--color-background-tertiary-default);--color-switch-off-chip-end:var(--color-background-tertiary-default);
       --color-status-lime-background:color-mix(in srgb,oklch(27.4% .072 132.109) 60%,transparent);--color-status-lime-text:oklch(76.8% .233 130.85);
       --color-status-yellow-background:color-mix(in srgb,oklch(28.6% .066 53.813) 60%,transparent);--color-status-yellow-text:oklch(79.5% .184 86.047);
       --color-status-rose-background:color-mix(in srgb,oklch(27.1% .105 12.094) 60%,transparent);--color-status-rose-text:oklch(64.5% .246 16.439);
@@ -278,6 +280,10 @@
       --color-border-button-default:#ebebeb;--color-border-button-hover:oklch(87% 0 0);--color-border-button-active:oklch(70.8% 0 0);
       --color-accent-400:#3392ff;--color-accent-500:oklch(62.3% .214 259.815);--color-accent-600:oklch(54.6% .245 262.881);--color-accent-700:oklch(48.8% .243 264.376);
       --color-text-white:#fff;--color-text-error:oklch(57.7% .245 27.325);--color-separator-border:#ebebeb;
+      --color-control-indicator-background:#fff;--color-control-indicator-background-subtle:#f5f5f5;
+      --color-switch-off-chip-start:#fff;--color-switch-off-chip-end:#f5f5f5;
+      --color-switch-on-chip-start:color-mix(in oklab,var(--color-accent-500) 63%,var(--color-accent-600));
+      --color-switch-on-chip-end:color-mix(in oklab,var(--color-accent-600) 16%,var(--color-accent-700));
       --update-script-foreground:oklch(54.6% .245 262.881);--update-peach-foreground:oklch(55.5% .163 48.998);
       --elevation-xs:0 1px 2px 0 rgb(0 0 0 / .05);--elevation-dropdown:0 1px 1px 0 rgb(0 0 0 / .04),0 4px 4px 0 rgb(0 0 0 / .02);
       --ground:var(--color-background-full);--surface:var(--color-background-secondary-default);--sunk:var(--color-background-tertiary-default);
@@ -353,9 +359,11 @@
     .geist-button.launcher{touch-action:none;cursor:grab}.geist-button.launcher:active{cursor:grabbing}
     .geist-button.launcher[data-count]{position:relative;overflow:visible}
     .geist-button.launcher[data-count]::after{content:attr(data-count);position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;border-radius:9px;
-      display:grid;place-items:center;background:var(--color-status-blue-background);color:var(--color-status-blue-text);font:var(--board-caption-semibold);box-shadow:0 0 0 2px var(--ground);pointer-events:none}
-    .geist-button.launcher[data-count-tone=ended]::after{background:var(--color-status-lime-background);color:var(--color-status-lime-text)}
-    .geist-button.launcher[data-count-tone=failed]::after{background:var(--color-status-rose-background);color:var(--color-status-rose-text)}
+      --count-background:var(--color-status-blue-background);display:grid;place-items:center;
+      background:linear-gradient(var(--count-background),var(--count-background)),var(--ground);
+      color:var(--color-status-blue-text);font:var(--board-caption-semibold);box-shadow:0 0 0 2px var(--ground);pointer-events:none}
+    .geist-button.launcher[data-count-tone=ended]::after{--count-background:var(--color-status-lime-background);color:var(--color-status-lime-text)}
+    .geist-button.launcher[data-count-tone=failed]::after{--count-background:var(--color-status-rose-background);color:var(--color-status-rose-text)}
     .shared-note{margin:8px 0 0}.shared-foot{display:flex;justify-content:flex-end;gap:16px;margin-top:8px}.shared-foot:not(:has(>:not([hidden]))){display:none}
     .shared-action[data-action=retry-failed]{margin-right:auto;color:var(--color-status-rose-text)}.shared-action[data-action=retry-failed]:hover{color:var(--color-status-rose-text);opacity:.8}
     .shared-action-icon{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
@@ -406,6 +414,7 @@
     .want-toggle{gap:6px}.want-toggle svg{fill:currentColor;stroke:none}.want-toggle[data-added]{cursor:default;color:var(--ink-2)}.want-toggle[data-added]:hover{background:var(--color-background-primary-default)}
     .geist-button:focus-visible{outline:2px solid var(--tungsten);outline-offset:2px}
     @media(hover:hover) and (pointer:fine){.geist-button:not(:disabled,[aria-disabled=true]):hover{background-color:var(--color-background-primary-hover);border-color:var(--color-border-button-hover)}
+      .geist-button.launcher:not(:disabled,[aria-disabled=true]):hover{background:linear-gradient(var(--color-background-primary-hover),var(--color-background-primary-hover)),var(--ground)}
       .geist-button.primary:not(:disabled,[aria-disabled=true]):hover::before{opacity:1}}
     .geist-button.primary:not(:disabled,[aria-disabled=true]):active{background:var(--board-blue-active)}.geist-button.primary:not(:disabled,[aria-disabled=true]):active::before{opacity:0}
     .geist-button:disabled,.geist-button[aria-disabled=true]{background:var(--surface);color:var(--color-text-tertiary);box-shadow:none;cursor:default;transition:none}
@@ -419,9 +428,37 @@
     .geist-input:focus{outline:0;box-shadow:inset 0 0 0 2px var(--color-border-button-active)}.geist-input[aria-invalid=true]{border-color:var(--drop)}
     .field{display:grid;gap:4px;min-width:0}.field label{font:var(--board-body-medium)}.hint{font:var(--board-caption);color:var(--muted);overflow-wrap:anywhere}
     .secret{display:flex;align-items:center;gap:8px}.secret .geist-button{flex:none}
-    fieldset.display-scope{margin:0;padding:0;border:0;display:grid;gap:8px;min-width:0}
-    .display-scope legend{font:var(--board-body-medium);margin-bottom:8px}.display-scope label{display:flex;align-items:center;gap:8px;cursor:pointer}
-    .display-scope input{accent-color:var(--color-accent-500);width:16px;height:16px;margin:0;flex:none}
+    .connection-settings{min-width:0}.connection-settings summary{cursor:pointer;font:var(--board-body-medium)}
+    .connection-settings summary .hint{display:block;margin-top:4px;font:var(--board-caption)}
+    .connection-settings summary:focus-visible{outline:2px solid var(--tungsten);outline-offset:2px;border-radius:4px}
+    .connection-fields{display:grid;gap:16px;margin-top:16px}
+    .geist-button.setting-select-trigger{width:100%;justify-content:space-between;gap:6px;padding:8px 10px;font:var(--board-body-medium)}
+    .setting-select-trigger svg{flex:none;color:var(--ink-2);transition:transform .2s ease}
+    .setting-select-trigger[aria-expanded=true] svg{transform:rotate(180deg)}
+    .setting-menu{position:fixed;inset:auto;margin:0;padding:8px;max-height:240px;overflow:auto;overscroll-behavior:contain;
+      border:1px solid var(--line);border-radius:16px;background:var(--color-background-primary-default);color:var(--ink);box-shadow:var(--elevation-dropdown);
+      opacity:0;transform:scale(.95);filter:blur(2px);transform-origin:top left;
+      transition:opacity .15s ease-out,transform .15s ease-out,filter .15s ease-out,display .15s allow-discrete,overlay .15s allow-discrete}
+    .setting-menu[data-placement=top]{transform-origin:bottom left}
+    .setting-menu:popover-open{opacity:1;transform:scale(1);filter:blur(0)}
+    @starting-style{.setting-menu:popover-open{opacity:0;transform:scale(.95);filter:blur(2px)}}
+    .setting-menu button{display:flex;align-items:center;width:100%;min-height:36px;padding:8px;border:0;border-radius:10px;
+      background:transparent;color:var(--ink);font:var(--board-body-medium);text-align:left;cursor:pointer;outline:none}
+    .setting-menu button+button{margin-top:4px}
+    .setting-menu button:is(:hover,:focus-visible,[aria-selected=true]){background:var(--color-background-primary-hover)}
+    .setting-switch{position:relative;display:flex;align-items:center;justify-content:space-between;gap:16px;cursor:pointer}
+    .setting-switch-copy{display:grid;gap:4px;min-width:0}.setting-switch-title{font:var(--board-body-medium)}
+    .setting-switch input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
+    .switch-track{position:relative;flex:none;width:42px;height:24px;border-radius:999px;background:var(--color-background-tertiary-default);transition:background .2s ease}
+    .switch-thumb{position:absolute;left:3px;top:3px;display:grid;place-items:center;width:18px;height:18px;border-radius:999px;
+      background:linear-gradient(var(--color-control-indicator-background) 43.837%,var(--color-control-indicator-background-subtle));
+      box-shadow:0 3px 3px #00000008,0 .75px 0 #0000000d;transition:transform .2s ease}
+    .switch-chip{width:7.5px;height:7.5px;border:.375px solid color-mix(in srgb,var(--line) 50%,transparent);border-radius:999px;
+      background:linear-gradient(to top,var(--color-switch-off-chip-start) 43.837%,var(--color-switch-off-chip-end));box-shadow:0 3px 3px #00000008}
+    .setting-switch input:checked+.switch-track{background:var(--board-blue);box-shadow:inset 0 1.5px #ffffff40,inset 0 0 0 .75px var(--color-accent-500)}
+    .setting-switch input:checked+.switch-track .switch-thumb{transform:translateX(18px)}
+    .setting-switch input:checked+.switch-track .switch-chip{border-color:var(--color-accent-600);background:linear-gradient(to top,var(--color-switch-on-chip-start) 43.837%,var(--color-switch-on-chip-end))}
+    .setting-switch input:focus-visible+.switch-track{outline:2px solid var(--tungsten);outline-offset:2px}
     .batch-frame{position:relative;min-width:0}
     .batch-list{position:relative;border:1px solid var(--line);border-radius:var(--control-radius);overflow:auto;overscroll-behavior:contain;
       max-height:min(480px,calc(100dvh - 320px));min-height:97px;scrollbar-width:none;background:var(--color-background-primary-default)}
@@ -631,22 +668,154 @@
     return button;
   }
 
+  // Select 的按钮、菜单行与定位沿用 Peach Select；Popover 承接顶层、外点与 Escape 关闭。
+  function settingSelect(id, title, options, current, hint = '') {
+    const root = element('div', 'field');
+    const label = element('label', '', title);
+    label.htmlFor = id;
+    const trigger = control(title, {icon:'collapse'});
+    trigger.classList.remove('icon');
+    trigger.classList.add('setting-select-trigger');
+    trigger.id = id;
+    trigger.setAttribute('role', 'combobox');
+    trigger.setAttribute('aria-haspopup', 'listbox');
+    trigger.setAttribute('aria-expanded', 'false');
+    const caption = element('span');
+    trigger.prepend(caption);
+    const menu = element('div', 'setting-menu');
+    menu.id = `${id}-options`;
+    menu.popover = 'auto';
+    menu.setAttribute('role', 'listbox');
+    menu.setAttribute('aria-label', title);
+    trigger.setAttribute('aria-controls', menu.id);
+    trigger.popoverTargetElement = menu;
+    let value = options.some(([key]) => key === current) ? current : options[0][0];
+    const rows = options.map(([key, text]) => {
+      const row = element('button', '', text);
+      row.type = 'button';
+      row.tabIndex = -1;
+      row.setAttribute('role', 'option');
+      row.dataset.value = key;
+      row.addEventListener('click', () => {
+        value = key;
+        paint();
+        menu.hidePopover();
+        trigger.focus();
+      });
+      menu.append(row);
+      return row;
+    });
+    const selected = () => rows.find(row => row.dataset.value === value);
+    function paint() {
+      for (const row of rows) row.setAttribute('aria-selected', String(row.dataset.value === value));
+      caption.textContent = selected().textContent;
+    }
+    const position = () => {
+      const anchor = trigger.getBoundingClientRect();
+      menu.style.width = `${Math.min(anchor.width, innerWidth - 32)}px`;
+      menu.style.maxHeight = '240px';
+      const naturalHeight = menu.scrollHeight + menu.offsetHeight - menu.clientHeight;
+      const under = innerHeight - 16 - anchor.bottom - 4, over = anchor.top - 20;
+      const downward = under >= naturalHeight || under >= over;
+      const height = Math.min(naturalHeight, Math.max(0, downward ? under : over));
+      menu.dataset.placement = downward ? 'bottom' : 'top';
+      menu.style.maxHeight = `${height}px`;
+      menu.style.left = `${Math.max(16, Math.min(anchor.left, innerWidth - menu.offsetWidth - 16))}px`;
+      menu.style.top = `${downward ? anchor.bottom + 4 : anchor.top - 4 - height}px`;
+    };
+    const closeOnScroll = event => {
+      if (event.target instanceof Node && event.target.contains(trigger)) menu.hidePopover();
+    };
+    const stopWatching = () => {
+      window.removeEventListener('resize', position);
+      root.getRootNode().removeEventListener('scroll', closeOnScroll, true);
+    };
+    menu.addEventListener('toggle', event => {
+      const open = event.newState === 'open';
+      trigger.setAttribute('aria-expanded', String(open));
+      if (open) {
+        position();
+        selected().focus();
+        window.addEventListener('resize', position);
+        root.getRootNode().addEventListener('scroll', closeOnScroll, true);
+      } else stopWatching();
+    });
+    trigger.addEventListener('keydown', event => {
+      if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+      event.preventDefault();
+      if (!menu.matches(':popover-open')) menu.showPopover();
+      selected().focus();
+    });
+    menu.addEventListener('keydown', event => {
+      if (event.key === 'Escape' || event.key === 'Tab') {
+        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); }
+        menu.hidePopover();
+        trigger.focus();
+        return;
+      }
+      const index = rows.indexOf(menu.getRootNode().activeElement);
+      let next;
+      if (event.key === 'ArrowDown') next = rows[(index + 1) % rows.length];
+      else if (event.key === 'ArrowUp') next = rows[(index - 1 + rows.length) % rows.length];
+      else if (event.key === 'Home') next = rows[0];
+      else if (event.key === 'End') next = rows.at(-1);
+      else if (event.key.length === 1 && event.key !== ' ') next = rows.find(row => row.textContent.startsWith(event.key));
+      if (next) { event.preventDefault(); next.focus(); }
+    });
+    root.append(label, trigger, menu);
+    if (hint) {
+      const help = element('p', 'hint', hint);
+      help.id = `${id}-hint`;
+      trigger.setAttribute('aria-describedby', help.id);
+      root.append(help);
+    }
+    paint();
+    return {root, get value() { return value; }, dispose() {
+      stopWatching();
+      if (menu.matches(':popover-open')) menu.hidePopover();
+    }};
+  }
+
+  // BoardUI Switch md 的轨道、拇指与内嵌标记，使用原生输入处理键盘与保存。
+  function settingSwitch(name, title, hint, checked) {
+    const root = element('label', 'setting-switch');
+    const copy = element('span', 'setting-switch-copy');
+    const help = element('span', 'hint', hint);
+    help.id = `${name}-hint`;
+    copy.append(element('span', 'setting-switch-title', title), help);
+    const input = element('input');
+    Object.assign(input, {type:'checkbox', name, checked});
+    input.setAttribute('role', 'switch');
+    input.setAttribute('aria-label', title);
+    input.setAttribute('aria-describedby', help.id);
+    const track = element('span', 'switch-track'), thumb = element('span', 'switch-thumb');
+    track.setAttribute('aria-hidden', 'true');
+    thumb.append(element('span', 'switch-chip'));
+    track.append(thumb);
+    root.append(copy, input, track);
+    return {root, input};
+  }
+
   // 按钮区：主按钮单独一行整宽；次要操作每行最多两个、平分宽度，只有一个时占整行；
-  // 图标键（识别本页番号、手动查询）排在第一行次要操作的最右，没有次要操作时单独一行靠右。
+  // 图标键排在第一行次要操作最右；已入库且没有次要操作时与打开馆藏同排，其余单独一行靠右。
   // 只在组成变了时重排，避免每次刷新都把按钮摘下再放回、丢掉键盘焦点。
   const actionIds = new WeakMap();
   let nextActionId = 0;
-  function layoutActions(area, main, secondary, icons) {
+  function layoutActions(area, main, secondary, icons, compact = false) {
     const id = button => { if (!actionIds.has(button)) actionIds.set(button, ++nextActionId); return actionIds.get(button); };
     const shown = secondary.filter(button => button && button !== main && !button.hidden), keys = icons.filter(button => !button.hidden);
-    const key = [main ? id(main) : 0, ...shown.map(id), '|', ...keys.map(id)].join(',');
+    const key = [compact, main ? id(main) : 0, ...shown.map(id), '|', ...keys.map(id)].join(',');
     if (area.dataset.layout === key) return false;
     area.dataset.layout = key;
     const row = (...nodes) => { const line = element('div', 'action-row'); line.append(...nodes); return line; };
     const rows = main ? [row(main)] : [];
     const group = element('div', 'action-keys'); group.append(...keys);
     for (let index = 0; index < shown.length; index += 2) rows.push(row(...shown.slice(index, index + 2)));
-    if (keys.length) shown.length ? rows[main ? 1 : 0].append(group) : rows.push(row(group));
+    if (keys.length) {
+      if (shown.length) rows[main ? 1 : 0].append(group);
+      else if (compact && main) rows[0].append(group);
+      else rows.push(row(group));
+    }
     // 隐藏的按钮仍留在区内（不占位），状态变了再排进来。
     const spare = element('div', 'action-spare'); spare.hidden = true;
     spare.append(...[...secondary, ...icons, main].filter(button => button && !rows.some(line => line.contains(button))));
@@ -720,8 +889,10 @@
 
   function applyAppearance(root) {
     const value = appearance();
+    const preference = GM_getValue(STORAGE_THEME, 'peach');
+    const theme = ['light', 'dark'].includes(preference) ? preference : value?.theme;
     root.toggleAttribute('data-peach-appearance', Boolean(value));
-    if (value && value.theme !== 'system') root.dataset.theme = value.theme; else delete root.dataset.theme;
+    if (theme && theme !== 'system') root.dataset.theme = theme; else delete root.dataset.theme;
     for (const step of [400, 500, 600, 700]) {
       const style = surfaceTrees.get(root).content.style;
       if (value) style.setProperty(`--color-accent-${step}`, value.colors[step]);
@@ -1210,7 +1381,7 @@
     return { base: base.origin, token };
   }
 
-  // 设置里勾了「浏览记录」时，作品浮卡与女优页的查询带 `record=1`，Peach 据此记一笔；缺省不记。
+  // 开启「浏览记录」时，作品浮卡与女优页的查询带 record=1；缺省不记。
   function recordBrowsing() {
     try { return GM_getValue(STORAGE_RECORD, false) === true; } catch { return false; }
   }
@@ -2067,11 +2238,11 @@
       body.append(wrapper);
       return { wrapper, input, help };
     }
-    const address = field('peach-base', 'Peach 地址', '可粘贴配对信息，一并填好令牌。', 'url');
+    const address = field('peach-base', 'Peach 地址', '可粘贴配对信息。', 'url');
     address.input.placeholder = 'https://peach.example.com';
     address.input.value = String(GM_getValue(STORAGE_BASE, '') || '');
-    address.input.autofocus = true;
-    const secret = field('peach-token', '专用令牌', '在 Peach 配置 → 下载渠道 → 浏览器添加 JAV 生成。', 'password');
+    address.input.autofocus = !saved;
+    const secret = field('peach-token', '专用令牌', '在 Peach「浏览器添加 JAV」中生成。', 'password');
     secret.input.placeholder = saved ? '已保存，留空保留' : '粘贴专用令牌';
     const secretRow = element('div', 'secret');
     secret.input.replaceWith(secretRow);
@@ -2086,31 +2257,25 @@
       reveal.setAttribute('aria-pressed', String(visible));
     });
     secretRow.append(secret.input, reveal);
-    const display = element('fieldset', 'display-scope');
-    display.append(element('legend', '', '按钮显示范围'));
+    const connection = element('details', 'connection-settings');
+    connection.open = !saved;
+    const connectionSummary = element('summary', '', 'Peach 连接');
+    connectionSummary.id = 'peach-connection-summary';
+    connectionSummary.autofocus = Boolean(saved);
+    connectionSummary.append(element('span', 'hint', saved ? `已保存 · ${saved.base}` : '填写地址与专用令牌'));
+    const connectionFields = element('div', 'connection-fields');
+    connectionFields.append(address.wrapper, secret.wrapper);
+    connection.append(connectionSummary, connectionFields);
+    body.prepend(connection);
+    const themeValue = GM_getValue(STORAGE_THEME, 'peach');
+    const theme = settingSelect('peach-theme', '主题',
+      [['peach', '跟随 Peach'], ['light', '浅色'], ['dark', '深色']], themeValue);
     const displayValue=GM_getValue(STORAGE_ENABLED,true) === false ? 'off' : GM_getValue(STORAGE_DISPLAY,'jav') === 'always' ? 'always' : 'jav';
-    for (const [value, title] of [['jav', '仅在 JAV 网站显示'], ['always', '在所有网页常驻显示'], ['off','彻底关闭图标']]) {
-      const option = element('label');
-      const radio = element('input');
-      Object.assign(radio, {type:'radio', name:'peach-display', value, checked:displayValue === value});
-      option.append(radio, document.createTextNode(title)); display.append(option);
-    }
-    display.append(element('p','hint','关闭后从篡改猴菜单「开启」恢复。'));
-    body.append(display);
-    const sound = element('fieldset', 'display-scope');
-    sound.append(element('legend', '', '提示音'));
-    const soundOption = element('label'), soundInput = element('input');
-    Object.assign(soundInput, {type:'checkbox', name:'peach-success-sound', checked:GM_getValue(STORAGE_SOUND, true) !== false});
-    soundOption.append(soundInput, document.createTextNode('点加入和影片完成入库时播放提示音'));
-    sound.append(soundOption);
-    body.append(sound);
-    const record = element('fieldset', 'display-scope');
-    record.append(element('legend', '', '浏览记录'));
-    const recordOption = element('label'), recordInput = element('input');
-    Object.assign(recordInput, {type:'checkbox', name:'peach-record-browsing', checked:recordBrowsing()});
-    recordOption.append(recordInput, document.createTextNode('把打开过的作品页、女优页记进 Peach，作推荐参考'));
-    record.append(recordOption, element('p','hint','只记在你的 Peach 里；列表与批量识别不算。'));
-    body.append(record);
+    const display = settingSelect('peach-display', '显示范围',
+      [['jav', '仅 JAV 网站'], ['always', '所有网页'], ['off', '关闭图标']], displayValue, '关闭后可从菜单「开启」恢复。');
+    const sound = settingSwitch('peach-success-sound', '提示音', '加入、入库完成时播放。', GM_getValue(STORAGE_SOUND, true) !== false);
+    const record = settingSwitch('peach-record-browsing', '浏览记录', '记录作品、女优页到 Peach，用于推荐。', recordBrowsing());
+    body.append(theme.root, display.root, sound.root, record.root);
     const error = element('p', 'geist-note');
     error.id = 'peach-settings-error';
     error.dataset.variant = 'error';
@@ -2157,7 +2322,7 @@
       closing = false;
       dialog.removeAttribute('data-closing');
       coverPanels();
-      address.input.focus();
+      (connection.open ? address.input : connectionSummary).focus();
     } };
     coverPanels();
     const cleanup = () => {
@@ -2165,6 +2330,8 @@
       closeGeneration++;
       closing = false;
       secret.input.value = '';
+      theme.dispose();
+      display.dispose();
       if (settingsView?.root === root) settingsView = null;
       root.remove();
       if (current && !subpageOpen()) {
@@ -2204,7 +2371,7 @@
     form.addEventListener('submit', event => {
       event.preventDefault();
       if (composing || closing) return;
-      const range=display.querySelector('input:checked').value;
+      const range=display.value;
       if(range==='off' && !saved && !address.input.value.trim() && !secret.input.value.trim()) {
         try{GM_setValue(STORAGE_ENABLED,false);}catch{
           error.textContent='设置未能保存，请检查脚本管理器的存储权限后重试。';error.hidden=false;return;
@@ -2227,6 +2394,7 @@
           ? '请输入有效的 Peach 地址，不含路径、查询参数或账号密码。HTTP 仅支持本机地址。'
           : '请输入专用令牌；更换 Peach 地址时需要重新填写令牌。';
         error.hidden = false;
+        connection.open = true;
         invalid.focus();
         return;
       }
@@ -2235,8 +2403,9 @@
         GM_setValue(STORAGE_BASE, config.base);
         if(range !== 'off')GM_setValue(STORAGE_DISPLAY,range);
         GM_setValue(STORAGE_ENABLED,range !== 'off');
-        GM_setValue(STORAGE_SOUND,soundInput.checked);
-        GM_setValue(STORAGE_RECORD,recordInput.checked);
+        GM_setValue(STORAGE_SOUND,sound.input.checked);
+        GM_setValue(STORAGE_RECORD,record.input.checked);
+        GM_setValue(STORAGE_THEME,theme.value);
       } catch {
         error.textContent = '设置未能保存，请检查脚本管理器的存储权限后重试。';
         error.hidden = false;
@@ -2479,7 +2648,7 @@
     const main = !view.button.hidden ? view.button
       : [view.ahead, view.want].find(button => !button.hidden && !button.hasAttribute('data-added')) || null;
     for (const button of [view.button, view.alternate, view.ahead, view.want]) button.classList.toggle('primary', button === main);
-    layoutActions(view.area, main, [view.button, view.alternate, view.ahead, view.want], [view.recheck, view.scan]);
+    layoutActions(view.area, main, [view.button, view.alternate, view.ahead, view.want], [view.recheck, view.scan], terminalSuccess);
     if (view.busy) {
       const spinner = element('span', 'ui-geist-spinner');
       spinner.setAttribute('aria-hidden', 'true');
@@ -3576,7 +3745,7 @@
   setInterval(() => { if (!document.hidden) refresh(); }, 5000);
   refresh();
   if (typeof GM_addValueChangeListener === 'function') {
-    for (const key of [STORAGE_INSTALLED, STORAGE_UPDATES, STORAGE_APPEARANCE, STORAGE_POSITION, STORAGE_DISPLAY]) updateListeners.push(GM_addValueChangeListener(key, () => {
+    for (const key of [STORAGE_INSTALLED, STORAGE_UPDATES, STORAGE_APPEARANCE, STORAGE_THEME, STORAGE_POSITION, STORAGE_DISPLAY]) updateListeners.push(GM_addValueChangeListener(key, () => {
       updateCache = readUpdateCache(); paintAllUpdates();
       for (const root of surfaces) if (root.isConnected) applyAppearance(root);
     }));
