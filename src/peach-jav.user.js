@@ -10,7 +10,7 @@
 // @supportURL   https://github.com/peach-mitao/peach-userscript/issues
 // @homepageURL  https://github.com/peach-mitao/peach-userscript
 // @license      AGPL-3.0-or-later
-// @version      0.7.20
+// @version      0.7.21
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -325,6 +325,7 @@
     .flow{display:grid;gap:12px}.flow-steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}
     .flow-step{display:grid;grid-template-rows:18px 20px;justify-items:center;align-items:center;gap:4px;min-width:0;color:var(--task-muted);font:var(--board-body)}
     .flow-step[data-state="complete"] .flow-label{text-decoration:line-through}.flow-step[data-state="current"]{color:var(--ink)}
+    .flow-step[data-state="waiting"]{color:var(--color-status-yellow-text)}
     .flow-step[data-state="error"]{color:var(--drop)}.flow-mark{width:18px;height:18px;display:grid;place-items:center;line-height:1}
     .flow-mark svg{display:block;width:100%;height:100%;fill:currentColor}
     .flow-step[data-state="current"] .flow-mark{color:var(--task-accent)}
@@ -365,7 +366,7 @@
     .geist-button.launcher[data-count-tone=ended]::after{--count-background:var(--color-status-lime-background);color:var(--color-status-lime-text)}
     .geist-button.launcher[data-count-tone=failed]::after{--count-background:var(--color-status-rose-background);color:var(--color-status-rose-text)}
     .shared-note{margin:8px 0 0}.shared-foot{display:flex;justify-content:flex-end;gap:16px;margin-top:8px}.shared-foot:not(:has(>:not([hidden]))){display:none}
-    .shared-action[data-action=retry-failed]{margin-right:auto;color:var(--color-status-rose-text)}.shared-action[data-action=retry-failed]:hover{color:var(--color-status-rose-text);opacity:.8}
+    .shared-action[data-action=retry-failed]{margin-right:auto}
     .shared-action-icon{width:14px;height:14px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
     .performer-follow{display:grid;gap:8px;min-width:0}.performer-head{display:flex;align-items:center;gap:8px;min-width:0}
     .performer-head strong{font:var(--board-body-medium)}
@@ -382,7 +383,7 @@
     /* 「其他任务」标题始终一行：标题与箭头固定，计数放不下时在中间横滚。 */
     .shared-heading{max-width:100%}.shared-title{flex:none;white-space:nowrap}
     /* 折叠沿用 Peach Collapse（frontend/src/ui-kit/collapse.css）：过渡时裁边，展开停稳后摘掉，行的悬停底色才不被切。 */
-    .shared-body{position:relative;display:flow-root;overflow:hidden;transition:height .2s ease-in-out}.shared-body.fold-settled{overflow:visible}
+    .fold-region{position:relative;display:flow-root;overflow:hidden;transition:height .2s ease-in-out}.fold-region.fold-settled{overflow:visible}
     /* 列表本身是滚动容器，会裁掉伸出去的子元素：行的悬停底色左右各外扩 8px 由列表的负边距给，行内容仍与标题左对齐。 */
     .shared-list{list-style:none;margin:8px -8px 0;padding:0;display:grid;gap:4px;max-height:172px;overflow:auto;overscroll-behavior:contain;scrollbar-width:none}
     /* 滚动条用 Peach 的悬浮轨道（overlayScrollbar）；能滚动时右侧留出轨道位置，不压住行尾的关闭键。 */
@@ -428,10 +429,14 @@
     .geist-input:focus{outline:0;box-shadow:inset 0 0 0 2px var(--color-border-button-active)}.geist-input[aria-invalid=true]{border-color:var(--drop)}
     .field{display:grid;gap:4px;min-width:0}.field label{font:var(--board-body-medium)}.hint{font:var(--board-caption);color:var(--muted);overflow-wrap:anywhere}
     .secret{display:flex;align-items:center;gap:8px}.secret .geist-button{flex:none}
-    .connection-settings{min-width:0}.connection-settings summary{cursor:pointer;font:var(--board-body-medium)}
+    .connection-settings{min-width:0}.connection-settings summary{display:flex;align-items:flex-start;gap:4px;cursor:pointer;list-style:none;font:var(--board-body-medium)}
+    .connection-settings summary::-webkit-details-marker{display:none}
+    .connection-chevron{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s ease}
+    .connection-settings summary[aria-expanded=true] .connection-chevron{transform:rotate(90deg)}
+    .connection-settings summary>span{min-width:0}
     .connection-settings summary .hint{display:block;margin-top:4px;font:var(--board-caption)}
     .connection-settings summary:focus-visible{outline:2px solid var(--tungsten);outline-offset:2px;border-radius:4px}
-    .connection-fields{display:grid;gap:16px;margin-top:16px}
+    .connection-fields{display:grid;gap:16px;padding-top:16px}
     .geist-button.setting-select-trigger{width:100%;justify-content:space-between;gap:6px;padding:8px 10px;font:var(--board-body-medium)}
     .setting-select-trigger svg{flex:none;color:var(--ink-2);transition:transform .2s ease}
     .setting-select-trigger[aria-expanded=true] svg{transform:rotate(180deg)}
@@ -1966,10 +1971,10 @@
   function rowState(body) {
     const download = body.download;
     if (body.state === 'idle') return ['pending'];
+    const paused = channelPauseText(body);
+    if (paused) return ['paused', paused];
     const retry = automaticRetryText(body);
     if (retry) return [body.state === 'ingested' ? 'organizing' : 'queued', retry, '待自动重试'];
-    // 渠道因额度或网盘空间暂停：番号还排着，恢复后自动继续。
-    if (body.state === 'queued' && body.paused) return ['paused', typeof body.message === 'string' ? body.message.slice(0, 120) : ''];
     if (body.state === 'failed') return ['failed', failureText(body), {magnet:'磁力失效', cloud:'网盘问题'}[body.cause] || '失败'];
     if (body.state === 'no_match') return ['no_match', failureText(body)];
     if (organizeFailed(body)) return ['failed', body.retry_exhausted === true
@@ -2258,14 +2263,33 @@
     });
     secretRow.append(secret.input, reveal);
     const connection = element('details', 'connection-settings');
-    connection.open = !saved;
-    const connectionSummary = element('summary', '', 'Peach 连接');
+    let connectionOpen = !saved;
+    connection.open = connectionOpen;
+    const connectionSummary = element('summary');
     connectionSummary.id = 'peach-connection-summary';
     connectionSummary.autofocus = Boolean(saved);
-    connectionSummary.append(element('span', 'hint', saved ? `已保存 · ${saved.base}` : '填写地址与专用令牌'));
+    connectionSummary.setAttribute('aria-controls', 'peach-connection-fields');
+    connectionSummary.setAttribute('aria-expanded', String(connectionOpen));
+    const connectionLabel = element('span', '', 'Peach 连接');
+    connectionLabel.append(element('span', 'hint', saved ? `已保存 · ${saved.base}` : '填写地址与专用令牌'));
+    connectionSummary.append(chevronIcon('connection-chevron', 'm9 6 6 6-6 6'), connectionLabel);
+    const connectionRegion = element('div', 'fold-region fold-settled');
+    connectionRegion.id = 'peach-connection-fields';
+    connectionRegion.hidden = !connectionOpen;
     const connectionFields = element('div', 'connection-fields');
     connectionFields.append(address.wrapper, secret.wrapper);
-    connection.append(connectionSummary, connectionFields);
+    connectionRegion.append(connectionFields);
+    connection.append(connectionSummary, connectionRegion);
+    function setConnectionOpen(open) {
+      if (connectionOpen === open) return;
+      connectionOpen = open;
+      connectionSummary.setAttribute('aria-expanded', String(open));
+      setFoldOpen(connectionRegion, open, { details: connection });
+    }
+    connectionSummary.addEventListener('click', event => {
+      event.preventDefault();
+      setConnectionOpen(!connectionOpen);
+    });
     body.prepend(connection);
     const themeValue = GM_getValue(STORAGE_THEME, 'peach');
     const theme = settingSelect('peach-theme', '主题',
@@ -2322,7 +2346,7 @@
       closing = false;
       dialog.removeAttribute('data-closing');
       coverPanels();
-      (connection.open ? address.input : connectionSummary).focus();
+      (connectionOpen ? address.input : connectionSummary).focus();
     } };
     coverPanels();
     const cleanup = () => {
@@ -2394,7 +2418,7 @@
           ? '请输入有效的 Peach 地址，不含路径、查询参数或账号密码。HTTP 仅支持本机地址。'
           : '请输入专用令牌；更换 Peach 地址时需要重新填写令牌。';
         error.hidden = false;
-        connection.open = true;
+        setConnectionOpen(true);
         invalid.focus();
         return;
       }
@@ -2668,6 +2692,12 @@
       && ['pending', 'queued', 'running'].includes(body.download?.postprocess_state));
   }
 
+  function channelPauseText(body) {
+    if (body?.state !== 'queued' || !body.paused) return '';
+    const message = body.paused.message || body.message;
+    return typeof message === 'string' && message.trim() ? message : '已暂停，恢复后自动继续';
+  }
+
   function automaticRetryText(body) {
     if (body.state !== 'queued' && !(body.state === 'ingested' && body.download?.postprocess_state === 'pending')) return '';
     if (typeof body.retry_at !== 'string' || !Number.isFinite(Date.parse(body.retry_at))
@@ -2817,7 +2847,7 @@
   }
   const offline = message => Object.assign(new Error(message), { kind: 'offline' });
 
-  // Peach 的任务列表：进行中与已结束各自最多 200 项；`paused` 是因额度或网盘空间暂停的渠道，旧版 Peach 没有。
+  // Peach 的任务列表：进行中与已结束各自最多 200 项；旧版 Peach 可能不返回暂停信息。
   function activeItems(data) {
     if (data?.ok !== true || !Array.isArray(data.items)) throw new Error();
     const items = data.items.filter(body => body?.ok === true && STATES.has(body.state) && typeof body.code === 'string'
@@ -2825,8 +2855,8 @@
     const paused = (Array.isArray(data.paused) ? data.paused : []).filter(row => typeof row?.provider_label === 'string'
       && typeof row.message === 'string' && Number.isSafeInteger(row.waiting) && row.waiting >= 0).slice(0, 4)
       .map(row => ({ provider_label: row.provider_label.slice(0, 40), message: row.message.slice(0, 120), waiting: row.waiting,
-        reason: typeof row.reason === 'string' ? row.reason.slice(0, 40) : '', hint: typeof row.hint === 'string' ? row.hint.slice(0, 80) : '',
-        tone: row.tone === 'error' ? 'error' : 'warning' }));
+        reason: typeof row.reason === 'string' ? row.reason.slice(0, 200) : '',
+        hint: typeof row.hint === 'string' ? row.hint.slice(0, 80) : '' }));
     return { items, paused };
   }
 
@@ -3060,7 +3090,7 @@
     }
     // 标题写渠道与原因，正文写排着几项、怎样恢复；旧版 Peach 没有分开的原因时整句放进正文。
     for (const row of snapshot?.paused || []) notices.push(notice({
-      tone: row.tone === 'error' ? 'error' : 'warning',
+      tone: 'warning',
       title: row.reason ? `${row.provider_label}：${row.reason}` : row.provider_label,
       body: row.reason ? `${row.waiting} 项已暂停，${row.hint}` : `${row.message}（${row.waiting} 项排队中）`,
     }));
@@ -3109,7 +3139,7 @@
       const note = element('p', 'geist-note shared-note');
       note.dataset.variant = 'error'; note.setAttribute('role', 'alert'); note.hidden = true;
       // 标题与展开的列表连在一起；提示框不在这里，画在面板最上方的提示组。
-      const body = element('div', 'shared-body fold-settled'), list = element('ul', 'shared-list');
+      const body = element('div', 'shared-body fold-region fold-settled'), list = element('ul', 'shared-list');
       body.hidden = !open;
       body.append(list, foot);
       const group = element('div', 'shared-group');
@@ -3128,7 +3158,7 @@
     clear.hidden = !ended.some(awaitingAck);
     retryAll.hidden = !ended.some(retryableTask);
     heading.setAttribute('aria-expanded', String(open));
-    if (open !== node.parts.open) setFoldOpen(fold, open, () => placeSurface(node.getRootNode().host));
+    if (open !== node.parts.open) setFoldOpen(fold, open, { place: () => placeSurface(node.getRootNode().host) });
     Object.assign(node.parts, { auto, open });
     const rows = [];
     // 全部列出，列表自己滚动；失败项排最前，排队再多也不会把它们挤出视野。
@@ -3210,34 +3240,48 @@
   // 折叠正文的高度过渡，与 Peach frontend/src/ui-kit/collapse.ts 的 setCollapseRegionOpen 同一做法：
   // 量出起止高度写进 inline height，跑完交回自然高度；过渡途中又被反向点按时，前一次的收尾不再做。
   const foldRuns = new WeakMap();
-  function setFoldOpen(body, open, place) {
+  function setFoldOpen(body, open, { place, details } = {}) {
     const run = (foldRuns.get(body) || 0) + 1;
     foldRuns.set(body, run);
+    const show = visible => {
+      body.hidden = !visible;
+      if (details) details.open = visible;
+    };
+    const settle = () => {
+      show(open);
+      body.inert = false;
+      body.style.height = '';
+      body.classList.toggle('fold-settled', open);
+      place?.();
+    };
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      settle();
+      return;
+    }
     const finish = done => {
       let finished = false;
       const end = event => {
-        if ((event && event.propertyName !== 'height') || finished) return;
+        if ((event && (event.target !== body || event.propertyName !== 'height')) || finished) return;
         finished = true; body.removeEventListener('transitionend', end); clearTimeout(timer);
-        if (foldRuns.get(body) === run) { done(); place(); }
+        if (foldRuns.get(body) === run) done();
       };
       body.addEventListener('transitionend', end);
-      // 减少动效时没有 transitionend，260ms 兜底。
+      // 尺寸没变时没有 transitionend。
       const timer = setTimeout(end, 260);
     };
     body.classList.remove('fold-settled');
     if (open) {
       const start = body.hidden ? 0 : body.getBoundingClientRect().height;
-      body.hidden = false; body.inert = false;
+      show(true); body.inert = false;
       body.style.height = `${start}px`; body.getBoundingClientRect();
       body.style.height = `${body.scrollHeight}px`;
-      finish(() => { body.style.height = ''; body.classList.add('fold-settled'); });
     } else {
       body.inert = true;
       body.style.height = `${body.getBoundingClientRect().height}px`; body.getBoundingClientRect();
       body.style.height = '0px';
-      finish(() => { body.hidden = true; body.inert = false; body.style.height = ''; });
     }
-    place();
+    finish(settle);
+    place?.();
   }
 
   // 其他任务的进度页：在同一张浮卡里替换主页，显示该番号的五段整体进度与状态说明；返回回到主页。
@@ -3418,6 +3462,7 @@
     let completed = 0;
     let fraction = 0;
     const failed = ['failed', 'no_match'].includes(body?.state) || download?.postprocess_state === 'failed';
+    const waiting = channelPauseText(body) ? '已暂停' : body && automaticRetryText(body) ? '待重试' : '';
     if (body?.state === 'queued') current = 0;
     else if (body?.state === 'searching') current = body.stage === 'submitting' ? 2 : 1;
     else if (body?.state === 'submitted' || body?.state === 'ingested' || failed) {
@@ -3434,16 +3479,19 @@
         && typeof download.progress === 'number' && Number.isFinite(download.progress)) fraction = Math.min(1, Math.max(0, download.progress));
     view.flow.toggleAttribute('hidden', !body || ['idle', 'owned'].includes(body.state));
     view.progress.setAttribute('aria-valuenow', String(Math.round((completed + fraction) * 1000) / 1000));
+    const labels = ['排队', '搜索', '下载', '入库', '整理'];
     view.progress.setAttribute('aria-valuetext', download?.state === 'ingested' && download.postprocess_state === 'not_requested'
-      ? '流程完成，整理未请求' : `${completed} 个阶段已完成${current >= 0 ? `，${failed ? '未完成' : '当前'}：${['排队', '搜索', '下载', '入库', '整理'][current]}` : ''}`);
+      ? '流程完成，整理未请求' : `${completed} 个阶段已完成${current >= 0 ? `，${labels[current]}：${waiting || (failed ? '未完成' : '当前阶段')}` : ''}`);
     view.progressFill.setAttribute('width', String((completed + fraction) * 20));
     view.steps.forEach((step, index) => {
       const skipped = download?.state === 'ingested' && download.postprocess_state === 'not_requested' && index === 4;
-      const state = skipped ? 'skipped' : index < completed ? 'complete' : index === current ? failed ? 'error' : 'current' : 'pending';
+      const held = index === current && waiting;
+      const state = skipped ? 'skipped' : index < completed ? 'complete' : index === current ? held ? 'waiting' : failed ? 'error' : 'current' : 'pending';
       step.dataset.state = state;
+      step.querySelector('.flow-label').textContent = held || labels[index];
       if (index === current) step.setAttribute('aria-current', 'step'); else step.removeAttribute('aria-current');
       step.querySelector('.flow-mark path').setAttribute('d', state === 'complete' ? STEP_ICON_PATHS.check : state === 'error' ? STEP_ICON_PATHS.error : state === 'skipped' ? STEP_ICON_PATHS.skipped : STAGE_ICON_PATHS[index]);
-      step.setAttribute('aria-label', `${['排队', '搜索', '下载', '入库', '整理'][index]}，${{complete:'已完成',current:'当前阶段',error:'未完成',skipped:'未请求',pending:'待处理'}[state]}`);
+      step.setAttribute('aria-label', `${labels[index]}，${held || {complete:'已完成',current:'当前阶段',error:'未完成',skipped:'未请求',pending:'待处理'}[state]}`);
     });
   }
 
@@ -3483,6 +3531,8 @@
 
   // 状态说明：下载任务的具体阶段、整理状态与百分比，失败时给出原因；浮卡与其他任务的进度页共用。
   function statusLabel(body) {
+    const paused = channelPauseText(body);
+    if (paused) return paused;
     const retry = automaticRetryText(body);
     if (retry) return retry;
     const download = body.download;
