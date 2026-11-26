@@ -2362,8 +2362,9 @@ describe('JAV 用户脚本', () => {
       await page.keyboard.press('Enter');
       assert.equal(await theme.innerText(), '深色');
       await theme.click();
+      await theme.and(dialog.locator('[aria-expanded="true"]')).waitFor();
       await page.keyboard.press('Escape');
-      assert.equal(await theme.getAttribute('aria-expanded'), 'false');
+      await theme.and(dialog.locator('[aria-expanded="false"]')).waitFor();
       assert.equal(await dialog.isVisible(), true);
       const sound = dialog.getByRole('switch', {name:'提示音', exact:true});
       const record = dialog.getByRole('switch', {name:'浏览记录', exact:true});
