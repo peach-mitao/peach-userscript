@@ -4,6 +4,13 @@ Notable changes are grouped by version. English and Chinese describe the same be
 
 Entries are written for users to scan: one sentence each, saying where something changed and what you now see. Reasons, implementation, compatibility conditions and edge cases stay in commits and PRs. Changes to one feature become one entry, and within each group the bigger changes come first. The English part before ` / ` stays within 160 characters including spaces, and the Chinese part after it within 80 characters including punctuation; bold and code marks and link addresses are not counted, only the text they display. / 条目给使用者扫读：每条一句话，只写在哪儿看到了什么变化；原因、实现、兼容条件和边界情况留在提交与 PR。同一功能的几处改动合成一条，每组里影响大的排前面。` / ` 之前的英文部分不超过 160 个字符（含空格），之后的中文部分不超过 80 字（含标点）；加粗、代码标记和链接地址不计，只计显示出来的文字。
 
+## 0.7.21 — 2026-11-26
+
+### Fixed / 修复
+
+- **Paused downloads** show the same reason in the list and task details, with a neutral Retry failed tasks action. / 暂停的下载在列表和详情显示同一原因，「重试失败项」使用中性色。
+- **Connection settings** expand and collapse with the standard Peach animation and chevron. / 「Peach 连接」使用通用折叠动画和箭头图标。
+
 ## 0.7.20 — 2026-11-17
 
 ### Added / 新增

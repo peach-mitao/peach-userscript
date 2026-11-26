@@ -389,6 +389,23 @@ describe('JAV 用户脚本', () => {
       assert.equal(settings.focus, 'peach-connection-summary');
       assert.ok(settings.width > 300 && settings.left >= 0 && settings.right <= viewport.width);
       assert.ok(settings.top >= 0 && settings.bottom <= viewport.height);
+      const connection = await inspectSurface(page, 'peach-jav-settings', root => {
+        const trigger = root.querySelector<HTMLElement>('#peach-connection-summary')!;
+        const fields = root.querySelector<HTMLElement>('#peach-connection-fields')!;
+        const initial = trigger.getAttribute('aria-expanded');
+        trigger.click();
+        const open = { expanded: trigger.getAttribute('aria-expanded'), height: fields.style.height, hidden: fields.hidden };
+        trigger.click();
+        const closing = { expanded: trigger.getAttribute('aria-expanded'), inert: fields.inert };
+        trigger.click();
+        return { initial, open, closing, reopened: trigger.getAttribute('aria-expanded'),
+          icon: trigger.querySelector('svg')?.getAttribute('aria-hidden'), focus: root.activeElement?.id };
+      });
+      const { open: { height, ...expanded }, ...connectionState } = connection;
+      assert.deepEqual(expanded, { expanded: 'true', hidden: false });
+      assert.ok(parseFloat(height) > 0);
+      assert.deepEqual(connectionState, { initial: 'false', closing: { expanded: 'false', inert: true },
+        reopened: 'true', icon: 'true', focus: 'peach-connection-summary' });
       assert.deepEqual(opened.problems, []);
     } finally { await opened.close(); }
   });
@@ -3196,18 +3213,24 @@ describe('JAV 用户脚本', () => {
       const [retry, clear] = [shared.getByRole('button', { name: '重试失败项' }), shared.getByRole('button', { name: '全部标为已读' })];
       assert.deepEqual([await retry.locator('svg').count(), await clear.locator('svg').count()], [1, 1]);
       assert.ok((await retry.boundingBox())!.x + 40 < (await clear.boundingBox())!.x);
+      assert.equal(await retry.evaluate(node => getComputedStyle(node).color), await clear.evaluate(node => getComputedStyle(node).color));
       const codes = await shared.locator('.shared-code').allTextContents();
       assert.equal(codes.length, 26);
       assert.deepEqual(codes.slice(0, 3), ['IPX-001', 'JUR-112', 'ABC-100']);
       const pausedRow = shared.locator('.shared-row[data-code="ABC-100"] .chip');
       assert.deepEqual([await pausedRow.textContent(), await pausedRow.getAttribute('data-chip')], ['已暂停', 'yellow']);
+      await pausedRow.click();
+      const task = root.locator('.task-page');
+      assert.equal(await task.locator('.geist-note').textContent(), message);
+      assert.equal(await task.locator('.flow-step[aria-current=step] .flow-label').textContent(), '已暂停');
+      await task.getByRole('button', { name: '返回 Peach 主页' }).click();
       assert.equal(await shared.locator('.shared-row[data-code="IPX-001"] .chip').textContent(), '网盘问题');
-      // 要用户动手修的暂停（配置失效）按错误语气显示。
+      // 兼容旧版服务端的 tone：会自动试探的渠道统一用警告色。
       await page.evaluate(() => { window.javMock.activePaused = [{ provider: '115', provider_label: '115', failure: 'config', tone: 'error',
         message: '网盘配置或登录有问题，已暂停；修好下载设置后自动继续', reason: '网盘配置或登录有问题', hint: '修好下载设置后自动继续', waiting: 24 }]; });
       await page.clock.fastForward(31_000);
       await notice.filter({ hasText: '网盘配置或登录有问题' }).waitFor();
-      assert.equal(await notice.getAttribute('data-tone'), 'error');
+      assert.equal(await notice.getAttribute('data-tone'), 'warning');
       assert.deepEqual(opened.problems, []);
     } finally { await opened.close(); }
   });
