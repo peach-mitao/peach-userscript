@@ -154,7 +154,7 @@
         const at = (days, hour, minute) => { const date = new Date(); date.setDate(date.getDate() + days); date.setHours(hour, minute, 0, 0); return date; };
         const tonight = at(0, 21, 39) > new Date() ? at(0, 21, 39) : new Date(Date.now() + 40 * 60_000);
         const retryItems = () => [
-          {ok:true,code:'JUL-500',state:'queued',message:'JavDB 未取得，等待自动重试',retry_at:tonight.toISOString(),retry_attempt:1,retry_limit:3},
+          {ok:true,code:'JUL-500',state:'queued',message:'JavDB：请求超时，等待自动重试',retry_at:tonight.toISOString(),retry_attempt:1,retry_limit:3},
           {ok:true,code:'MIDV-339',state:'queued',retry_at:at(1, 9, 0).toISOString(),retry_attempt:2,retry_limit:3},
           {ok:true,code:'SSIS-057',state:'ingested',retry_at:at(1, 9, 0).toISOString(),retry_attempt:1,retry_limit:3,
             download:{state:'ingested',label:'已入库',progress:1,postprocess_state:'pending',postprocess_label:'等待自动重试'}},

@@ -10,7 +10,7 @@
 // @supportURL   https://github.com/peach-mitao/peach-userscript/issues
 // @homepageURL  https://github.com/peach-mitao/peach-userscript
 // @license      AGPL-3.0-or-later
-// @version      0.7.21
+// @version      0.7.22
 // @description  Detect video codes on web pages, select titles, and send them to Peach for download and library import.
 // @description:zh-CN 识别网页中的番号，选择影片并交给 Peach 下载入库。
 // @description:zh-TW 識別網頁中的番號，選擇影片並交給 Peach 下載入庫。
@@ -553,6 +553,7 @@
     .notice[data-tone=error]{--notice-bg:var(--color-status-rose-background);--notice-fg:var(--color-status-rose-text)}
     .notice[data-tone=info]{--notice-bg:var(--color-status-blue-background);--notice-fg:var(--color-status-blue-text)}
     .notice-text{display:flex;flex:1 1 160px;flex-direction:column;gap:2px;min-width:0}
+    .task-status.notice>.geist-note{flex:1 1 140px;min-width:0}
     .notice p{margin:0}.notice-title{font:var(--board-body-medium)}.notice-body{font:400 13px/18px var(--board-font)}
     .notice-actions{display:flex;flex-wrap:wrap;gap:8px;flex:none}
     /* 框内动作照 Peach 的 BoardUI Button secondary small：白底描边、32px 高、8px 圆角，不随更新类别染色。 */
@@ -1765,17 +1766,24 @@
         if (ticket) updateRequests.delete(ticket);
         if (error) reject(error); else resolve(value);
       };
-      const failed = () => finish(new Error(config ? 'Peach 更新状态未取得，请检查连接和令牌后重试。' : '脚本发行状态未取得，请稍后重试。'));
-      ticket = { abort() { failed(); handle?.abort?.(); } };
+      const target = config ? 'Peach 更新接口' : '脚本发行站';
+      const failed = message => finish(new Error(message));
+      ticket = { abort(message = target + '的请求已取消。') { failed(message); handle?.abort?.(); } };
       // anonymous 使用的 fetch 模式在 Chrome 中不保证 GM timeout 生效。
-      watchdog = setTimeout(() => ticket.abort(), 15_000);
+      watchdog = setTimeout(() => ticket.abort(target + '请求超时。'), 15_000);
       try {
         handle = GM_xmlhttpRequest({ method: 'GET', url, anonymous: true, timeout: 15_000, redirect: 'error',
           headers: config ? { Accept: 'application/json', Authorization: `Bearer ${config.token}` } : { Accept: 'text/plain' },
           onload(response) {
             if (finished) return;
-            if (response.status < 200 || response.status >= 300 || response.responseText?.length > 128_000
-              || (response.finalUrl && response.finalUrl !== url)) { failed(); return; }
+            if (response.status < 200 || response.status >= 300) {
+              failed(response.status === 0 ? '无法访问' + target + '。' :
+                config && response.status === 401 ? 'Peach 更新接口需要有效令牌（HTTP 401）。' :
+                target + '返回 HTTP ' + response.status + '。');
+              return;
+            }
+            if (response.responseText?.length > 128_000) { failed(target + '返回的数据超过大小限制。'); return; }
+            if (response.finalUrl && response.finalUrl !== url) { failed(target + '重定向到了其他地址。'); return; }
             try {
               if (!config) {
                 const metadata = /^\s*\/\/ ==UserScript==\r?\n([\s\S]*?)\/\/ ==\/UserScript==/.exec(response.responseText)?.[1];
@@ -1794,11 +1802,14 @@
                 finish(null, { base: config.base, runtime: body.runtime, release: body.release,
                   userscript: { version: body.userscript.version, minimum_version: body.userscript.minimum_version } });
               }
-            } catch { failed(); }
-          }, onerror: failed, ontimeout: failed, onabort: failed,
+            } catch { failed(target + '返回的数据格式无效。'); }
+          },
+          onerror: () => failed('无法访问' + target + '。'),
+          ontimeout: () => failed(target + '请求超时。'),
+          onabort: () => failed(target + '的请求已取消。'),
         });
         if (!finished) updateRequests.add(ticket);
-      } catch { failed(); }
+      } catch { failed('无法发起访问' + target + '的请求。'); }
     });
   }
 
@@ -1929,7 +1940,8 @@
         applyRowStatus(item, body);
       } catch (error) {
         if (!view.root.isConnected || view.rows !== rows) return;
-        setRowState(item, 'failed', error.message, '未取得');
+        const label = {network: '无法连接', timeout: '请求超时', invalid_response: '响应无效', abort: '查询已取消', client_exception: '请求发起失败'}[error.kind];
+        setRowState(item, 'failed', error.message, label || '状态查询失败');
       }
     }
     view.busy = false; view.paint();
@@ -1941,14 +1953,27 @@
     return new Promise((resolve,reject)=>{
       let handle, timer, finished=false;
       const finish=(error,value)=>{if(finished)return;finished=true;clearTimeout(timer);setAbort(null);error?reject(error):resolve(value);};
-      const abort=()=>{finish(new Error('本地女优资料未取得'));handle?.abort?.();};
-      setAbort(abort); timer=setTimeout(abort,5000);
+      const fail=message=>finish(new Error(message));
+      const abort=(message='已取消查询本地女优资料')=>{fail(message);handle?.abort?.();};
+      setAbort(abort); timer=setTimeout(()=>abort('查询本地女优资料超时'),5000);
       const names=codes.length===1?performers.map(name=>`&performers=${encodeURIComponent(name)}`).join(''):'';
       handle=GM_xmlhttpRequest({method:'GET',url:`${config.base}/api/jav-browser/people?codes=${encodeURIComponent(codes.join(','))}${names}`,anonymous:true,redirect:'error',timeout:5000,
         headers:{Accept:'application/json',Authorization:`Bearer ${config.token}`},
-        onload(response){try{if(response.status!==200||response.responseText.length>2*1024*1024)throw new Error();
-          const data=JSON.parse(response.responseText);if(data.ok!==true||data.source!=='local-cache'||!data.items)throw new Error();finish(null,data);
-        }catch{finish(new Error('本地女优资料未取得'));}},onerror:()=>finish(new Error('本地女优资料未取得')),ontimeout:()=>finish(new Error('本地女优资料未取得')),onabort:()=>finish(new Error('本地女优资料未取得'))});
+        onload(response){
+          if(response.status!==200){
+            fail(response.status===0?'无法连接 Peach 查询本地女优资料':'查询本地女优资料失败（HTTP '+response.status+'）');
+            return;
+          }
+          try{
+            if(response.responseText.length>2*1024*1024){fail('本地女优资料超过响应大小限制');return;}
+            const data=JSON.parse(response.responseText);
+            if(data.ok!==true||data.source!=='local-cache'||!data.items)throw new Error();
+            finish(null,data);
+          }catch{fail('Peach 返回的本地女优资料格式无效');}
+        },
+        onerror:()=>fail('无法连接 Peach 查询本地女优资料'),
+        ontimeout:()=>fail('查询本地女优资料超时'),
+        onabort:()=>fail('已取消查询本地女优资料')});
     });
   }
 
@@ -2546,7 +2571,7 @@
           ontimeout: () => fail('timeout', 'Peach 请求超时，请查询状态。'),
           onabort: () => fail('abort', 'Peach 请求已中止，请查询状态。'),
         });
-      } catch { fail('client_exception', '无法连接 Peach，请查询状态。'); }
+      } catch { fail('client_exception', '无法发起 Peach 请求，请查询状态。'); }
     });
   }
 
@@ -2855,7 +2880,7 @@
     const paused = (Array.isArray(data.paused) ? data.paused : []).filter(row => typeof row?.provider_label === 'string'
       && typeof row.message === 'string' && Number.isSafeInteger(row.waiting) && row.waiting >= 0).slice(0, 4)
       .map(row => ({ provider_label: row.provider_label.slice(0, 40), message: row.message.slice(0, 120), waiting: row.waiting,
-        reason: typeof row.reason === 'string' ? row.reason.slice(0, 200) : '',
+        failure: row.failure, recovery: row.recovery, reason: typeof row.reason === 'string' ? row.reason.slice(0, 200) : '',
         hint: typeof row.hint === 'string' ? row.hint.slice(0, 80) : '' }));
     return { items, paused };
   }
@@ -3073,6 +3098,31 @@
     return box;
   }
 
+  function recoveryDestination(status) {
+    const kind = status?.recovery?.kind;
+    if (kind === 'downloads_settings' || status?.failure === 'config')
+      return { path:'/settings/downloads', label:'打开下载设置' };
+    if (kind === 'indexer_settings')
+      return { path:'/settings/subscriptions#sources-indexers', label:'打开索引器设置' };
+    if (kind === 'source_connection') {
+      const source = status.recovery.source;
+      const section = typeof source === 'string' && /^[a-z0-9-]{1,30}$/.test(source) ? '#source-' + source : '';
+      return { path:'/sources' + section, label:'检查来源连接' };
+    }
+    return null;
+  }
+
+  function setRecoveryLink(anchor, config, status) {
+    const destination = config && recoveryDestination(status);
+    anchor.hidden = !destination;
+    if (!destination) { anchor.removeAttribute('href'); return false; }
+    anchor.href = config.base + destination.path;
+    anchor.target = '_blank';
+    anchor.rel = 'noopener';
+    anchor.textContent = destination.label;
+    return true;
+  }
+
   // 其他任务上方的提示：先说脚本自己连不连得上 Peach，再说 Peach 暂停了哪些渠道。
   function sharedNotices() {
     const config = configuration();
@@ -3089,11 +3139,15 @@
       notices.push(notice({ tone: 'error', title: '连不上 Peach', body: `任务进度停在 ${minutes} 分钟前，恢复后自动刷新` }));
     }
     // 标题写渠道与原因，正文写排着几项、怎样恢复；旧版 Peach 没有分开的原因时整句放进正文。
-    for (const row of snapshot?.paused || []) notices.push(notice({
-      tone: 'warning',
-      title: row.reason ? `${row.provider_label}：${row.reason}` : row.provider_label,
-      body: row.reason ? `${row.waiting} 项已暂停，${row.hint}` : `${row.message}（${row.waiting} 项排队中）`,
-    }));
+    for (const row of snapshot?.paused || []) {
+      const link = element('a', 'geist-button');
+      notices.push(notice({
+        tone: 'warning',
+        title: row.reason ? (row.failure === 'search' ? row.reason : `${row.provider_label}：${row.reason}`) : row.provider_label,
+        body: row.reason ? `${row.waiting} 项已暂停，${row.hint}` : `${row.message}（${row.waiting} 项排队中）`,
+        action: setRecoveryLink(link, config, row) ? link : null,
+      }));
+    }
     return notices;
   }
 
@@ -3374,12 +3428,16 @@
     });
     dress(ahead, 'speed-up-line'); dress(library, 'external-link-line'); dress(ack, 'check-double-line');
     const area = element('div', 'action-area');
-    body.append(note, parts.flow, area);
+    const recovery = element('a', 'geist-button task-recovery');
+    recovery.hidden = true;
+    const status = element('div', 'task-status');
+    status.append(note, recovery);
+    body.append(status, parts.flow, area);
     page.append(bar, body);
     switchPanel(panel, () => {
       for (const child of panel.children) if (!child.hidden) { child.hidden = true; child.dataset.taskHidden = ''; }
       panel.append(page);
-      panel.taskPage = { page, code, note, people, ahead, retry, library, want, ack, area, wantState: undefined, wantBusy: false, body: null, ...parts };
+      panel.taskPage = { page, code, status, note, recovery, people, ahead, retry, library, want, ack, area, wantState: undefined, wantBusy: false, body: null, ...parts };
       paintTaskPage(panel);
       return [page];
     });
@@ -3440,6 +3498,9 @@
     // 加入想要失败时原因留在状态行，直到下一次点击。
     open.note.textContent = open.wantError || statusLabel(open.body);
     open.note.dataset.variant = open.wantError ? 'error' : statusVariant(open.body);
+    const hasRecovery = setRecoveryLink(open.recovery, configuration(), open.body.paused || open.body);
+    open.status.classList.toggle('notice', hasRecovery);
+    open.status.dataset.tone = open.note.dataset.variant === 'error' ? 'error' : 'warning';
     open.ahead.hidden = !canPrioritize(open.body);
     open.retry.hidden = !retryableTask(open.body);
     open.retry.textContent = retryLabel(open.body);

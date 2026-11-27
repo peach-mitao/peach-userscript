@@ -521,16 +521,17 @@ describe('JAV 用户脚本', () => {
         await page.evaluate(() => window.javMock.menus['检测更新']!());
         await waitUpdates(page, 1);
         await answerMetadata(page, '9.1.0', 'https://untrusted.example/script');
-        await settingsDialog(page).getByRole('alert').filter({ hasText: '脚本发行状态未取得' }).waitFor();
+        await settingsDialog(page).getByRole('alert').filter({ hasText: '脚本发行站返回的数据格式无效' }).waitFor();
         assert.equal(await settingsDialog(page).getByRole('link', { name: '更新用户脚本' }).count(), 0);
         await settingsDialog(page).getByRole('button', { name: '检查更新', exact: true }).click();
         await waitUpdates(page, 2);
         await page.evaluate(() => window.javMock.updates.at(-1)!.onerror());
+        await settingsDialog(page).getByRole('alert').filter({ hasText: '无法访问脚本发行站' }).waitFor();
         assert.equal((await settingsDialog(page).textContent())!.includes('已是最新'), false);
         await settingsDialog(page).getByRole('button', { name: '检查更新', exact: true }).click();
         await waitUpdates(page, 3);
         await answerMetadata(page, '9.1.0', undefined, 'Other Script');
-        await settingsDialog(page).getByRole('alert').filter({ hasText: '脚本发行状态未取得' }).waitFor();
+        await settingsDialog(page).getByRole('alert').filter({ hasText: '脚本发行站返回的数据格式无效' }).waitFor();
         assert.equal(await settingsDialog(page).getByRole('link', { name: '更新用户脚本' }).count(), 0);
         assert.equal(await page.evaluate(() => window.javMock.calls.length), 0);
       } finally { await close(); }
@@ -1796,7 +1797,7 @@ describe('JAV 用户脚本', () => {
     } finally {await opened.close();}
   });
 
-  it('打开列表即跟踪已有任务，状态未取得时明确提示，重新识别可恢复真实状态', async () => {
+  it('打开列表即跟踪已有任务，状态查询失败时保留原因，重新识别可恢复真实状态', async () => {
     const opened = await open(browser,{url:'https://javdb.com/',html:'<p>ABP-100 ABP-101</p>',automatic:false});
     const {page} = opened;
     try {
@@ -1804,8 +1805,8 @@ describe('JAV 用户脚本', () => {
       await pending(page,1);await reply(page,0,body('queued','ABP-100'));
       await pending(page,2);await page.evaluate(()=>window.javMock.reply(1,{},503));
       const list=page.locator('#peach-jav-batch');
-      await list.locator('.batch-row-status',{hasText:'未取得'}).waitFor();
-      assert.equal(await list.locator('.batch-row-status',{hasText:'未取得'}).getAttribute('title'),'Peach 服务暂时不可用，请稍后查询状态。');
+      await list.locator('.batch-row-status',{hasText:'状态查询失败'}).waitFor();
+      assert.equal(await list.locator('.batch-row-status',{hasText:'状态查询失败'}).getAttribute('title'),'Peach 服务暂时不可用，请稍后查询状态。');
       await page.clock.fastForward(2100);
       await pending(page,3);await reply(page,2,body('ingested','ABP-100'));
       await list.locator('.batch-row-status',{hasText:'已入库'}).waitFor();
@@ -3232,6 +3233,8 @@ describe('JAV 用户脚本', () => {
       await page.clock.fastForward(31_000);
       await notice.filter({ hasText: '网盘配置或登录有问题' }).waitFor();
       assert.equal(await notice.getAttribute('data-tone'), 'warning');
+      const settings = notice.getByRole('link', { name: '打开下载设置', exact: true });
+      assert.ok((await settings.getAttribute('href'))?.endsWith('/settings/downloads'));
       assert.deepEqual(opened.problems, []);
     } finally { await opened.close(); }
   });
